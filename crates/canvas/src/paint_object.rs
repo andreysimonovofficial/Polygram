@@ -1,0 +1,269 @@
+use crate::theme::Theme;
+use egui::{Painter, Rect, Stroke, Vec2};
+use polygram_core::{DynamicState, ObjectGeom, StatusCode};
+use polygram_core::types::Direction;
+
+pub fn paint_object(
+    painter: &Painter,
+    object: &ObjectGeom,
+    dynamic: &DynamicState,
+    theme: &Theme,
+    rect_px: Rect,
+    cell_px: f32,
+    is_hovered: bool,
+) {
+    // Внешняя рамка
+    let border_color = if is_hovered { theme.text } else { theme.card_border };
+    let border_width = if is_hovered { 2.0_f32 } else { 1.0_f32 };
+    painter.rect_filled(rect_px, 2.0, theme.card_bg);
+    painter.rect_stroke(rect_px, 2.0, Stroke::new(border_width, border_color));
+
+    // Заголовок
+    let header_h = cell_px;
+    let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h));
+    painter.rect_filled(header_rect, 0.0, theme.card_header);
+
+    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
+    let name_color = if is_hovered { theme.text } else { theme.text_muted };
+    painter.text(
+        rect_px.min + Vec2::new(8.0, header_h / 2.0),
+        egui::Align2::LEFT_CENTER,
+        &title,
+        egui::FontId::default(),
+        name_color,
+    );
+
+    let id_text = format!("#{}", object.ix);
+    painter.text(
+        rect_px.max - Vec2::new(8.0, header_h / 2.0),
+        egui::Align2::RIGHT_CENTER,
+        &id_text,
+        egui::FontId::default(),
+        name_color,
+    );
+
+    // Два контейнера: ЗАПРОС (верх) и ВЫХОД (низ)
+    let container_h = (rect_px.height() - header_h) / 2.0;
+
+    paint_container(
+        painter,
+        object,
+        dynamic,
+        theme,
+        Rect::from_min_size(
+            rect_px.min + Vec2::new(0.0, header_h),
+            Vec2::new(rect_px.width(), container_h),
+        ),
+        cell_px,
+        Direction::Request,
+        is_hovered,
+    );
+
+    paint_container(
+        painter,
+        object,
+        dynamic,
+        theme,
+        Rect::from_min_size(
+            rect_px.min + Vec2::new(0.0, header_h + container_h),
+            Vec2::new(rect_px.width(), container_h),
+        ),
+        cell_px,
+        Direction::Output,
+        is_hovered,
+    );
+}
+
+/// Нарисовать контейнер показателей (Запрос или Выход).
+pub fn paint_container(
+    painter: &Painter,
+    object: &ObjectGeom,
+    dynamic: &DynamicState,
+    theme: &Theme,
+    rect: Rect,
+    cell_px: f32,
+    dir: Direction,
+    is_obj_hovered: bool,
+) {
+    let entries = match dir {
+        Direction::Request => &object.requests,
+        Direction::Output => &object.outputs,
+    };
+
+    let n_entries = entries.len().max(1);
+    let entry_h = rect.height() / n_entries as f32;
+    let header_h = cell_px * 0.5;
+
+    // Статус контейнера (худший среди записей)
+    let mut worst_rank: u8 = 0;
+    for e in entries {
+        let s = dynamic.status[e.ix as usize];
+        let r = match s {
+            StatusCode::Ok => 0,
+            StatusCode::Unknown | StatusCode::Disabled => 1,
+            StatusCode::Unconnected => 2,
+            StatusCode::Warning => 3,
+            StatusCode::Deficit => 4,
+            StatusCode::Surplus => 5,
+            StatusCode::Invalid => 6,
+        };
+        if r > worst_rank {
+            worst_rank = r;
+        }
+    }
+    let container_status = match worst_rank {
+        4 => StatusCode::Deficit,
+        5 => StatusCode::Surplus,
+        3 => StatusCode::Warning,
+        2 => StatusCode::Unconnected,
+        6 => StatusCode::Invalid,
+        _ => StatusCode::Ok,
+    };
+
+    let dot_color = super::status_dot_color(container_status, theme);
+    let label = match dir {
+        Direction::Request => "ЗАПРОС",
+        Direction::Output => "ВЫХОД",
+    };
+    let status_text = super::status_label_ru(container_status, dir);
+
+    // Количество записей с проблемным статусом (не Ok).
+    let problem_count = entries.iter().filter(|e| dynamic.status[e.ix as usize] != StatusCode::Ok).count();
+    let status_full = if problem_count > 0 {
+        format!("{} ({})", status_text, problem_count)
+    } else {
+        status_text.to_string()
+    };
+    let count_text = format!("{} ({}) {}", label, entries.len(), status_full);
+
+    // Цвет текста заголовка контейнера: красный при проблеме, иначе серый.
+    let header_text_color = if container_status != StatusCode::Ok {
+        super::status_dot_color(container_status, theme)
+    } else {
+        theme.text_muted
+    };
+
+    // Заголовок контейнера
+    let header_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width(), header_h));
+    painter.rect_filled(header_rect, 0.0, theme.card_bg);
+
+    // Точка статуса
+    painter.circle_filled(
+        rect.min + Vec2::new(8.0, header_h / 2.0),
+        3.0,
+        dot_color,
+    );
+
+    // Кнопка списка (справа) — фиксированный размер, как на целевом скрине.
+    let btn_rect = Rect::from_min_size(
+        rect.max - Vec2::new(24.0, header_h),
+        Vec2::new(24.0, header_h),
+    );
+
+    // Доступная ширина для текста заголовка (от 16px отступа до кнопки с зазором).
+    let header_avail_w = (btn_rect.min.x - rect.min.x - 32.0).max(0.0);
+    let header_text_width = count_text.len() as f32 * 7.0;
+    let header_text_display: String = if header_text_width > header_avail_w && header_avail_w > 14.0 {
+        let n_chars = (header_avail_w / 7.0) as usize;
+        if n_chars > 4 {
+            count_text.chars().take(n_chars - 4).collect::<String>() + "..."
+        } else {
+            "...".to_string()
+        }
+    } else {
+        count_text.clone()
+    };
+
+    // Текст метки
+    let header_text_actual = if is_obj_hovered {
+        theme.text
+    } else {
+        header_text_color
+    };
+    painter.text(
+        rect.min + Vec2::new(16.0, header_h / 2.0),
+        egui::Align2::LEFT_CENTER,
+        &header_text_display,
+        egui::FontId::default(),
+        header_text_actual,
+    );
+
+    painter.rect_stroke(btn_rect, 1.0, Stroke::new(1.0_f32, theme.card_border));
+    let btn_text_actual = if is_obj_hovered {
+        theme.text
+    } else {
+        header_text_color
+    };
+    painter.text(
+        btn_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "≡",
+        egui::FontId::default(),
+        btn_text_actual,
+    );
+
+    // Записи
+    if entries.is_empty() {
+        let add_text = "+ Добавить показатель";
+        let add_color = if is_obj_hovered { theme.text } else { theme.text_muted };
+        let add_rect = Rect::from_min_size(
+            rect.min + Vec2::new(16.0, header_h),
+            Vec2::new(rect.width() - 32.0, rect.height() - header_h),
+        );
+        painter.text(
+            add_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            add_text,
+            egui::FontId::default(),
+            add_color,
+        );
+    } else {
+        for (k, entry) in entries.iter().enumerate() {
+            let entry_y = rect.min.y + header_h + (k as f32 + 0.5) * entry_h;
+            let entry_rect = Rect::from_min_size(
+                rect.min + Vec2::new(0.0, header_h + k as f32 * entry_h),
+                Vec2::new(rect.width(), entry_h),
+            );
+
+            let status = dynamic.status[entry.ix as usize];
+            let entry_dot_color = super::status_dot_color(status, theme);
+
+            let value_text = format!("{:.0}", entry.value);
+
+            // Фон строки при наведении на объект
+            if is_obj_hovered {
+                painter.rect_filled(entry_rect, 0.0, theme.card_header);
+            }
+
+            // Точка статуса записи
+            painter.circle_filled(
+                rect.min + Vec2::new(8.0, entry_y),
+                3.0,
+                entry_dot_color,
+            );
+
+            // Имя записи
+            let name_color = if is_obj_hovered {
+                theme.text
+            } else {
+                theme.text_muted
+            };
+            painter.text(
+                rect.min + Vec2::new(16.0, entry_y),
+                egui::Align2::LEFT_CENTER,
+                &entry.name,
+                egui::FontId::default(),
+                name_color,
+            );
+
+            // Значение (справа)
+            painter.text(
+                entry_rect.max - Vec2::new(8.0, 0.0),
+                egui::Align2::RIGHT_CENTER,
+                &value_text,
+                egui::FontId::default(),
+                name_color,
+            );
+        }
+    }
+}

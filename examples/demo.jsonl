@@ -1,0 +1,21 @@
+# Демонстрация: мини-завод. Запуск:  pg run examples/demo.jsonl --save demo.pg
+{"cmd":"add_node","id":"ore","name":"Рудник"}
+{"cmd":"add_metric","node":"ore","dir":"output","id":"o1","name":"Руда","unit":"т/ч","value":120}
+{"cmd":"add_node","id":"power","name":"Электростанция"}
+{"cmd":"add_metric","node":"power","dir":"output","id":"o1","name":"Энергия","unit":"МВт","value":70}
+{"cmd":"add_node","id":"smelter","name":"Плавильня"}
+{"cmd":"add_metric","node":"smelter","dir":"input","id":"i1","name":"Руда","unit":"т/ч","required":100}
+{"cmd":"add_metric","node":"smelter","dir":"input","id":"i2","name":"Энергия","unit":"МВт","required":40}
+{"cmd":"add_metric","node":"smelter","dir":"output","id":"o1","name":"Металл","unit":"т/ч","value":80}
+{"cmd":"add_node","id":"factory","name":"Завод"}
+{"cmd":"add_metric","node":"factory","dir":"input","id":"i1","name":"Металл","unit":"т/ч","required":60}
+{"cmd":"add_metric","node":"factory","dir":"input","id":"i2","name":"Энергия","unit":"МВт","required":50}
+{"cmd":"add_metric","node":"factory","dir":"output","id":"o1","name":"Изделия","unit":"шт/ч","value":20}
+{"cmd":"add_node","id":"shop","name":"Магазин"}
+{"cmd":"add_metric","node":"shop","dir":"input","id":"i1","name":"Изделия","unit":"шт/ч","required":30}
+{"cmd":"connect","from_node":"ore","from_metric":"o1","to_node":"smelter","to_metric":"i1"}
+{"cmd":"connect","from_node":"power","from_metric":"o1","to_node":"smelter","to_metric":"i2"}
+{"cmd":"connect","from_node":"power","from_metric":"o1","to_node":"factory","to_metric":"i2"}
+{"cmd":"connect","from_node":"smelter","from_metric":"o1","to_node":"factory","to_metric":"i1"}
+{"cmd":"connect","from_node":"factory","from_metric":"o1","to_node":"shop","to_metric":"i1"}
+{"cmd":"auto_layout"}

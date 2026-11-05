@@ -1,0 +1,40 @@
+flowchart LR
+    user([Пользователь])
+    agent([Агент и субагенты])
+    world([Внешний мир])
+
+    subgraph rooms[Комнаты]
+        direction LR
+        shell["shell — окно<br/>меню, палитра, строка статуса<br/>(позже)"]
+        api["api — HTTP и MCP<br/>срезы, права, области<br/>(позже)"]
+        subgraph core["core — ядро (сделано)"]
+            term["Терминал<br/>команды → результаты"]
+            hier["Иерархия"]
+            vals["Значения и статусы"]
+            arch["Архитектура графа<br/>сетка, линии"]
+            bn["Узкие места"]
+            log["Журнал событий"]
+            term --> hier
+            term --> vals
+            term --> arch
+            vals --> bn
+            hier --> bn
+            term --> log
+        end
+        canvas["canvas — GPU-холст и тема<br/>(следующий шаг)"]
+        chat["chat — чаты по иерархии<br/>(позже)"]
+        agents["agents — рантайм агентов<br/>(позже)"]
+        storage["storage — файлы .pg, импорт<br/>(позже)"]
+    end
+
+    user --> shell
+    agent --> api
+    world --> api
+    shell -->|команды| term
+    api -->|команды| term
+    core -->|снимки| canvas
+    canvas --> user
+    log -->|события| chat
+    log -->|события| api
+    agents --> api
+    storage --> term

@@ -1,0 +1,13 @@
+[package]
+name = "polygram-canvas"
+description = "GPU-холст Polygram: камера, рендер карточек и ортогональных линий, сменная тема."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+egui = "0.29"
+polygram-core = { path = "../core" }
+
+[lib]
+doctest = false
