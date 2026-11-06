@@ -281,9 +281,10 @@ impl FreeCanvas {
                     ui.heading("Код для агента (JSON)");
                     ui.separator();
 
-                    // Если дизайн изменился через UI, синхронизируем код в поле (дизайн → код)
+                    // Если дизайн изменился через UI и пользователь не правит код вручную,
+                    // синхронизируем код в поле (дизайн → код).
                     let current_json = self.doc.to_json().unwrap_or_default();
-                    if self.code_text != current_json {
+                    if self.code_text == self.last_applied_code && self.code_text != current_json {
                         self.code_text = current_json.clone();
                         self.last_applied_code = current_json;
                     }

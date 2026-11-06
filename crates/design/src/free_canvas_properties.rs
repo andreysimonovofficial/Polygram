@@ -1,6 +1,6 @@
 //! Панель свойств выделенной фигуры (справа).
 
-use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign};
+use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{Color32, DragValue};
 
@@ -46,6 +46,8 @@ impl FreeCanvas {
                 if changed {
                     self.push_undo_state(prev_doc);
                     self.touch();
+                    // Переиндексировать иерархию, чтобы родитель шёл раньше детей (корректный hit-тест).
+                    self.reindex_containment();
                 } else if delete {
                     self.doc.shapes.remove(idx);
                     self.selected.clear();
@@ -354,6 +356,73 @@ impl FreeCanvas {
             if ui.button("Убрать из группы").clicked() {
                 shape.group_id = None;
                 changed = true;
+            }
+        }
+
+        ui.separator();
+        ui.label("Иерархия (контейнеры):");
+        ui.separator();
+
+        // is_container
+        let mut is_container = shape.is_container;
+        if ui.checkbox(&mut is_container, "Рамка-контейнер (распространяет наведение/нажатие на детей)").changed() {
+            shape.is_container = is_container;
+            changed = true;
+        }
+
+        // parent_id
+        let mut parent_id = shape.parent_id.clone().unwrap_or_default();
+        if ui.text_edit_singleline(&mut parent_id).changed() {
+            shape.parent_id = if parent_id.is_empty() { None } else { Some(parent_id) };
+            changed = true;
+        }
+        if shape.parent_id.is_some() {
+            if ui.button("Убрать родителя").clicked() {
+                shape.parent_id = None;
+                changed = true;
+            }
+            // reacts_to_parent
+            let mut reacts = shape.reacts_to_parent;
+            if ui.checkbox(&mut reacts, "Реагировать на состояние родителя").changed() {
+                shape.reacts_to_parent = reacts;
+                changed = true;
+            }
+        }
+
+        // child_react_mode (only for containers)
+        if shape.is_container {
+            ui.label("Режим реакции детей:");
+            let mut mode = shape.child_react_mode;
+            egui::ComboBox::from_label("")
+                .selected_text(match mode {
+                    ChildReactMode::All => "Все дети",
+                    ChildReactMode::List => "Список детей",
+                    ChildReactMode::None => "Никто",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut mode, ChildReactMode::All, "Все дети").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut mode, ChildReactMode::List, "Список детей").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut mode, ChildReactMode::None, "Никто").changed() {
+                        changed = true;
+                    }
+                });
+            shape.child_react_mode = mode;
+
+            if mode == ChildReactMode::List {
+                let mut allow = shape.child_react_allow.join(", ");
+                if ui.text_edit_singleline(&mut allow).changed() {
+                    shape.child_react_allow = allow
+                        .split(',')
+                        .map(|s| s.trim().to_owned())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    changed = true;
+                }
+                ui.label("id детей через запятую, которые горят с родителем.");
             }
         }
 
