@@ -125,24 +125,24 @@ impl FreeCanvas {
     fn resolve_style(shape: &FreeShape, state: ShapeState) -> (Color32, Color32, f32) {
         let base_fill = shape
             .fill
-            .map(|c| Color32::from_rgb(c.r, c.g, c.b))
+            .map(|c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a))
             .unwrap_or(Color32::TRANSPARENT);
-        let base_stroke = Color32::from_rgb(shape.stroke.r, shape.stroke.g, shape.stroke.b);
+        let base_stroke = Color32::from_rgba_unmultiplied(shape.stroke.r, shape.stroke.g, shape.stroke.b, shape.stroke.a);
         let base_width = shape.stroke_width.max(0.0);
 
         match state {
             ShapeState::Normal => (base_fill, base_stroke, base_width),
             ShapeState::Hover => {
                 let s = shape.states.hover.as_ref();
-                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgb(c.r, c.g, c.b));
-                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a));
+                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a));
                 let width = s.and_then(|st| st.stroke_width).unwrap_or(base_width);
                 (fill, stroke, width)
             }
             ShapeState::Pressed => {
                 let s = shape.states.pressed.as_ref();
-                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgb(c.r, c.g, c.b));
-                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a));
+                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a));
                 let width = s.and_then(|st| st.stroke_width).unwrap_or(base_width);
                 (fill, stroke, width)
             }
