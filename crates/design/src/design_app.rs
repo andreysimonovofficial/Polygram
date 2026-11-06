@@ -12,8 +12,6 @@ use std::path::PathBuf;
 pub struct DesignApp {
     pub free_canvas: FreeCanvas,
     pub file_path: Option<PathBuf>,
-    pub show_export_dialog: bool,
-    pub export_json: String,
     pub show_open_dialog: bool,
     pub show_save_as_dialog: bool,
     pub dialog_path: String,
@@ -25,8 +23,6 @@ impl DesignApp {
         Self {
             free_canvas: FreeCanvas::new(),
             file_path: None,
-            show_export_dialog: false,
-            export_json: String::new(),
             show_open_dialog: false,
             show_save_as_dialog: false,
             dialog_path: String::new(),
@@ -65,10 +61,6 @@ impl DesignApp {
                     self.show_save_as_dialog = true;
                 }
                 ui.separator();
-                if ui.button("Экспорт для Агента").clicked() {
-                    self.show_export_dialog = true;
-                }
-                ui.separator();
                 ui.label(format!("Статус: {}", self.status));
             });
         });
@@ -76,10 +68,6 @@ impl DesignApp {
         self.file_dialogs(ctx);
 
         self.free_canvas.ui(ctx, frame);
-
-        if self.show_export_dialog {
-            self.export_dialog(ctx);
-        }
     }
 
     /// Диалоги открытия и сохранения файла дизайна (JSON).
@@ -144,32 +132,6 @@ impl DesignApp {
                     });
                 });
         }
-    }
-
-    /// Экспорт дизайна в JSON для Агента.
-    fn export_dialog(&mut self, ctx: &Context) {
-        egui::Window::new("Экспорт для Агента")
-            .collapsible(true)
-            .resizable(true)
-            .default_size([600.0, 400.0])
-            .show(ctx, |ui| {
-                ui.label("JSON-дизайн для передачи Агенту:");
-                ui.separator();
-                self.export_json = self.free_canvas.doc.to_json().unwrap_or_default();
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.code(&self.export_json);
-                });
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if ui.button("Копировать в буфер обмена").clicked() {
-                        ctx.copy_text(self.export_json.clone());
-                        self.status = "JSON скопирован в буфер обмена".to_owned();
-                    }
-                    if ui.button("Закрыть").clicked() {
-                        self.show_export_dialog = false;
-                    }
-                });
-            });
     }
 }
 
