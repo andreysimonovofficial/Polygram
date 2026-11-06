@@ -36,7 +36,10 @@ fn exact_and_surplus_supply() {
     assert_eq!(status(&e, "p", "o1"), StatusCode::Ok);
     set_value(&mut e, "p", "o1", 150.0);
     assert_eq!(status(&e, "p", "o1"), StatusCode::Surplus);
-    assert!((value_of(&e, "a", "r1") - 60.0).abs() < 1e-9, "лишнее не раздаётся сверх требования");
+    assert!(
+        (value_of(&e, "a", "r1") - 60.0).abs() < 1e-9,
+        "лишнее не раздаётся сверх требования"
+    );
 }
 
 #[test]
@@ -107,11 +110,32 @@ fn requirement_change_updates_all_sources() {
 #[test]
 fn bad_input_is_rejected() {
     let mut e = producer_with_two_consumers(10.0);
-    let r = e.apply(Scope::Root, Command::SetValue { object: "p".into(), entry: "o1".into(), value: f64::NAN });
+    let r = e.apply(
+        Scope::Root,
+        Command::SetValue {
+            object: "p".into(),
+            entry: "o1".into(),
+            value: f64::NAN,
+        },
+    );
     assert_eq!(r.unwrap_err().code(), "invalid_number");
-    let r = e.apply(Scope::Root, Command::SetRequired { object: "p".into(), entry: "o1".into(), required: 1.0 });
+    let r = e.apply(
+        Scope::Root,
+        Command::SetRequired {
+            object: "p".into(),
+            entry: "o1".into(),
+            required: 1.0,
+        },
+    );
     assert_eq!(r.unwrap_err().code(), "wrong_direction");
-    let r = e.apply(Scope::Root, Command::SetValue { object: "нет".into(), entry: "o1".into(), value: 1.0 });
+    let r = e.apply(
+        Scope::Root,
+        Command::SetValue {
+            object: "нет".into(),
+            entry: "o1".into(),
+            value: 1.0,
+        },
+    );
     assert_eq!(r.unwrap_err().code(), "object_not_found");
 }
 
@@ -120,12 +144,24 @@ fn invalid_connections_are_rejected() {
     let mut e = producer_with_two_consumers(10.0);
     let dup = e.apply(
         Scope::Root,
-        Command::Connect { from_object: "p".into(), from_entry: "o1".into(), to_object: "a".into(), to_entry: "r1".into(), throughput: 100.0 },
+        Command::Connect {
+            from_object: "p".into(),
+            from_entry: "o1".into(),
+            to_object: "a".into(),
+            to_entry: "r1".into(),
+            throughput: 100.0,
+        },
     );
     assert_eq!(dup.unwrap_err().code(), "edge_exists");
     let reversed = e.apply(
         Scope::Root,
-        Command::Connect { from_object: "a".into(), from_entry: "r1".into(), to_object: "p".into(), to_entry: "o1".into(), throughput: 100.0 },
+        Command::Connect {
+            from_object: "a".into(),
+            from_entry: "r1".into(),
+            to_object: "p".into(),
+            to_entry: "o1".into(),
+            throughput: 100.0,
+        },
     );
     assert_eq!(reversed.unwrap_err().code(), "invalid_connection");
     object(&mut e, "q");
@@ -133,7 +169,13 @@ fn invalid_connections_are_rejected() {
     req(&mut e, "q", "r1", "tovary", 1.0, None);
     let selfloop = e.apply(
         Scope::Root,
-        Command::Connect { from_object: "q".into(), from_entry: "o1".into(), to_object: "q".into(), to_entry: "r1".into(), throughput: 100.0 },
+        Command::Connect {
+            from_object: "q".into(),
+            from_entry: "o1".into(),
+            to_object: "q".into(),
+            to_entry: "r1".into(),
+            throughput: 100.0,
+        },
     );
     assert_eq!(selfloop.unwrap_err().code(), "invalid_connection");
 }
@@ -186,7 +228,13 @@ fn bottlenecks_are_ranked_by_shortfall() {
 #[test]
 fn commands_parse_from_json() {
     let c: Command = serde_json::from_str(r#"{"cmd":"add_object","name":"A","at":[0,0]}"#).unwrap();
-    assert!(matches!(c, Command::AddObject { at: Some([0, 0]), .. }));
+    assert!(matches!(
+        c,
+        Command::AddObject {
+            at: Some([0, 0]),
+            ..
+        }
+    ));
     let c: Command =
         serde_json::from_str(r#"{"cmd":"set_value","object":"a","entry":"o1","value":5}"#).unwrap();
     assert!(matches!(c, Command::SetValue { value, .. } if value == 5.0));

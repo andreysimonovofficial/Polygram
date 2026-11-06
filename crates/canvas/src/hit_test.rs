@@ -1,9 +1,15 @@
 use egui::Pos2;
-use polygram_core::Geometry;
 use polygram_core::layout::Rect as CoreRect;
+use polygram_core::Geometry;
 
 /// Определить объект под заданной экранной позицией.
-pub fn object_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: egui::Vec2, camera_zoom: f32, cell_size: f32) -> Option<&'a str> {
+pub fn object_at<'a>(
+    geometry: &'a Geometry,
+    screen_pos: Pos2,
+    camera_offset: egui::Vec2,
+    camera_zoom: f32,
+    cell_size: f32,
+) -> Option<&'a str> {
     let cell_px = cell_size * camera_zoom;
     for object in &geometry.objects {
         if object.kind == polygram_core::types::NodeKind::Department {
@@ -11,7 +17,12 @@ pub fn object_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: eg
         }
         let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
         let rect_px = egui::Rect::from_min_size(
-            world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px, camera_offset, camera_zoom),
+            world_to_screen(
+                Pos2::new(r.x as f32, r.y as f32),
+                cell_px,
+                camera_offset,
+                camera_zoom,
+            ),
             egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
         );
         if rect_px.contains(screen_pos) {
@@ -24,7 +35,12 @@ pub fn object_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: eg
         }
         let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
         let rect_px = egui::Rect::from_min_size(
-            world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px, camera_offset, camera_zoom),
+            world_to_screen(
+                Pos2::new(r.x as f32, r.y as f32),
+                cell_px,
+                camera_offset,
+                camera_zoom,
+            ),
             egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
         );
         if rect_px.contains(screen_pos) {
@@ -35,7 +51,13 @@ pub fn object_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: eg
 }
 
 /// Вернуть id объекта, если экранная позиция попадает в его шапку.
-pub fn header_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: egui::Vec2, camera_zoom: f32, cell_size: f32) -> Option<&'a str> {
+pub fn header_at<'a>(
+    geometry: &'a Geometry,
+    screen_pos: Pos2,
+    camera_offset: egui::Vec2,
+    camera_zoom: f32,
+    cell_size: f32,
+) -> Option<&'a str> {
     let cell_px = cell_size * camera_zoom;
     for object in &geometry.objects {
         if object.kind == polygram_core::types::NodeKind::Department {
@@ -43,7 +65,12 @@ pub fn header_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: eg
         }
         let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
         let rect_px = egui::Rect::from_min_size(
-            world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px, camera_offset, camera_zoom),
+            world_to_screen(
+                Pos2::new(r.x as f32, r.y as f32),
+                cell_px,
+                camera_offset,
+                camera_zoom,
+            ),
             egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
         );
         let header_h = cell_px;
@@ -59,7 +86,12 @@ pub fn header_at<'a>(geometry: &'a Geometry, screen_pos: Pos2, camera_offset: eg
         }
         let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
         let rect_px = egui::Rect::from_min_size(
-            world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px, camera_offset, camera_zoom),
+            world_to_screen(
+                Pos2::new(r.x as f32, r.y as f32),
+                cell_px,
+                camera_offset,
+                camera_zoom,
+            ),
             egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
         );
         let header_h = cell_px * 1.2;

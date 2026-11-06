@@ -1,8 +1,8 @@
+use crate::engine::Engine;
 use crate::{
     command::Applied,
     error::{EngineError, Result},
 };
-use crate::engine::Engine;
 
 pub fn handle_connect(
     engine: &mut Engine,
@@ -20,7 +20,9 @@ pub fn handle_connect(
     engine.vals.mark_out(from);
     engine.vals.mark_in(to);
     engine.layout.queue_route(edge);
-    engine.pending.push(crate::event::EventKind::EdgeAdded { edge: edge.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::EdgeAdded { edge: edge.0 });
     Ok(Applied::default())
 }
 
@@ -33,7 +35,10 @@ pub fn handle_disconnect(
 ) -> Result<Applied> {
     let (_, from) = engine.find_entry(from_object, from_entry)?;
     let (_, to) = engine.find_entry(to_object, to_entry)?;
-    let edge = engine.hier.find_edge(from, to).ok_or(EngineError::EdgeNotFound)?;
+    let edge = engine
+        .hier
+        .find_edge(from, to)
+        .ok_or(EngineError::EdgeNotFound)?;
     engine.remove_edge_internal(edge);
     Ok(Applied::default())
 }

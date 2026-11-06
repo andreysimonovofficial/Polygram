@@ -73,7 +73,8 @@ impl Layout {
             if processed == alive.len() {
                 break;
             }
-            while cursor < alive.len() && (done[alive[cursor].idx()] || queued[alive[cursor].idx()]) {
+            while cursor < alive.len() && (done[alive[cursor].idx()] || queued[alive[cursor].idx()])
+            {
                 cursor += 1;
             }
             let v = alive[cursor].idx();

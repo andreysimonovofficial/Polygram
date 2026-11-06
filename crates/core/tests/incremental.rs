@@ -39,20 +39,28 @@ fn incremental_equals_full_recompute_under_random_operations() {
             let a = ids[rng.below(ids.len())].clone();
             let b = ids[rng.below(ids.len())].clone();
             let cmd = match rng.below(12) {
-                0 | 1 | 2 => random_metric(&e, &a, &mut rng, Some(Direction::Output)).map(|m| Command::SetValue {
-                    object: a.clone(),
-                    entry: m,
-                    value: (rng.unit() * 120.0 * 100.0).round() / 100.0,
+                0 | 1 | 2 => random_metric(&e, &a, &mut rng, Some(Direction::Output)).map(|m| {
+                    Command::SetValue {
+                        object: a.clone(),
+                        entry: m,
+                        value: (rng.unit() * 120.0 * 100.0).round() / 100.0,
+                    }
                 }),
-                3 => random_metric(&e, &a, &mut rng, Some(Direction::Request)).map(|m| Command::SetRequired {
-                    object: a.clone(),
-                    entry: m,
-                    required: (rng.unit() * 90.0).round(),
+                3 => random_metric(&e, &a, &mut rng, Some(Direction::Request)).map(|m| {
+                    Command::SetRequired {
+                        object: a.clone(),
+                        entry: m,
+                        required: (rng.unit() * 90.0).round(),
+                    }
                 }),
                 4 => random_metric(&e, &a, &mut rng, None).map(|m| Command::SetMax {
                     object: a.clone(),
                     entry: m,
-                    max: if rng.below(3) == 0 { None } else { Some((rng.unit() * 70.0).round()) },
+                    max: if rng.below(3) == 0 {
+                        None
+                    } else {
+                        Some((rng.unit() * 70.0).round())
+                    },
                 }),
                 5 | 6 | 7 => {
                     let m1 = random_metric(&e, &a, &mut rng, Some(Direction::Output));
@@ -81,10 +89,17 @@ fn incremental_equals_full_recompute_under_random_operations() {
                         _ => None,
                     }
                 }
-                9 => random_metric(&e, &a, &mut rng, None).map(|m| Command::RemoveMetricEntry { object: a.clone(), entry: m }),
+                9 => random_metric(&e, &a, &mut rng, None).map(|m| Command::RemoveMetricEntry {
+                    object: a.clone(),
+                    entry: m,
+                }),
                 10 => Some(Command::AddMetricEntry {
                     object: a.clone(),
-                    dir: if rng.below(2) == 0 { Direction::Request } else { Direction::Output },
+                    dir: if rng.below(2) == 0 {
+                        Direction::Request
+                    } else {
+                        Direction::Output
+                    },
                     id: None,
                     metric_def: "tovary".into(),
                     name: "новый".into(),
@@ -102,7 +117,13 @@ fn incremental_equals_full_recompute_under_random_operations() {
                         counter += 1;
                         let id = format!("x{counter}");
                         ids.push(id.clone());
-                        Some(Command::AddObject { id: Some(id), name: "новый".into(), kind: NodeKind::Process, at: None, parent: None })
+                        Some(Command::AddObject {
+                            id: Some(id),
+                            name: "новый".into(),
+                            kind: NodeKind::Process,
+                            at: None,
+                            parent: None,
+                        })
                     }
                 }
             };
@@ -110,10 +131,18 @@ fn incremental_equals_full_recompute_under_random_operations() {
                 let _ = e.apply(Scope::Root, cmd); // часть команд законно отклоняется (дубликаты, лимиты)
             }
             if step % 25 == 0 {
-                assert_eq!(e.dynamic_state(), e.recomputed_state(), "расхождение на шаге {step}, seed {seed}");
+                assert_eq!(
+                    e.dynamic_state(),
+                    e.recomputed_state(),
+                    "расхождение на шаге {step}, seed {seed}"
+                );
             }
         }
-        assert_eq!(e.dynamic_state(), e.recomputed_state(), "итоговое расхождение, seed {seed}");
+        assert_eq!(
+            e.dynamic_state(),
+            e.recomputed_state(),
+            "итоговое расхождение, seed {seed}"
+        );
         assert_no_overlaps(&e);
         for edge in e.geometry().edges {
             assert_orthogonal(&edge.points);
@@ -131,7 +160,8 @@ fn removing_nodes_updates_neighbours() {
     req(&mut e, "a", "r1", "tovary", 100.0, None);
     connect(&mut e, "p", "o1", "a", "r1");
     assert_eq!(status(&e, "a", "r1"), StatusCode::Ok);
-    e.apply(Scope::Root, Command::RemoveObject { object: "p".into() }).unwrap();
+    e.apply(Scope::Root, Command::RemoveObject { object: "p".into() })
+        .unwrap();
     assert_eq!(status(&e, "a", "r1"), StatusCode::Unconnected);
     assert_eq!(e.stats().edges, 0);
     assert_eq!(e.dynamic_state(), e.recomputed_state());
@@ -146,9 +176,14 @@ fn slots_are_reused_without_stale_state() {
     object(&mut e, "a");
     req(&mut e, "a", "r1", "tovary", 100.0, None);
     connect(&mut e, "p", "o1", "a", "r1");
-    e.apply(Scope::Root, Command::RemoveObject { object: "a".into() }).unwrap();
+    e.apply(Scope::Root, Command::RemoveObject { object: "a".into() })
+        .unwrap();
     object(&mut e, "b");
     req(&mut e, "b", "r1", "tovary", 10.0, None);
-    assert_eq!(status(&e, "b", "r1"), StatusCode::Unconnected, "в новом слоте не должно остаться чужого состояния");
+    assert_eq!(
+        status(&e, "b", "r1"),
+        StatusCode::Unconnected,
+        "в новом слоте не должно остаться чужого состояния"
+    );
     assert_eq!(e.dynamic_state(), e.recomputed_state());
 }

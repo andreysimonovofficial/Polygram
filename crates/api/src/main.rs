@@ -1,8 +1,8 @@
 //! Точка входа API-сервера Polygram.
 
-use polygram_api::ApiService;
 use polygram_api::http::router;
 use polygram_api::mcp::McpServer;
+use polygram_api::ApiService;
 use std::sync::Arc;
 
 #[tokio::main]

@@ -108,15 +108,24 @@ impl Hierarchy {
     }
 
     pub fn find_edge(&self, from: EntryIx, to: EntryIx) -> Option<EdgeIx> {
-        self.out_entries(from).find(|&e| self.edges[e.idx()].to == to)
+        self.out_entries(from)
+            .find(|&e| self.edges[e.idx()].to == to)
     }
 
     pub fn out_entries(&self, e: EntryIx) -> EdgeIter<'_> {
-        EdgeIter { h: self, cur: self.first_out[e.idx()], by_from: true }
+        EdgeIter {
+            h: self,
+            cur: self.first_out[e.idx()],
+            by_from: true,
+        }
     }
 
     pub fn in_entries(&self, e: EntryIx) -> EdgeIter<'_> {
-        EdgeIter { h: self, cur: self.first_in[e.idx()], by_from: false }
+        EdgeIter {
+            h: self,
+            cur: self.first_in[e.idx()],
+            by_from: false,
+        }
     }
 
     /// Число связей записи.
@@ -234,15 +243,19 @@ impl Hierarchy {
         loop {
             self.id_counter += 1;
             let id = format!("{prefix}{}", self.id_counter);
-            if !self.by_ext_object.contains_key(&id)
-                && !self.by_ext_metric_def.contains_key(&id)
-            {
+            if !self.by_ext_object.contains_key(&id) && !self.by_ext_metric_def.contains_key(&id) {
                 return id;
             }
         }
     }
 
-    pub fn add_object(&mut self, ext: Option<String>, name: String, kind: NodeKind, parent: Option<ObjectIx>) -> Result<ObjectIx> {
+    pub fn add_object(
+        &mut self,
+        ext: Option<String>,
+        name: String,
+        kind: NodeKind,
+        parent: Option<ObjectIx>,
+    ) -> Result<ObjectIx> {
         let ext_id = match ext.filter(|s| !s.trim().is_empty()) {
             Some(id) => {
                 if self.by_ext_object.contains_key(&id) {
@@ -343,7 +356,10 @@ impl Hierarchy {
         // Проверяем, что нет записей, ссылающихся на этот показатель
         for om in &self.object_metrics {
             if om.alive && om.metric_def == ix {
-                panic!("cannot remove metric_def {} referenced by entry {}", ix.0, om.ext_id);
+                panic!(
+                    "cannot remove metric_def {} referenced by entry {}",
+                    ix.0, om.ext_id
+                );
             }
         }
         self.by_ext_metric_def.remove(&md.ext_id);
@@ -443,7 +459,10 @@ impl Hierarchy {
     }
 
     pub fn connect(&mut self, from: EntryIx, to: EntryIx, throughput: f64) -> Result<EdgeIx> {
-        let (fm, tm) = (&self.object_metrics[from.idx()], &self.object_metrics[to.idx()]);
+        let (fm, tm) = (
+            &self.object_metrics[from.idx()],
+            &self.object_metrics[to.idx()],
+        );
         if fm.direction != Direction::Output || tm.direction != Direction::Request {
             return Err(EngineError::InvalidConnection(
                 "связь идёт только от записи Выхода к записи Запроса".to_owned(),

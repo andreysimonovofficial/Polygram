@@ -2,10 +2,7 @@
 //! Значения хранятся по записи (объект + запись показателя), а не по глобальному показателю.
 //! Один и тот же глобальный показатель может иметь разные значения в разных объектах.
 
-use crate::{
-    hierarchy::Hierarchy,
-    types::*,
-};
+use crate::{hierarchy::Hierarchy, types::*};
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Values {
@@ -94,7 +91,11 @@ impl Values {
     }
 
     /// Пересчитать все значения и статусы.
-    pub fn recompute_all(&mut self, h: &Hierarchy, changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>) {
+    pub fn recompute_all(
+        &mut self,
+        h: &Hierarchy,
+        changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>,
+    ) {
         changes.clear();
         // Сначала выходы (источники), потом запросы (цели).
         for e in h.live_object_metrics() {
@@ -132,7 +133,12 @@ impl Values {
         }
     }
 
-    fn recompute_exit(&mut self, h: &Hierarchy, e: EntryIx, changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>) {
+    fn recompute_exit(
+        &mut self,
+        h: &Hierarchy,
+        e: EntryIx,
+        changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>,
+    ) {
         let meta = h.object_metric(e);
         debug_assert_eq!(meta.direction, Direction::Output);
         let i = e.idx();
@@ -166,7 +172,12 @@ impl Values {
         }
     }
 
-    fn recompute_request(&mut self, h: &Hierarchy, e: EntryIx, changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>) {
+    fn recompute_request(
+        &mut self,
+        h: &Hierarchy,
+        e: EntryIx,
+        changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>,
+    ) {
         let meta = h.object_metric(e);
         debug_assert_eq!(meta.direction, Direction::Request);
         let i = e.idx();
@@ -225,12 +236,26 @@ impl PartialEq for DynamicState {
     fn eq(&self, other: &Self) -> bool {
         self.rev == other.rev
             && self.value.len() == other.value.len()
-            && self.value.iter().zip(other.value.iter()).all(|(a, b)| (a - b).abs() < 1e-9)
-            && self.required.iter().zip(other.required.iter()).all(|(a, b)| (a - b).abs() < 1e-9)
-            && self.max.iter().zip(other.max.iter()).all(|(a, b)| {
-                (a.is_nan() && b.is_nan()) || (a - b).abs() < 1e-9
-            })
-            && self.fact.iter().zip(other.fact.iter()).all(|(a, b)| (a - b).abs() < 1e-9)
+            && self
+                .value
+                .iter()
+                .zip(other.value.iter())
+                .all(|(a, b)| (a - b).abs() < 1e-9)
+            && self
+                .required
+                .iter()
+                .zip(other.required.iter())
+                .all(|(a, b)| (a - b).abs() < 1e-9)
+            && self
+                .max
+                .iter()
+                .zip(other.max.iter())
+                .all(|(a, b)| (a.is_nan() && b.is_nan()) || (a - b).abs() < 1e-9)
+            && self
+                .fact
+                .iter()
+                .zip(other.fact.iter())
+                .all(|(a, b)| (a - b).abs() < 1e-9)
             && self.status == other.status
     }
 }

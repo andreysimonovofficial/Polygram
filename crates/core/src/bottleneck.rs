@@ -17,7 +17,10 @@ pub struct Bottleneck {
 pub fn find(h: &Hierarchy, v: &Values, limit: usize) -> Vec<Bottleneck> {
     let mut found: Vec<Bottleneck> = h
         .live_object_metrics()
-        .filter(|&e| h.object_metric(e).direction == Direction::Output && v.status[e.idx()] == StatusCode::Deficit)
+        .filter(|&e| {
+            h.object_metric(e).direction == Direction::Output
+                && v.status[e.idx()] == StatusCode::Deficit
+        })
         .map(|e| {
             // Недостача = сумма требуемого целями − значение выхода.
             let mut demand: f64 = 0.0;

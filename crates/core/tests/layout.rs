@@ -4,15 +4,31 @@ use common::*;
 use polygram_core::*;
 
 fn metric_def(e: &mut Engine, id: &str, name: &str, kind: MetricKind, unit: &str) {
-    e.apply(Scope::Root, Command::AddMetricDef { id: Some(id.into()), name: name.into(), kind, unit: unit.into(), api: None }).unwrap();
+    e.apply(
+        Scope::Root,
+        Command::AddMetricDef {
+            id: Some(id.into()),
+            name: name.into(),
+            kind,
+            unit: unit.into(),
+            api: None,
+        },
+    )
+    .unwrap();
 }
 
 #[test]
 fn occupied_cells_are_rejected() {
     let mut e = Engine::new();
     object_at(&mut e, "a", [0, 0]).unwrap();
-    assert_eq!(object_at(&mut e, "b", [0, 0]).unwrap_err().code(), "cell_occupied");
-    assert_eq!(object_at(&mut e, "b", [7, 1]).unwrap_err().code(), "cell_occupied");
+    assert_eq!(
+        object_at(&mut e, "b", [0, 0]).unwrap_err().code(),
+        "cell_occupied"
+    );
+    assert_eq!(
+        object_at(&mut e, "b", [7, 1]).unwrap_err().code(),
+        "cell_occupied"
+    );
     object_at(&mut e, "b", [30, 0]).unwrap(); // вплотную справа — можно
     object_at(&mut e, "c", [0, 30]).unwrap(); // вплотную снизу — можно
     assert_eq!(e.stats().objects, 3);
@@ -32,17 +48,36 @@ fn auto_placement_never_overlaps() {
 #[test]
 fn move_respects_occupancy_and_ghost_check() {
     let mut e = Engine::new();
-    object_at(&mut e, "a", [0, 0]).unwrap();   // a: 0..30 x, 0..30 y
-    object_at(&mut e, "b", [60, 0]).unwrap();  // b: 60..90 x, 0..30 y
-    assert!(!e.can_place("a", [35, 0]).unwrap(), "35..65 задевает соседа в 60");
+    object_at(&mut e, "a", [0, 0]).unwrap(); // a: 0..30 x, 0..30 y
+    object_at(&mut e, "b", [60, 0]).unwrap(); // b: 60..90 x, 0..30 y
+    assert!(
+        !e.can_place("a", [35, 0]).unwrap(),
+        "35..65 задевает соседа в 60"
+    );
     assert!(e.can_place("a", [5, 0]).unwrap(), "5..35 свободен");
-    let r = e.apply(Scope::Root, Command::MoveObject { object: "a".into(), at: [35, 1] });
+    let r = e.apply(
+        Scope::Root,
+        Command::MoveObject {
+            object: "a".into(),
+            at: [35, 1],
+        },
+    );
     assert_eq!(r.unwrap_err().code(), "cell_occupied");
-    e.apply(Scope::Root, Command::MoveObject { object: "a".into(), at: [5, 0] }).unwrap();
+    e.apply(
+        Scope::Root,
+        Command::MoveObject {
+            object: "a".into(),
+            at: [5, 0],
+        },
+    )
+    .unwrap();
     assert_eq!(e.object_view("a").unwrap().at, [5, 0]);
     // сам на себя можно (сдвиг на одну клетку внутри собственной площади)
     assert!(e.can_place("a", [4, 0]).unwrap());
-    assert!(!e.can_place("a", [31, 0]).unwrap(), "31..61 задевает соседа в 60");
+    assert!(
+        !e.can_place("a", [31, 0]).unwrap(),
+        "31..61 задевает соседа в 60"
+    );
 }
 
 #[test]
@@ -51,13 +86,17 @@ fn growing_card_relocates_instead_of_overlapping() {
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object_at(&mut e, "a", [0, 0]).unwrap();
     object_at(&mut e, "b", [0, 30]).unwrap(); // вплотную под a
-    // Добавляем максимум показателей — карточка остаётся 30×30 (минимум)
+                                              // Добавляем максимум показателей — карточка остаётся 30×30 (минимум)
     for k in 0..MAX_METRICS_PER_SIDE {
         out(&mut e, "a", &format!("o{k}"), "tovary", 1.0, None);
     }
     assert_no_overlaps(&e);
     assert_eq!(e.object_view("b").unwrap().at, [0, 30], "соседа не двигаем");
-    assert_eq!(e.object_view("a").unwrap().at, [0, 0], "карточка не переезжает (уже 30×30)");
+    assert_eq!(
+        e.object_view("a").unwrap().at,
+        [0, 0],
+        "карточка не переезжает (уже 30×30)"
+    );
 }
 
 #[test]
@@ -71,13 +110,21 @@ fn straight_forward_and_dogleg_routes() {
     connect(&mut e, "a", "o1", "b", "r1");
     let g = e.geometry();
     assert_eq!(g.edges.len(), 1);
-    assert_eq!(g.edges[0].points.len(), 2, "одна строка и свободно — прямая линия");
+    assert_eq!(
+        g.edges[0].points.len(),
+        2,
+        "одна строка и свободно — прямая линия"
+    );
 
     object_at(&mut e, "c", [60, 70]).unwrap();
     req(&mut e, "c", "r1", "tovary", 10.0, None);
     connect(&mut e, "a", "o1", "c", "r1");
     let g = e.geometry();
-    let dog = g.edges.iter().find(|x| x.points.len() > 2).expect("ломаная");
+    let dog = g
+        .edges
+        .iter()
+        .find(|x| x.points.len() > 2)
+        .expect("ломаная");
     assert_eq!(dog.points.len(), 4);
     assert_orthogonal(&dog.points);
 }
@@ -124,7 +171,11 @@ fn overlapping_vertical_routes_get_separate_lanes() {
     let mut xs: Vec<i32> = g.edges.iter().map(|x| x.points[1].x).collect();
     xs.sort_unstable();
     xs.dedup();
-    assert_eq!(xs.len(), 3, "три пересекающиеся линии идут по трём разным дорожкам: {xs:?}");
+    assert_eq!(
+        xs.len(),
+        3,
+        "три пересекающиеся линии идут по трём разным дорожкам: {xs:?}"
+    );
 }
 
 #[test]
@@ -143,8 +194,13 @@ fn route_avoids_blocking_card_when_possible() {
     connect(&mut e, "a", "o1", "b", "r1");
     let g = e.geometry();
     let col = g.edges[0].points[1].x / 4;
-    let wall = e.layout().rect_of(e.hierarchy().find_object("wall").unwrap());
-    assert!(col < wall.x || col >= wall.x + wall.w, "вертикаль не должна идти сквозь карточку");
+    let wall = e
+        .layout()
+        .rect_of(e.hierarchy().find_object("wall").unwrap());
+    assert!(
+        col < wall.x || col >= wall.x + wall.w,
+        "вертикаль не должна идти сквозь карточку"
+    );
 }
 
 #[test]
@@ -223,7 +279,10 @@ fn events_are_ordered_and_gaps_detected() {
     let log = polygram_core::event::EventLog::new(3);
     let mut log = log;
     for r in 1..=5 {
-        log.push(Event { rev: r, kind: EventKind::RoutesChanged });
+        log.push(Event {
+            rev: r,
+            kind: EventKind::RoutesChanged,
+        });
     }
     assert_eq!(log.since(0).unwrap_err().oldest_available, 3);
     assert_eq!(log.since(2).unwrap().len(), 3);

@@ -27,9 +27,17 @@ pub enum Command {
         #[serde(default)]
         parent: Option<String>,
     },
-    RemoveObject { object: String },
-    RenameObject { object: String, name: String },
-    MoveObject { object: String, at: [i32; 2] },
+    RemoveObject {
+        object: String,
+    },
+    RenameObject {
+        object: String,
+        name: String,
+    },
+    MoveObject {
+        object: String,
+        at: [i32; 2],
+    },
 
     /// Создать глобальный показатель (единый для всего холста).
     AddMetricDef {
@@ -43,8 +51,13 @@ pub enum Command {
         #[serde(default)]
         api: Option<MetricApi>,
     },
-    RemoveMetricDef { metric_def: String },
-    RenameMetricDef { metric_def: String, name: String },
+    RemoveMetricDef {
+        metric_def: String,
+    },
+    RenameMetricDef {
+        metric_def: String,
+        name: String,
+    },
 
     /// Добавить запись показателя в контейнер объекта.
     AddMetricEntry {
@@ -63,11 +76,30 @@ pub enum Command {
         #[serde(default = "zero")]
         fact: f64,
     },
-    RemoveMetricEntry { object: String, entry: String },
-    SetValue { object: String, entry: String, value: f64 },
-    SetRequired { object: String, entry: String, required: f64 },
-    SetMax { object: String, entry: String, max: Option<f64> },
-    SetFact { object: String, entry: String, fact: f64 },
+    RemoveMetricEntry {
+        object: String,
+        entry: String,
+    },
+    SetValue {
+        object: String,
+        entry: String,
+        value: f64,
+    },
+    SetRequired {
+        object: String,
+        entry: String,
+        required: f64,
+    },
+    SetMax {
+        object: String,
+        entry: String,
+        max: Option<f64>,
+    },
+    SetFact {
+        object: String,
+        entry: String,
+        fact: f64,
+    },
 
     /// Связь: запись Выхода источника → запись Запроса цели.
     /// throughput — доля Выхода в процентах (0..=100) или абсолютное значение.

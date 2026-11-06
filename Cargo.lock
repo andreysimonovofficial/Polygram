@@ -2543,6 +2543,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "polygram-design"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "polygram-canvas",
+ "polygram-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "polygram-shell"
 version = "0.1.0"
 dependencies = [

@@ -9,7 +9,10 @@ pub struct Camera {
 
 impl Camera {
     pub fn new() -> Self {
-        Self { offset: Vec2::ZERO, zoom: 1.0 }
+        Self {
+            offset: Vec2::ZERO,
+            zoom: 1.0,
+        }
     }
 
     pub fn world_to_screen(&self, p: Pos2, cell_size: f32) -> Pos2 {

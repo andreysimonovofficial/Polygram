@@ -1,6 +1,6 @@
 use crate::app::PolygramApp;
-use polygram_core::Command;
 use polygram_canvas::Camera;
+use polygram_core::Command;
 
 pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("menu").show(ctx, |ui| {

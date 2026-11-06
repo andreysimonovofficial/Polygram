@@ -233,12 +233,7 @@ impl Layout {
 
     /// Свободное место для rect w×h внутри rect родителя (отдела), ниже шапки.
     /// Ищет перебором от левого верхнего угла внутренней области.
-    pub fn find_free_in_parent(
-        &self,
-        parent: ObjectIx,
-        w: i32,
-        h: i32,
-    ) -> Option<(i32, i32)> {
+    pub fn find_free_in_parent(&self, parent: ObjectIx, w: i32, h: i32) -> Option<(i32, i32)> {
         let pr = self.rect_of(parent);
         let inner_y = pr.y + 2;
         let inner_h = pr.h.saturating_sub(2);
@@ -271,13 +266,19 @@ impl Layout {
     /// Точка выхода k-го выходного показателя (правая граница карточки), в квантах.
     pub fn out_port(&self, o: ObjectIx, k: usize) -> Point {
         let r = self.rect[o.idx()];
-        Point { x: (r.x + r.w) * Q, y: (r.y + 1 + k as i32) * Q + Q / 2 }
+        Point {
+            x: (r.x + r.w) * Q,
+            y: (r.y + 1 + k as i32) * Q + Q / 2,
+        }
     }
 
     /// Точка входа k-го запроса (левая граница карточки), в квантах.
     pub fn request_port(&self, o: ObjectIx, k: usize) -> Point {
         let r = self.rect[o.idx()];
-        Point { x: r.x * Q, y: (r.y + 1 + k as i32) * Q + Q / 2 }
+        Point {
+            x: r.x * Q,
+            y: (r.y + 1 + k as i32) * Q + Q / 2,
+        }
     }
 
     // ---------- очередь перемаршрутизации ----------

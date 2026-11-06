@@ -11,22 +11,14 @@ pub fn paint_department_frame(
     theme: &Theme,
 ) {
     // Внешняя рамка отдела
-    painter.rect_stroke(
-        rect_px,
-        2.0,
-        Stroke::new(2.0_f32, theme.card_border),
-    );
-    painter.rect_filled(rect_px, 2.0, theme.card_bg);
+    painter.rect_stroke(rect_px, theme.object_corner_radius, Stroke::new(theme.object_border_width, theme.card_border));
+    painter.rect_filled(rect_px, theme.object_corner_radius, theme.card_bg);
 
     // Шапка отдела
-    let header_h = cell_px * 1.2;
+    let header_h = cell_px * theme.object_header_height_cells;
     let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h));
     painter.rect_filled(header_rect, 0.0, theme.card_header);
-    painter.rect_stroke(
-        header_rect,
-        0.0,
-        Stroke::new(1.0_f32, theme.card_border),
-    );
+    painter.rect_stroke(header_rect, 0.0, Stroke::new(1.0_f32, theme.card_border));
 
     let title = format!("Отдел '{}'", object.name);
     painter.text(

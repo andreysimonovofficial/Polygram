@@ -29,8 +29,16 @@ pub struct Published {
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
 
 enum Msg {
-    Apply { scope: Scope, cmd: Command, reply: mpsc::Sender<Result<Applied>> },
-    Batch { scope: Scope, cmds: Vec<Command>, reply: mpsc::Sender<BatchResult> },
+    Apply {
+        scope: Scope,
+        cmd: Command,
+        reply: mpsc::Sender<Result<Applied>>,
+    },
+    Batch {
+        scope: Scope,
+        cmds: Vec<Command>,
+        reply: mpsc::Sender<BatchResult>,
+    },
     Query(Box<dyn FnOnce(&mut Engine) + Send>),
     Stop,
 }
@@ -46,12 +54,17 @@ pub struct EngineRuntime {
     join: Option<thread::JoinHandle<Engine>>,
 }
 
-fn publish(engine: &Engine, slot: &RwLock<Arc<Published>>, prev: &Arc<Published>) -> Arc<Published> {
-    let geometry = if prev.geometry.rev != engine.geometry_rev() || prev.rev == 0 && engine.rev() == 0 {
-        Arc::new(engine.geometry())
-    } else {
-        prev.geometry.clone()
-    };
+fn publish(
+    engine: &Engine,
+    slot: &RwLock<Arc<Published>>,
+    prev: &Arc<Published>,
+) -> Arc<Published> {
+    let geometry =
+        if prev.geometry.rev != engine.geometry_rev() || prev.rev == 0 && engine.rev() == 0 {
+            Arc::new(engine.geometry())
+        } else {
+            prev.geometry.clone()
+        };
     let next = Arc::new(Published {
         rev: engine.rev(),
         dynamic: Arc::new(engine.dynamic_state()),
@@ -121,7 +134,10 @@ impl EngineRuntime {
                 engine
             })
             .expect("не удалось запустить поток движка");
-        EngineRuntime { handle: EngineHandle { tx, published }, join: Some(join) }
+        EngineRuntime {
+            handle: EngineHandle { tx, published },
+            join: Some(join),
+        }
     }
 
     pub fn handle(&self) -> EngineHandle {
@@ -151,20 +167,29 @@ impl EngineHandle {
 
     pub fn apply_scoped(&self, scope: Scope, cmd: Command) -> Result<Applied> {
         let (reply, rx) = mpsc::channel();
-        self.tx.send(Msg::Apply { scope, cmd, reply }).map_err(|_| EngineError::Stopped)?;
+        self.tx
+            .send(Msg::Apply { scope, cmd, reply })
+            .map_err(|_| EngineError::Stopped)?;
         rx.recv().map_err(|_| EngineError::Stopped)?
     }
 
     pub fn apply_batch(&self, cmds: Vec<Command>) -> BatchResult {
         let (reply, rx) = mpsc::channel();
         self.tx
-            .send(Msg::Batch { scope: Scope::Root, cmds, reply })
+            .send(Msg::Batch {
+                scope: Scope::Root,
+                cmds,
+                reply,
+            })
             .map_err(|_| (0, EngineError::Stopped))?;
         rx.recv().map_err(|_| (0, EngineError::Stopped))?
     }
 
     /// Выполнить чтение на потоке движка и вернуть результат.
-    pub fn query<R: Send + 'static>(&self, f: impl FnOnce(&Engine) -> R + Send + 'static) -> Option<R> {
+    pub fn query<R: Send + 'static>(
+        &self,
+        f: impl FnOnce(&Engine) -> R + Send + 'static,
+    ) -> Option<R> {
         let (reply, rx) = mpsc::channel();
         let job = Box::new(move |e: &mut Engine| {
             let _ = reply.send(f(e));

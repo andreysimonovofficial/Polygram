@@ -1,8 +1,8 @@
 //! MCP сервер Polygram (JSON-RPC 2.0 over stdio).
 
-use serde_json::{Value, json};
-use std::io::{self, BufRead, Write};
 use polygram_core::Command;
+use serde_json::{json, Value};
+use std::io::{self, BufRead, Write};
 
 use super::ApiService;
 

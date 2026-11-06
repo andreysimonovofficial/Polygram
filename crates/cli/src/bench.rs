@@ -34,7 +34,15 @@ fn percentile(sorted: &[Duration], p: f64) -> Duration {
     sorted[((sorted.len() - 1) as f64 * p) as usize]
 }
 
-fn metric(object: &str, dir: Direction, id: &str, metric_def: &str, value: f64, required: f64, max: Option<f64>) -> Command {
+fn metric(
+    object: &str,
+    dir: Direction,
+    id: &str,
+    metric_def: &str,
+    value: f64,
+    required: f64,
+    max: Option<f64>,
+) -> Command {
     Command::AddMetricEntry {
         object: object.to_owned(),
         dir,
@@ -50,13 +58,41 @@ fn metric(object: &str, dir: Direction, id: &str, metric_def: &str, value: f64, 
 
 fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
     let mut cmds = Vec::with_capacity(n * 6 + n * 2);
-    cmds.push(Command::AddMetricDef { id: Some("tovary".into()), name: "Товары".into(), kind: Default::default(), unit: "ед.".into(), api: None });
+    cmds.push(Command::AddMetricDef {
+        id: Some("tovary".into()),
+        name: "Товары".into(),
+        kind: Default::default(),
+        unit: "ед.".into(),
+        api: None,
+    });
     for i in 0..n {
         let id = format!("n{i}");
-        cmds.push(Command::AddObject { id: Some(id.clone()), name: id.clone(), kind: NodeKind::Process, at: None, parent: None });
+        cmds.push(Command::AddObject {
+            id: Some(id.clone()),
+            name: id.clone(),
+            kind: NodeKind::Process,
+            at: None,
+            parent: None,
+        });
         for k in 1..=2 {
-            cmds.push(metric(&id, Direction::Request, &format!("r{k}"), "tovary", 0.0, 5.0 + rng.below(45) as f64, None));
-            cmds.push(metric(&id, Direction::Output, &format!("o{k}"), "tovary", rng.below(100) as f64, 0.0, Some(150.0)));
+            cmds.push(metric(
+                &id,
+                Direction::Request,
+                &format!("r{k}"),
+                "tovary",
+                0.0,
+                5.0 + rng.below(45) as f64,
+                None,
+            ));
+            cmds.push(metric(
+                &id,
+                Direction::Output,
+                &format!("o{k}"),
+                "tovary",
+                rng.below(100) as f64,
+                0.0,
+                Some(150.0),
+            ));
         }
     }
     let mut seen: HashSet<(usize, usize, usize, usize)> = HashSet::new();
@@ -84,7 +120,10 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
 }
 
 pub fn bench(n: usize) -> i32 {
-    println!("Замер ядра Polygram: {n} объектов, по 2 входа и 2 выхода, ~{} связей\n", n * 2);
+    println!(
+        "Замер ядра Polygram: {n} объектов, по 2 входа и 2 выхода, ~{} связей\n",
+        n * 2
+    );
     let mut rng = Rng(0x00C0FFEE);
     let cmds = build_commands(n, &mut rng);
     let total_cmds = cmds.len();
@@ -93,15 +132,24 @@ pub fn bench(n: usize) -> i32 {
     let t = Instant::now();
     e.apply_batch(Scope::Root, cmds).expect("построение графа");
     let build = t.elapsed();
-    println!("  Построение графа ({total_cmds} команд, расчёт и линии)  {}", ms(build));
+    println!(
+        "  Построение графа ({total_cmds} команд, расчёт и линии)  {}",
+        ms(build)
+    );
 
     let t = Instant::now();
     e.apply(Scope::Root, Command::AutoLayout).unwrap();
-    println!("  Автораскладка + маршруты всех связей                  {}", ms(t.elapsed()));
+    println!(
+        "  Автораскладка + маршруты всех связей                  {}",
+        ms(t.elapsed())
+    );
 
     let t = Instant::now();
     e.apply(Scope::Root, Command::RerouteAll).unwrap();
-    println!("  Пересчёт маршрутов всех связей                        {}", ms(t.elapsed()));
+    println!(
+        "  Пересчёт маршрутов всех связей                        {}",
+        ms(t.elapsed())
+    );
 
     // Инкрементальные обновления значений (как приходят от агентов и коннекторов).
     let updates = 10_000;
@@ -131,7 +179,15 @@ pub fn bench(n: usize) -> i32 {
         let id = format!("n{}", rng.below(n));
         let at = e.object_view(&id).unwrap().at;
         let t = Instant::now();
-        if e.apply(Scope::Root, Command::MoveObject { object: id, at: [at[0] + 1, at[1]] }).is_ok() {
+        if e.apply(
+            Scope::Root,
+            Command::MoveObject {
+                object: id,
+                at: [at[0] + 1, at[1]],
+            },
+        )
+        .is_ok()
+        {
             moves.push(t.elapsed());
         }
     }
@@ -152,19 +208,42 @@ pub fn bench(n: usize) -> i32 {
     let t = Instant::now();
     let geo = e.geometry();
     let t_geo = t.elapsed();
-    println!("  Снимок чисел для окна ({} показателей)            {}", dynamic.value.len(), ms(t_dyn));
-    println!("  Снимок геометрии для окна ({} объектов, {} линий) {}", geo.objects.len(), geo.edges.len(), ms(t_geo));
+    println!(
+        "  Снимок чисел для окна ({} показателей)            {}",
+        dynamic.value.len(),
+        ms(t_dyn)
+    );
+    println!(
+        "  Снимок геометрии для окна ({} объектов, {} линий) {}",
+        geo.objects.len(),
+        geo.edges.len(),
+        ms(t_geo)
+    );
 
     let t = Instant::now();
     let bn = e.bottlenecks(20);
-    println!("  Поиск узких мест (найдено {})                        {}", bn.len(), us(t.elapsed()));
+    println!(
+        "  Поиск узких мест (найдено {})                        {}",
+        bn.len(),
+        us(t.elapsed())
+    );
 
     let t = Instant::now();
     let fresh = e.recomputed_state();
     let t_full = t.elapsed();
     let ok = fresh == e.dynamic_state();
-    println!("  Полный пересчёт с нуля (для сверки)                   {}", ms(t_full));
-    println!("  Сверка инкрементального расчёта с полным: {}", if ok { "СОВПАДАЕТ" } else { "РАСХОЖДЕНИЕ!" });
+    println!(
+        "  Полный пересчёт с нуля (для сверки)                   {}",
+        ms(t_full)
+    );
+    println!(
+        "  Сверка инкрементального расчёта с полным: {}",
+        if ok {
+            "СОВПАДАЕТ"
+        } else {
+            "РАСХОЖДЕНИЕ!"
+        }
+    );
 
     // Через рантайм: движок в своём потоке, клиент ждёт ответ и публикуется снимок.
     let rt = EngineRuntime::spawn(e);

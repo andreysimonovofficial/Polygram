@@ -1,9 +1,14 @@
 use crate::app::PolygramApp;
-use polygram_core::Command;
+use polygram_canvas::object_at;
 use polygram_core::types::{Direction, NodeKind};
-use polygram_canvas::{object_at};
+use polygram_core::Command;
 
-pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &polygram_core::Published, close_menu: &mut bool) {
+pub fn context_menu(
+    app: &mut PolygramApp,
+    ctx: &egui::Context,
+    published: &polygram_core::Published,
+    close_menu: &mut bool,
+) {
     let menu_data = app.right_click.clone();
     if let Some((pos, object_id)) = &menu_data {
         egui::Window::new("Контекстное меню")
@@ -18,7 +23,8 @@ pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &poly
                         });
                         *close_menu = true;
                     }
-                    if ui.button("Добавить показатель в запрос").clicked() {
+                    if ui.button("Добавить показатель в запрос").clicked()
+                    {
                         let n_req = published
                             .geometry
                             .objects
@@ -73,7 +79,10 @@ pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &poly
                         .map(|n| n.kind);
                     if let Some(NodeKind::Department) = obj_kind {
                         if ui.button("Добавить объект в отдел").clicked() {
-                            let world_pos = app.canvas.camera.screen_to_world(*pos, app.canvas.cell_px());
+                            let world_pos = app
+                                .canvas
+                                .camera
+                                .screen_to_world(*pos, app.canvas.cell_px());
                             let cmd = Command::AddObject {
                                 id: None,
                                 name: "Новый процесс".to_owned(),
@@ -85,7 +94,10 @@ pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &poly
                             *close_menu = true;
                         }
                         if ui.button("Добавить отдел в отдел").clicked() {
-                            let world_pos = app.canvas.camera.screen_to_world(*pos, app.canvas.cell_px());
+                            let world_pos = app
+                                .canvas
+                                .camera
+                                .screen_to_world(*pos, app.canvas.cell_px());
                             let cmd = Command::AddObject {
                                 id: None,
                                 name: "Новый отдел".to_owned(),
@@ -114,7 +126,10 @@ pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &poly
                 }
                 if object_id.is_none() {
                     if ui.button("Добавить объект здесь").clicked() {
-                        let world_pos = app.canvas.camera.screen_to_world(*pos, app.canvas.cell_px());
+                        let world_pos = app
+                            .canvas
+                            .camera
+                            .screen_to_world(*pos, app.canvas.cell_px());
                         let cmd = Command::AddObject {
                             id: None,
                             name: "Новый объект".to_owned(),
@@ -126,7 +141,10 @@ pub fn context_menu(app: &mut PolygramApp, ctx: &egui::Context, published: &poly
                         *close_menu = true;
                     }
                     if ui.button("Добавить отдел здесь").clicked() {
-                        let world_pos = app.canvas.camera.screen_to_world(*pos, app.canvas.cell_px());
+                        let world_pos = app
+                            .canvas
+                            .camera
+                            .screen_to_world(*pos, app.canvas.cell_px());
                         let cmd = Command::AddObject {
                             id: None,
                             name: "Новый отдел".to_owned(),
@@ -179,10 +197,8 @@ pub fn handle_canvas_interaction(
                                 (pos.y / old_zoom - app.canvas.camera.offset.y) / cell_px_old;
                             // Новое смещение, чтобы та же мировая точка осталась под курсором.
                             let cell_px_new = app.canvas.cell_size * new_zoom;
-                            app.canvas.camera.offset.x =
-                                pos.x / new_zoom - world_x * cell_px_new;
-                            app.canvas.camera.offset.y =
-                                pos.y / new_zoom - world_y * cell_px_new;
+                            app.canvas.camera.offset.x = pos.x / new_zoom - world_x * cell_px_new;
+                            app.canvas.camera.offset.y = pos.y / new_zoom - world_y * cell_px_new;
                         }
                         app.canvas.camera.zoom = new_zoom;
                     }
@@ -199,7 +215,13 @@ pub fn handle_canvas_interaction(
         // Перемещение объекта за шапку: зажать левую кнопку на шапке и тащить.
         if canvas_response.drag_started_by(egui::PointerButton::Primary) {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
-                if let Some(object_id) = object_at(&published.geometry, pos, app.canvas.camera.offset, app.canvas.camera.zoom, app.canvas.cell_size) {
+                if let Some(object_id) = object_at(
+                    &published.geometry,
+                    pos,
+                    app.canvas.camera.offset,
+                    app.canvas.camera.zoom,
+                    app.canvas.cell_size,
+                ) {
                     let object = published
                         .geometry
                         .objects
@@ -270,7 +292,8 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas.paint(ui, &published.geometry, &published.dynamic, hovered_object);
+    app.canvas
+        .paint(ui, &published.geometry, &published.dynamic, hovered_object);
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {

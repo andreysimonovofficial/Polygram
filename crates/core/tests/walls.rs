@@ -23,16 +23,26 @@ fn no_mega_files() {
     assert!(!files.is_empty());
     for f in files {
         let n = fs::read_to_string(&f).unwrap().lines().count();
-        assert!(n <= 1000, "{} длиннее 1000 строк ({n}): разрежь на комнаты", f.display());
+        assert!(
+            n <= 1000,
+            "{} длиннее 1000 строк ({n}): разрежь на комнаты",
+            f.display()
+        );
     }
 }
 
 /// Ядро не знает об окне, графике и сети.
 #[test]
 fn core_stays_headless() {
-    let manifest = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap();
+    let manifest =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap();
     let deps = manifest.split("[dependencies]").nth(1).unwrap_or("");
-    for banned in ["egui", "eframe", "wgpu", "winit", "tokio", "axum", "hyper", "reqwest"] {
-        assert!(!deps.contains(banned), "ядро не должно зависеть от «{banned}»");
+    for banned in [
+        "egui", "eframe", "wgpu", "winit", "tokio", "axum", "hyper", "reqwest",
+    ] {
+        assert!(
+            !deps.contains(banned),
+            "ядро не должно зависеть от «{banned}»"
+        );
     }
 }

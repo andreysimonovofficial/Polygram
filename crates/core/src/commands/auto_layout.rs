@@ -1,6 +1,6 @@
 use crate::command::Applied;
-use crate::error::Result;
 use crate::engine::Engine;
+use crate::error::Result;
 
 pub fn handle_auto_layout(engine: &mut Engine) -> Result<Applied> {
     engine.layout.auto_layout(&engine.hier);

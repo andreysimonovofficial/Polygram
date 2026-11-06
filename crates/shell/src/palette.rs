@@ -15,7 +15,8 @@ pub fn command_palette(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.monospace("{ \"cmd\": \"add_node\", \"name\": \"Завод А\", \"kind\": \"process\" }");
             ui.separator();
             ui.text_edit_singleline(&mut app.command_input);
-            if ui.button("Выполнить").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ui.button("Выполнить").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
+            {
                 match serde_json::from_str::<Command>(&app.command_input) {
                     Ok(cmd) => {
                         app.apply_cmd(cmd);
@@ -27,7 +28,8 @@ pub fn command_palette(app: &mut PolygramApp, ctx: &egui::Context) {
                     }
                 }
             }
-            if ui.button("Отмена").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if ui.button("Отмена").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape))
+            {
                 app.show_command_palette = false;
             }
         });

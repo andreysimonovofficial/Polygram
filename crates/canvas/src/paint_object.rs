@@ -1,7 +1,7 @@
 use crate::theme::Theme;
 use egui::{Painter, Rect, Stroke, Vec2};
-use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 use polygram_core::types::Direction;
+use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 
 pub fn paint_object(
     painter: &Painter,
@@ -12,19 +12,47 @@ pub fn paint_object(
     cell_px: f32,
     is_hovered: bool,
 ) {
+    // Свечение за объектом (если включено в стиле)
+    if theme.glow_enabled {
+        let glow_rect = rect_px.expand(theme.glow_size);
+        painter.rect_filled(glow_rect, theme.object_corner_radius, theme.glow_color);
+    }
+
+    // Тень под объектом (если включена в стиле)
+    if theme.shadow_enabled {
+        let shadow_rect = rect_px.translate(Vec2::new(theme.shadow_offset[0], theme.shadow_offset[1]));
+        painter.rect_filled(shadow_rect, theme.object_corner_radius, theme.shadow_color);
+    }
+
     // Внешняя рамка
-    let border_color = if is_hovered { theme.text } else { theme.card_border };
-    let border_width = if is_hovered { 2.0_f32 } else { 1.0_f32 };
-    painter.rect_filled(rect_px, 2.0, theme.card_bg);
-    painter.rect_stroke(rect_px, 2.0, Stroke::new(border_width, border_color));
+    let border_color = if is_hovered {
+        theme.text
+    } else {
+        theme.card_border
+    };
+    let border_width = if is_hovered {
+        theme.object_border_hover_width
+    } else {
+        theme.object_border_width
+    };
+    painter.rect_filled(rect_px, theme.object_corner_radius, theme.card_bg);
+    painter.rect_stroke(
+        rect_px,
+        theme.object_corner_radius,
+        Stroke::new(border_width, border_color),
+    );
 
     // Заголовок
-    let header_h = cell_px;
+    let header_h = cell_px * theme.object_header_height_cells;
     let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h));
     painter.rect_filled(header_rect, 0.0, theme.card_header);
 
     let title = format!("{} '{}'", object.kind.label_ru(), object.name);
-    let name_color = if is_hovered { theme.text } else { theme.text_muted };
+    let name_color = if is_hovered {
+        theme.text
+    } else {
+        theme.text_muted
+    };
     painter.text(
         rect_px.min + Vec2::new(8.0, header_h / 2.0),
         egui::Align2::LEFT_CENTER,
@@ -92,7 +120,7 @@ pub fn paint_container(
 
     let n_entries = entries.len().max(1);
     let entry_h = rect.height() / n_entries as f32;
-    let header_h = cell_px * 0.5;
+    let header_h = cell_px * theme.container_header_height_cells;
 
     // Статус контейнера (худший среди записей)
     let mut worst_rank: u8 = 0;
@@ -128,7 +156,10 @@ pub fn paint_container(
     let status_text = super::status_label_ru(container_status, dir);
 
     // Количество записей с проблемным статусом (не Ok).
-    let problem_count = entries.iter().filter(|e| dynamic.status[e.ix as usize] != StatusCode::Ok).count();
+    let problem_count = entries
+        .iter()
+        .filter(|e| dynamic.status[e.ix as usize] != StatusCode::Ok)
+        .count();
     let status_full = if problem_count > 0 {
         format!("{} ({})", status_text, problem_count)
     } else {
@@ -147,12 +178,9 @@ pub fn paint_container(
     let header_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width(), header_h));
     painter.rect_filled(header_rect, 0.0, theme.card_bg);
 
-    // Точка статуса
-    painter.circle_filled(
-        rect.min + Vec2::new(8.0, header_h / 2.0),
-        3.0,
-        dot_color,
-    );
+    // Точка статуса (радиус порта из стиля)
+    let dot_radius = theme.port_radius.max(2.0);
+    painter.circle_filled(rect.min + Vec2::new(8.0, header_h / 2.0), dot_radius, dot_color);
 
     // Кнопка списка (справа) — фиксированный размер, как на целевом скрине.
     let btn_rect = Rect::from_min_size(
@@ -163,7 +191,8 @@ pub fn paint_container(
     // Доступная ширина для текста заголовка (от 16px отступа до кнопки с зазором).
     let header_avail_w = (btn_rect.min.x - rect.min.x - 32.0).max(0.0);
     let header_text_width = count_text.len() as f32 * 7.0;
-    let header_text_display: String = if header_text_width > header_avail_w && header_avail_w > 14.0 {
+    let header_text_display: String = if header_text_width > header_avail_w && header_avail_w > 14.0
+    {
         let n_chars = (header_avail_w / 7.0) as usize;
         if n_chars > 4 {
             count_text.chars().take(n_chars - 4).collect::<String>() + "..."
@@ -205,7 +234,11 @@ pub fn paint_container(
     // Записи
     if entries.is_empty() {
         let add_text = "+ Добавить показатель";
-        let add_color = if is_obj_hovered { theme.text } else { theme.text_muted };
+        let add_color = if is_obj_hovered {
+            theme.text
+        } else {
+            theme.text_muted
+        };
         let add_rect = Rect::from_min_size(
             rect.min + Vec2::new(16.0, header_h),
             Vec2::new(rect.width() - 32.0, rect.height() - header_h),
@@ -236,11 +269,7 @@ pub fn paint_container(
             }
 
             // Точка статуса записи
-            painter.circle_filled(
-                rect.min + Vec2::new(8.0, entry_y),
-                3.0,
-                entry_dot_color,
-            );
+            painter.circle_filled(rect.min + Vec2::new(8.0, entry_y), dot_radius, entry_dot_color);
 
             // Имя записи
             let name_color = if is_obj_hovered {

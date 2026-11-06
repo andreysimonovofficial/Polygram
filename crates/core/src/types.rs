@@ -17,7 +17,9 @@ pub(crate) const NONE: u32 = u32::MAX;
 
 macro_rules! ix_type {
     ($name:ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+        )]
         pub struct $name(pub u32);
         impl $name {
             #[inline]

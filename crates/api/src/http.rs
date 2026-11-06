@@ -1,8 +1,9 @@
 //! HTTP REST API Polygram.
 
 use axum::{
+    extract::{Path, State},
     routing::{get, post},
-    Router, Json, extract::{State, Path},
+    Json, Router,
 };
 use polygram_core::Command;
 use serde_json::json;

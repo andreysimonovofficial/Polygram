@@ -1,6 +1,6 @@
 use eframe::egui;
-use polygram_core::{runtime::EngineRuntime, Command};
 use polygram_canvas::Canvas;
+use polygram_core::{runtime::EngineRuntime, Command};
 
 pub struct PolygramApp {
     pub runtime: EngineRuntime,

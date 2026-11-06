@@ -1,10 +1,10 @@
+use crate::engine::Engine;
 use crate::{
     command::Applied,
     error::Result,
-    layout::{Rect, footprint_for},
+    layout::{footprint_for, Rect},
     types::*,
 };
-use crate::engine::Engine;
 
 pub fn handle_add_object(
     engine: &mut Engine,
@@ -21,7 +21,12 @@ pub fn handle_add_object(
         (w as i32, h as i32)
     };
     let parent_ix = match &parent {
-        Some(p) => Some(engine.hier.find_object(p).ok_or_else(|| crate::error::EngineError::ObjectNotFound(p.clone()))?),
+        Some(p) => Some(
+            engine
+                .hier
+                .find_object(p)
+                .ok_or_else(|| crate::error::EngineError::ObjectNotFound(p.clone()))?,
+        ),
         None => None,
     };
     let (ix, gx, gy) = match at {
@@ -47,7 +52,8 @@ pub fn handle_add_object(
             let ix = engine.hier.add_object(id, name, kind, parent_ix)?;
             engine.sync_sizes();
             let (x, y) = if let Some(p) = parent_ix {
-                engine.layout
+                engine
+                    .layout
                     .find_free_in_parent(p, w, h)
                     .unwrap_or_else(|| engine.layout.next_auto_slot(w, h))
             } else {
@@ -57,8 +63,14 @@ pub fn handle_add_object(
         }
     };
     engine.layout.place(ix, Rect::new(gx, gy, w, h));
-    engine.pending.push(crate::event::EventKind::ObjectAdded { object: ix.0 });
-    engine.pending.push(crate::event::EventKind::ObjectMoved { object: ix.0, gx, gy });
+    engine
+        .pending
+        .push(crate::event::EventKind::ObjectAdded { object: ix.0 });
+    engine.pending.push(crate::event::EventKind::ObjectMoved {
+        object: ix.0,
+        gx,
+        gy,
+    });
     Ok(Applied {
         created: Some(engine.hier.object(ix).ext_id.clone()),
         at: Some([gx, gy]),
@@ -79,17 +91,23 @@ pub fn handle_remove_object(engine: &mut Engine, object: &str) -> Result<Applied
     for e in entries {
         engine.vals.reset_metric(e);
         engine.hier.remove_object_metric(e);
-        engine.pending.push(crate::event::EventKind::MetricRemoved { metric: e.0 });
+        engine
+            .pending
+            .push(crate::event::EventKind::MetricRemoved { metric: e.0 });
     }
     engine.layout.unplace(ix);
     engine.hier.remove_object_slot(ix);
-    engine.pending.push(crate::event::EventKind::ObjectRemoved { object: ix.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::ObjectRemoved { object: ix.0 });
     Ok(Applied::default())
 }
 
 pub fn handle_rename_object(engine: &mut Engine, object: &str, name: String) -> Result<Applied> {
     let ix = engine.find_object(object)?;
     engine.hier.rename_object(ix, name);
-    engine.pending.push(crate::event::EventKind::ObjectRenamed { object: ix.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::ObjectRenamed { object: ix.0 });
     Ok(Applied::default())
 }

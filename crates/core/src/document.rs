@@ -86,7 +86,11 @@ impl Document {
         match v.get("format").and_then(|f| f.as_str()) {
             Some(FORMAT) => {}
             Some(other) => return Err(EngineError::UnsupportedFormat(other.to_owned())),
-            None => return Err(EngineError::UnsupportedFormat("формат не указан".to_owned())),
+            None => {
+                return Err(EngineError::UnsupportedFormat(
+                    "формат не указан".to_owned(),
+                ))
+            }
         }
         serde_json::from_value(v).map_err(|e| EngineError::Document(e.to_string()))
     }
@@ -131,7 +135,11 @@ impl Engine {
                             dir: om.direction,
                             value: v.value[i],
                             required: v.required[i],
-                            max: if v.max[i].is_nan() { None } else { Some(v.max[i]) },
+                            max: if v.max[i].is_nan() {
+                                None
+                            } else {
+                                Some(v.max[i])
+                            },
                             fact: v.fact[i],
                         }
                     })
@@ -149,7 +157,11 @@ impl Engine {
                             dir: om.direction,
                             value: v.value[i],
                             required: v.required[i],
-                            max: if v.max[i].is_nan() { None } else { Some(v.max[i]) },
+                            max: if v.max[i].is_nan() {
+                                None
+                            } else {
+                                Some(v.max[i])
+                            },
                             fact: v.fact[i],
                         }
                     })
@@ -178,7 +190,13 @@ impl Engine {
                 }
             })
             .collect();
-        Document { format: FORMAT.to_owned(), name: self.name().to_owned(), metric_defs, objects, edges }
+        Document {
+            format: FORMAT.to_owned(),
+            name: self.name().to_owned(),
+            metric_defs,
+            objects,
+            edges,
+        }
     }
 
     pub fn from_document(doc: &Document) -> Result<Engine> {
@@ -207,7 +225,10 @@ impl Engine {
                 at: Some(o.at),
                 parent: None,
             });
-            for (dir, list) in [(Direction::Request, &o.requests), (Direction::Output, &o.outputs)] {
+            for (dir, list) in [
+                (Direction::Request, &o.requests),
+                (Direction::Output, &o.outputs),
+            ] {
                 for m in list {
                     cmds.push(Command::AddMetricEntry {
                         object: o.id.clone(),

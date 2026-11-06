@@ -81,7 +81,9 @@ fn department_feed_excludes_global_events() {
     e.apply(Scope::Root, Command::AutoLayout).unwrap(); // LayoutChanged — глобальное
 
     let events = e.department_events("d1").unwrap();
-    assert!(!events.iter().any(|ev| matches!(ev.kind, EventKind::LayoutChanged)));
+    assert!(!events
+        .iter()
+        .any(|ev| matches!(ev.kind, EventKind::LayoutChanged)));
     // Отдельный отдел вне поддерева не попадает
     dept(&mut e, "d2", "Отдел 2", None);
     proc(&mut e, "p2", Some("d2"));

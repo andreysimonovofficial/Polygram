@@ -7,9 +7,9 @@ use crate::{
     command::*,
     commit::finish,
     error::{EngineError, Result},
-    event::{EventKind, EventGap},
+    event::{EventGap, EventKind},
     event_subjects::event_subjects,
-    geometry::{EntryGeom, ObjectGeom, EdgeGeom, Geometry},
+    geometry::{EdgeGeom, EntryGeom, Geometry, ObjectGeom},
     hierarchy::Hierarchy,
     layout::{footprint_for, Layout, Rect},
     types::*,
@@ -95,7 +95,10 @@ impl Engine {
         }
     }
 
-    pub fn events_since(&self, rev: u64) -> std::result::Result<Vec<crate::event::Event>, EventGap> {
+    pub fn events_since(
+        &self,
+        rev: u64,
+    ) -> std::result::Result<Vec<crate::event::Event>, EventGap> {
         self.log.since(rev)
     }
 
@@ -249,10 +252,19 @@ impl Engine {
             .live_edges()
             .map(|e| {
                 let d = self.hier.edge(e);
-                EdgeGeom { ix: e.0, from: d.from.0, to: d.to.0, points: self.layout.route(e).to_vec() }
+                EdgeGeom {
+                    ix: e.0,
+                    from: d.from.0,
+                    to: d.to.0,
+                    points: self.layout.route(e).to_vec(),
+                }
             })
             .collect();
-        Geometry { rev: self.geo_rev, objects, edges }
+        Geometry {
+            rev: self.geo_rev,
+            objects,
+            edges,
+        }
     }
 
     pub fn bottlenecks(&self, limit: usize) -> Vec<Bottleneck> {
@@ -262,7 +274,9 @@ impl Engine {
     pub fn can_place(&self, object: &str, at: [i32; 2]) -> Result<bool> {
         let ix = self.find_object(object)?;
         let r = self.layout.rect_of(ix);
-        Ok(self.layout.is_free(&Rect::new(at[0], at[1], r.w, r.h), Some(ix)))
+        Ok(self
+            .layout
+            .is_free(&Rect::new(at[0], at[1], r.w, r.h), Some(ix)))
     }
 
     pub fn recomputed_state(&self) -> DynamicState {
@@ -305,25 +319,34 @@ impl Engine {
     }
 
     pub(crate) fn find_object(&self, id: &str) -> Result<ObjectIx> {
-        self.hier.find_object(id).ok_or_else(|| EngineError::ObjectNotFound(id.to_owned()))
+        self.hier
+            .find_object(id)
+            .ok_or_else(|| EngineError::ObjectNotFound(id.to_owned()))
     }
 
     pub(crate) fn find_entry(&self, object: &str, entry: &str) -> Result<(ObjectIx, EntryIx)> {
         let o = self.find_object(object)?;
-        let e = self.hier.find_entry(o, entry).ok_or_else(|| EngineError::MetricNotFound {
-            object: object.to_owned(),
-            metric: entry.to_owned(),
-        })?;
+        let e = self
+            .hier
+            .find_entry(o, entry)
+            .ok_or_else(|| EngineError::MetricNotFound {
+                object: object.to_owned(),
+                metric: entry.to_owned(),
+            })?;
         Ok((o, e))
     }
 
     pub(crate) fn find_metric_def(&self, id: &str) -> Result<MetricDefIx> {
-        self.hier.find_metric_def(id).ok_or_else(|| EngineError::ObjectNotFound(id.to_owned()))
+        self.hier
+            .find_metric_def(id)
+            .ok_or_else(|| EngineError::ObjectNotFound(id.to_owned()))
     }
 
     pub(crate) fn sync_sizes(&mut self) {
-        self.vals.ensure(self.hier.object_metric_slots(), self.hier.edge_slots());
-        self.layout.ensure(self.hier.object_slots(), self.hier.edge_slots());
+        self.vals
+            .ensure(self.hier.object_metric_slots(), self.hier.edge_slots());
+        self.layout
+            .ensure(self.hier.object_slots(), self.hier.edge_slots());
     }
 
     pub(crate) fn queue_entry_routes(&mut self, e: EntryIx) {
@@ -345,7 +368,12 @@ impl Engine {
         self.pending.push(EventKind::EdgeRemoved { edge: edge.0 });
     }
 
-    pub(crate) fn plan_refit(&self, o: ObjectIx, n_req: usize, n_out: usize) -> Result<Option<Rect>> {
+    pub(crate) fn plan_refit(
+        &self,
+        o: ObjectIx,
+        n_req: usize,
+        n_out: usize,
+    ) -> Result<Option<Rect>> {
         let (w, h) = footprint_for(n_req, n_out);
         let (w, h) = (w as i32, h as i32);
         let r = self.layout.rect_of(o);
@@ -367,7 +395,11 @@ impl Engine {
             let old = self.layout.rect_of(o);
             self.layout.replace(o, new);
             if (new.x, new.y) != (old.x, old.y) {
-                self.pending.push(EventKind::ObjectMoved { object: o.0, gx: new.x, gy: new.y });
+                self.pending.push(EventKind::ObjectMoved {
+                    object: o.0,
+                    gx: new.x,
+                    gy: new.y,
+                });
             }
             // Перекладываем все линии объекта.
             let reqs: Vec<crate::types::EntryIx> = self.hier.object(o).requests.clone();

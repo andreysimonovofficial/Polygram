@@ -2,19 +2,54 @@
 use polygram_core::*;
 
 pub fn object(e: &mut Engine, id: &str) {
-    e.apply(Scope::Root, Command::AddObject { id: Some(id.into()), name: id.into(), kind: NodeKind::Process, at: None, parent: None })
-        .unwrap();
+    e.apply(
+        Scope::Root,
+        Command::AddObject {
+            id: Some(id.into()),
+            name: id.into(),
+            kind: NodeKind::Process,
+            at: None,
+            parent: None,
+        },
+    )
+    .unwrap();
 }
 
 pub fn object_at(e: &mut Engine, id: &str, at: [i32; 2]) -> Result<Applied> {
-    e.apply(Scope::Root, Command::AddObject { id: Some(id.into()), name: id.into(), kind: NodeKind::Process, at: Some(at), parent: None })
+    e.apply(
+        Scope::Root,
+        Command::AddObject {
+            id: Some(id.into()),
+            name: id.into(),
+            kind: NodeKind::Process,
+            at: Some(at),
+            parent: None,
+        },
+    )
 }
 
 pub fn metric_def(e: &mut Engine, id: &str, name: &str, kind: MetricKind, unit: &str) {
-    e.apply(Scope::Root, Command::AddMetricDef { id: Some(id.into()), name: name.into(), kind, unit: unit.into(), api: None }).unwrap();
+    e.apply(
+        Scope::Root,
+        Command::AddMetricDef {
+            id: Some(id.into()),
+            name: name.into(),
+            kind,
+            unit: unit.into(),
+            api: None,
+        },
+    )
+    .unwrap();
 }
 
-pub fn out(e: &mut Engine, object: &str, entry: &str, metric_def: &str, value: f64, max: Option<f64>) {
+pub fn out(
+    e: &mut Engine,
+    object: &str,
+    entry: &str,
+    metric_def: &str,
+    value: f64,
+    max: Option<f64>,
+) {
     e.apply(
         Scope::Root,
         Command::AddMetricEntry {
@@ -32,7 +67,14 @@ pub fn out(e: &mut Engine, object: &str, entry: &str, metric_def: &str, value: f
     .unwrap();
 }
 
-pub fn req(e: &mut Engine, object: &str, entry: &str, metric_def: &str, required: f64, max: Option<f64>) {
+pub fn req(
+    e: &mut Engine,
+    object: &str,
+    entry: &str,
+    metric_def: &str,
+    required: f64,
+    max: Option<f64>,
+) {
     e.apply(
         Scope::Root,
         Command::AddMetricEntry {
@@ -53,27 +95,59 @@ pub fn req(e: &mut Engine, object: &str, entry: &str, metric_def: &str, required
 pub fn connect(e: &mut Engine, a: &str, am: &str, b: &str, bm: &str) {
     e.apply(
         Scope::Root,
-        Command::Connect { from_object: a.into(), from_entry: am.into(), to_object: b.into(), to_entry: bm.into(), throughput: 100.0 },
+        Command::Connect {
+            from_object: a.into(),
+            from_entry: am.into(),
+            to_object: b.into(),
+            to_entry: bm.into(),
+            throughput: 100.0,
+        },
     )
     .unwrap();
 }
 
 pub fn set_value(e: &mut Engine, object: &str, entry: &str, value: f64) {
-    e.apply(Scope::Root, Command::SetValue { object: object.into(), entry: entry.into(), value }).unwrap();
+    e.apply(
+        Scope::Root,
+        Command::SetValue {
+            object: object.into(),
+            entry: entry.into(),
+            value,
+        },
+    )
+    .unwrap();
 }
 
 pub fn set_required(e: &mut Engine, object: &str, entry: &str, required: f64) {
-    e.apply(Scope::Root, Command::SetRequired { object: object.into(), entry: entry.into(), required }).unwrap();
+    e.apply(
+        Scope::Root,
+        Command::SetRequired {
+            object: object.into(),
+            entry: entry.into(),
+            required,
+        },
+    )
+    .unwrap();
 }
 
 pub fn status(e: &Engine, object: &str, entry: &str) -> StatusCode {
     let v = e.object_view(object).unwrap();
-    v.requests.iter().chain(v.outputs.iter()).find(|m| m.id == entry).unwrap().status
+    v.requests
+        .iter()
+        .chain(v.outputs.iter())
+        .find(|m| m.id == entry)
+        .unwrap()
+        .status
 }
 
 pub fn value_of(e: &Engine, object: &str, entry: &str) -> f64 {
     let v = e.object_view(object).unwrap();
-    v.requests.iter().chain(v.outputs.iter()).find(|m| m.id == entry).unwrap().supplied
+    v.requests
+        .iter()
+        .chain(v.outputs.iter())
+        .find(|m| m.id == entry)
+        .unwrap()
+        .supplied
 }
 
 /// Простой детерминированный генератор (xorshift64*), чтобы тесты были воспроизводимы.
@@ -100,7 +174,14 @@ pub fn assert_no_overlaps(e: &Engine) {
     let g = e.geometry();
     for (i, a) in g.objects.iter().enumerate() {
         for b in &g.objects[i + 1..] {
-            assert!(!a.rect.overlaps(&b.rect), "{} пересекается с {}: {:?} и {:?}", a.id, b.id, a.rect, b.rect);
+            assert!(
+                !a.rect.overlaps(&b.rect),
+                "{} пересекается с {}: {:?} и {:?}",
+                a.id,
+                b.id,
+                a.rect,
+                b.rect
+            );
         }
     }
 }
@@ -108,6 +189,11 @@ pub fn assert_no_overlaps(e: &Engine) {
 /// Линия состоит только из горизонтальных и вертикальных отрезков.
 pub fn assert_orthogonal(points: &[Point]) {
     for w in points.windows(2) {
-        assert!(w[0].x == w[1].x || w[0].y == w[1].y, "диагональный отрезок: {:?} -> {:?}", w[0], w[1]);
+        assert!(
+            w[0].x == w[1].x || w[0].y == w[1].y,
+            "диагональный отрезок: {:?} -> {:?}",
+            w[0],
+            w[1]
+        );
     }
 }

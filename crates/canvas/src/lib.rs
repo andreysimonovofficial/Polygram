@@ -17,9 +17,9 @@ pub use paint_object::{paint_container, paint_object};
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Shape, Stroke, Vec2};
-use polygram_core::{DynamicState, Geometry, StatusCode};
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
+use polygram_core::{DynamicState, Geometry, StatusCode};
 
 /// Холст.
 pub struct Canvas {
@@ -61,14 +61,20 @@ impl Canvas {
         for x in (min_w.floor() as i32)..=(max_w.ceil() as i32) {
             let sx = (x as f32 * cell + offset.x) * zoom;
             shapes.push(Shape::line(
-                vec![Pos2::new(sx, clip_rect.min.y), Pos2::new(sx, clip_rect.max.y)],
+                vec![
+                    Pos2::new(sx, clip_rect.min.y),
+                    Pos2::new(sx, clip_rect.max.y),
+                ],
                 Stroke::new(1.0_f32, self.theme.grid),
             ));
         }
         for y in (min_h.floor() as i32)..=(max_h.ceil() as i32) {
             let sy = (y as f32 * cell + offset.y) * zoom;
             shapes.push(Shape::line(
-                vec![Pos2::new(clip_rect.min.x, sy), Pos2::new(clip_rect.max.x, sy)],
+                vec![
+                    Pos2::new(clip_rect.min.x, sy),
+                    Pos2::new(clip_rect.max.x, sy),
+                ],
                 Stroke::new(1.0_f32, self.theme.grid),
             ));
         }
@@ -92,8 +98,14 @@ impl Canvas {
         // Сначала линии (под карточками и отделами)
         for edge in &geometry.edges {
             paint_edge(
-                painter, edge, geometry, dynamic, &self.theme,
-                cell_px, self.camera.offset, self.camera.zoom,
+                painter,
+                edge,
+                geometry,
+                dynamic,
+                &self.theme,
+                cell_px,
+                self.camera.offset,
+                self.camera.zoom,
             );
         }
 
@@ -104,7 +116,8 @@ impl Canvas {
             }
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
             let rect_px = Rect::from_min_size(
-                self.camera.world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
+                self.camera
+                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
             if !rect_px.intersects(clip_rect) {
@@ -121,24 +134,43 @@ impl Canvas {
             let is_hovered = hovered_object == Some(&object.id);
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
             let rect_px = Rect::from_min_size(
-                self.camera.world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
+                self.camera
+                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
             paint_object(
-                painter, object, dynamic, &self.theme, rect_px, cell_px, is_hovered,
+                painter,
+                object,
+                dynamic,
+                &self.theme,
+                rect_px,
+                cell_px,
+                is_hovered,
             );
         }
     }
 
     pub fn object_at<'a>(&self, geometry: &'a Geometry, screen_pos: Pos2) -> Option<&'a str> {
-        object_at(geometry, screen_pos, self.camera.offset, self.camera.zoom, self.cell_size)
+        object_at(
+            geometry,
+            screen_pos,
+            self.camera.offset,
+            self.camera.zoom,
+            self.cell_size,
+        )
     }
 
     pub fn header_at<'a>(&self, geometry: &'a Geometry, screen_pos: Pos2) -> Option<&'a str> {
-        header_at(geometry, screen_pos, self.camera.offset, self.camera.zoom, self.cell_size)
+        header_at(
+            geometry,
+            screen_pos,
+            self.camera.offset,
+            self.camera.zoom,
+            self.cell_size,
+        )
     }
 }
 

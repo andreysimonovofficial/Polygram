@@ -26,7 +26,8 @@ fn usage() {
 }
 
 fn load_engine(path: &str) -> std::result::Result<Engine, String> {
-    let text = fs::read_to_string(path).map_err(|e| format!("не удалось прочитать «{path}»: {e}"))?;
+    let text =
+        fs::read_to_string(path).map_err(|e| format!("не удалось прочитать «{path}»: {e}"))?;
     Engine::from_json(&text).map_err(|e| e.to_string())
 }
 

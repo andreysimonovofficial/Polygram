@@ -1,9 +1,5 @@
-use crate::{
-    command::Applied,
-    error::Result,
-    types::*,
-};
 use crate::engine::Engine;
+use crate::{command::Applied, error::Result, types::*};
 
 pub fn handle_add_metric_entry(
     engine: &mut Engine,
@@ -42,7 +38,9 @@ pub fn handle_add_metric_entry(
     } else {
         None
     };
-    let e = engine.hier.add_object_metric(oix, dir, id, mdix, String::new())?;
+    let e = engine
+        .hier
+        .add_object_metric(oix, dir, id, mdix, String::new())?;
     engine.sync_sizes();
     engine.vals.reset_metric(e);
     engine.vals.value[e.idx()] = value;
@@ -50,7 +48,9 @@ pub fn handle_add_metric_entry(
     engine.vals.max[e.idx()] = max.unwrap_or(f64::NAN);
     engine.vals.fact[e.idx()] = fact;
     engine.vals.mark_metric(&engine.hier, e);
-    engine.pending.push(crate::event::EventKind::MetricAdded { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricAdded { metric: e.0 });
     engine.apply_refit(oix, plan);
     Ok(Applied {
         created: Some(engine.hier.object_metric(e).ext_id.clone()),
@@ -58,7 +58,11 @@ pub fn handle_add_metric_entry(
     })
 }
 
-pub fn handle_remove_metric_entry(engine: &mut Engine, object: &str, entry: &str) -> Result<Applied> {
+pub fn handle_remove_metric_entry(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+) -> Result<Applied> {
     let (oix, e) = engine.find_entry(object, entry)?;
     let edges: Vec<crate::types::EdgeIx> = match engine.hier.object_metric(e).direction {
         Direction::Output => engine.hier.out_entries(e).collect(),
@@ -69,7 +73,9 @@ pub fn handle_remove_metric_entry(engine: &mut Engine, object: &str, entry: &str
     }
     engine.vals.reset_metric(e);
     engine.hier.remove_object_metric(e);
-    engine.pending.push(crate::event::EventKind::MetricRemoved { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricRemoved { metric: e.0 });
     let (n_req, n_out) = {
         let o = engine.hier.object(oix);
         (o.requests.len(), o.outputs.len())
@@ -80,7 +86,12 @@ pub fn handle_remove_metric_entry(engine: &mut Engine, object: &str, entry: &str
     Ok(Applied::default())
 }
 
-pub fn handle_set_value(engine: &mut Engine, object: &str, entry: &str, value: f64) -> Result<Applied> {
+pub fn handle_set_value(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+    value: f64,
+) -> Result<Applied> {
     let (_, e) = engine.find_entry(object, entry)?;
     if !value.is_finite() {
         return Err(crate::error::EngineError::InvalidNumber("value"));
@@ -94,14 +105,23 @@ pub fn handle_set_value(engine: &mut Engine, object: &str, entry: &str, value: f
         let to = engine.hier.edge(edge).to;
         engine.vals.mark_in(to);
     }
-    engine.pending.push(crate::event::EventKind::MetricChanged { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: e.0 });
     Ok(Applied::default())
 }
 
-pub fn handle_set_required(engine: &mut Engine, object: &str, entry: &str, required: f64) -> Result<Applied> {
+pub fn handle_set_required(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+    required: f64,
+) -> Result<Applied> {
     let (_, e) = engine.find_entry(object, entry)?;
     if engine.hier.object_metric(e).direction != Direction::Request {
-        return Err(crate::error::EngineError::WrongDirection("требование задаётся только у записи Запроса"));
+        return Err(crate::error::EngineError::WrongDirection(
+            "требование задаётся только у записи Запроса",
+        ));
     }
     if !required.is_finite() {
         return Err(crate::error::EngineError::InvalidNumber("required"));
@@ -112,11 +132,18 @@ pub fn handle_set_required(engine: &mut Engine, object: &str, entry: &str, requi
     engine.vals.required[e.idx()] = required;
     engine.vals.mark_in(e);
     engine.vals.mark_sources_of(&engine.hier, e);
-    engine.pending.push(crate::event::EventKind::MetricChanged { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: e.0 });
     Ok(Applied::default())
 }
 
-pub fn handle_set_max(engine: &mut Engine, object: &str, entry: &str, max: Option<f64>) -> Result<Applied> {
+pub fn handle_set_max(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+    max: Option<f64>,
+) -> Result<Applied> {
     let (_, e) = engine.find_entry(object, entry)?;
     if max.map_or(false, |x| !x.is_finite()) {
         return Err(crate::error::EngineError::InvalidNumber("max"));
@@ -127,11 +154,18 @@ pub fn handle_set_max(engine: &mut Engine, object: &str, entry: &str, max: Optio
     }
     engine.vals.max[e.idx()] = new;
     engine.vals.mark_metric(&engine.hier, e);
-    engine.pending.push(crate::event::EventKind::MetricChanged { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: e.0 });
     Ok(Applied::default())
 }
 
-pub fn handle_set_fact(engine: &mut Engine, object: &str, entry: &str, fact: f64) -> Result<Applied> {
+pub fn handle_set_fact(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+    fact: f64,
+) -> Result<Applied> {
     let (_, e) = engine.find_entry(object, entry)?;
     if !fact.is_finite() {
         return Err(crate::error::EngineError::InvalidNumber("fact"));
@@ -140,6 +174,8 @@ pub fn handle_set_fact(engine: &mut Engine, object: &str, entry: &str, fact: f64
         return Ok(Applied::default());
     }
     engine.vals.fact[e.idx()] = fact;
-    engine.pending.push(crate::event::EventKind::MetricChanged { metric: e.0 });
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: e.0 });
     Ok(Applied::default())
 }

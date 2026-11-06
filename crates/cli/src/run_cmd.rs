@@ -4,10 +4,19 @@ use std::fs;
 
 pub fn summary(e: &Engine) {
     let s = e.stats();
-    println!("Проект «{}»: объектов {}, показателей {}, связей {}, ревизия {}", e.name(), s.objects, s.object_metrics, s.edges, s.rev);
+    println!(
+        "Проект «{}»: объектов {}, показателей {}, связей {}, ревизия {}",
+        e.name(),
+        s.objects,
+        s.object_metrics,
+        s.edges,
+        s.rev
+    );
     let mut by_status: BTreeMap<&str, usize> = BTreeMap::new();
     for m in e.hierarchy().live_object_metrics() {
-        *by_status.entry(e.values().status[m.idx()].label_ru()).or_default() += 1;
+        *by_status
+            .entry(e.values().status[m.idx()].label_ru())
+            .or_default() += 1;
     }
     for (k, v) in by_status {
         println!("  {k}: {v}");
@@ -22,7 +31,10 @@ pub fn summary(e: &Engine) {
             let obj = h.object(ObjectIx(b.object));
             let entry = h.object_metric(EntryIx(b.entry));
             let md = h.metric_def(entry.metric_def);
-            println!("  {} / {}: не хватает {:.1} {} (потребителей: {})", obj.name, md.name, b.shortfall, md.unit, b.consumers);
+            println!(
+                "  {} / {}: не хватает {:.1} {} (потребителей: {})",
+                obj.name, md.name, b.shortfall, md.unit, b.consumers
+            );
         }
     }
 }
@@ -82,7 +94,11 @@ pub fn run(args: &[String]) -> i32 {
         };
         match engine.apply(Scope::Root, cmd) {
             Ok(a) => match a.created {
-                Some(id) => println!("строка {}: готово, создано «{id}» (ревизия {})", n + 1, a.rev),
+                Some(id) => println!(
+                    "строка {}: готово, создано «{id}» (ревизия {})",
+                    n + 1,
+                    a.rev
+                ),
                 None => println!("строка {}: готово (ревизия {})", n + 1, a.rev),
             },
             Err(e) => {

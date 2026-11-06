@@ -41,15 +41,27 @@ fn round_trip_preserves_everything() {
 #[test]
 fn old_or_unknown_formats_are_rejected() {
     let old = r#"{"storage_id":"x","name":"Старый","objects":[],"edges":[]}"#;
-    assert_eq!(Engine::from_json(old).unwrap_err().code(), "unsupported_format");
+    assert_eq!(
+        Engine::from_json(old).unwrap_err().code(),
+        "unsupported_format"
+    );
     let v1 = r#"{"format":"polygram/1","name":"Старый","objects":[],"edges":[]}"#;
-    assert_eq!(Engine::from_json(v1).unwrap_err().code(), "unsupported_format");
-    assert_eq!(Engine::from_json("не json").unwrap_err().code(), "invalid_document");
+    assert_eq!(
+        Engine::from_json(v1).unwrap_err().code(),
+        "unsupported_format"
+    );
+    assert_eq!(
+        Engine::from_json("не json").unwrap_err().code(),
+        "invalid_document"
+    );
 }
 
 #[test]
 fn overlapping_document_is_rejected() {
     let bad = r#"{"format":"polygram/2","name":"x","objects":[
         {"id":"a","name":"a","at":[0,0]},{"id":"b","name":"b","at":[1,0]}]}"#;
-    assert_eq!(Engine::from_json(bad).unwrap_err().code(), "invalid_document");
+    assert_eq!(
+        Engine::from_json(bad).unwrap_err().code(),
+        "invalid_document"
+    );
 }

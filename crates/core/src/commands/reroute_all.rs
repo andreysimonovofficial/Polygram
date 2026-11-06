@@ -1,6 +1,6 @@
 use crate::command::Applied;
-use crate::error::Result;
 use crate::engine::Engine;
+use crate::error::Result;
 
 pub fn handle_reroute_all(engine: &mut Engine) -> Result<Applied> {
     engine.layout.reset_lanes();

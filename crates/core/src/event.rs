@@ -7,27 +7,62 @@ use std::collections::VecDeque;
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventKind {
-    ObjectAdded { object: u32 },
-    ObjectRemoved { object: u32 },
-    ObjectRenamed { object: u32 },
-    ObjectMoved { object: u32, gx: i32, gy: i32 },
-    MetricDefAdded { metric_def: u32 },
-    MetricDefRemoved { metric_def: u32 },
-    MetricDefRenamed { metric_def: u32 },
-    MetricAdded { metric: u32 },
-    MetricRemoved { metric: u32 },
-    MetricChanged { metric: u32 },
-    EdgeAdded { edge: u32 },
-    EdgeRemoved { edge: u32 },
-    EdgeRouted { edge: u32 },
+    ObjectAdded {
+        object: u32,
+    },
+    ObjectRemoved {
+        object: u32,
+    },
+    ObjectRenamed {
+        object: u32,
+    },
+    ObjectMoved {
+        object: u32,
+        gx: i32,
+        gy: i32,
+    },
+    MetricDefAdded {
+        metric_def: u32,
+    },
+    MetricDefRemoved {
+        metric_def: u32,
+    },
+    MetricDefRenamed {
+        metric_def: u32,
+    },
+    MetricAdded {
+        metric: u32,
+    },
+    MetricRemoved {
+        metric: u32,
+    },
+    MetricChanged {
+        metric: u32,
+    },
+    EdgeAdded {
+        edge: u32,
+    },
+    EdgeRemoved {
+        edge: u32,
+    },
+    EdgeRouted {
+        edge: u32,
+    },
     RoutesChanged,
     LayoutChanged,
-    StatusChanged { metric: u32, from: StatusCode, to: StatusCode },
+    StatusChanged {
+        metric: u32,
+        from: StatusCode,
+        to: StatusCode,
+    },
 }
 
 impl EventKind {
     pub fn is_structural(&self) -> bool {
-        !matches!(self, Self::MetricChanged { .. } | Self::StatusChanged { .. })
+        !matches!(
+            self,
+            Self::MetricChanged { .. } | Self::StatusChanged { .. }
+        )
     }
 }
 
@@ -52,7 +87,11 @@ pub struct EventLog {
 
 impl EventLog {
     pub fn new(cap: usize) -> Self {
-        Self { buf: VecDeque::new(), cap: cap.max(1), dropped_up_to: 0 }
+        Self {
+            buf: VecDeque::new(),
+            cap: cap.max(1),
+            dropped_up_to: 0,
+        }
     }
 
     pub fn push(&mut self, e: Event) {
@@ -66,7 +105,9 @@ impl EventLog {
 
     pub fn since(&self, rev: u64) -> Result<Vec<Event>, EventGap> {
         if rev < self.dropped_up_to {
-            return Err(EventGap { oldest_available: self.dropped_up_to + 1 });
+            return Err(EventGap {
+                oldest_available: self.dropped_up_to + 1,
+            });
         }
         Ok(self.buf.iter().filter(|e| e.rev > rev).cloned().collect())
     }

@@ -95,7 +95,15 @@ impl Layout {
     }
 
     /// Диапазон колонок-каналов [lo, hi], при котором горизонтали не упираются в чужие карточки.
-    fn channel_range(&self, src: ObjectIx, dst: ObjectIx, srow: i32, drow: i32, sc: i32, dc: i32) -> (i32, i32) {
+    fn channel_range(
+        &self,
+        src: ObjectIx,
+        dst: ObjectIx,
+        srow: i32,
+        drow: i32,
+        sc: i32,
+        dc: i32,
+    ) -> (i32, i32) {
         let (mut lo, mut hi) = (sc, dc);
         let mut tmp: Vec<u32> = Vec::new();
         self.objects_overlapping(&Rect::new(sc, srow, dc - sc + 1, 1), None, &mut tmp);
@@ -116,13 +124,23 @@ impl Layout {
 
     pub fn route_edge(&mut self, h: &Hierarchy, e: EdgeIx) {
         let ed = *h.edge(e);
-        let (src, dst) = (h.object_metric(ed.from).object, h.object_metric(ed.to).object);
+        let (src, dst) = (
+            h.object_metric(ed.from).object,
+            h.object_metric(ed.to).object,
+        );
         let (ks, kd) = (h.entry_position(ed.from), h.entry_position(ed.to));
         let path = self.compute_path(e, src, ks, dst, kd);
         self.routes[e.idx()] = path;
     }
 
-    fn compute_path(&mut self, e: EdgeIx, src: ObjectIx, ks: usize, dst: ObjectIx, kd: usize) -> Vec<Point> {
+    fn compute_path(
+        &mut self,
+        e: EdgeIx,
+        src: ObjectIx,
+        ks: usize,
+        dst: ObjectIx,
+        kd: usize,
+    ) -> Vec<Point> {
         let a = self.rect_of(src);
         let b = self.rect_of(dst);
         let s = self.out_port(src, ks);
@@ -134,8 +152,7 @@ impl Layout {
 
         if dc >= sc {
             // Прямая линия, если строки совпадают и путь свободен.
-            if srow == drow
-                && self.blockers(&[Rect::new(sc, srow, dc - sc + 1, 1)], src, dst) == 0
+            if srow == drow && self.blockers(&[Rect::new(sc, srow, dc - sc + 1, 1)], src, dst) == 0
             {
                 self.lanes.release(e.0);
                 return vec![s, d];
