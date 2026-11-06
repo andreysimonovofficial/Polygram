@@ -12,6 +12,7 @@ mod free_canvas_paint;
 mod free_canvas_properties;
 mod free_canvas_state;
 mod screen_agent;
+mod ui_agent;
 
 pub use design_app::DesignApp;
 pub use design_format::*;

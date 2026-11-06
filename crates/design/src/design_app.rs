@@ -5,6 +5,7 @@
 use crate::design_format::*;
 use crate::free_canvas::FreeCanvas;
 use crate::screen_agent::ScreenAgent;
+use crate::ui_agent::{AnalysisResult, LlmProvider, UiAgent};
 use eframe::Frame;
 use egui::Context;
 use rfd::FileDialog;
@@ -15,6 +16,10 @@ pub struct DesignApp {
     pub free_canvas: FreeCanvas,
     pub file_path: Option<PathBuf>,
     pub status: String,
+    /// Агент анализа UI-скриншота.
+    pub ui_agent: UiAgent,
+    /// Путь к последнему загруженному скриншоту.
+    pub screenshot_path: Option<PathBuf>,
 }
 
 impl DesignApp {
@@ -23,6 +28,8 @@ impl DesignApp {
             free_canvas: FreeCanvas::new(),
             file_path: None,
             status: "Готов".to_owned(),
+            ui_agent: UiAgent::new(LlmProvider::default()),
+            screenshot_path: None,
         }
     }
 
@@ -69,26 +76,78 @@ impl DesignApp {
                 ui.separator();
                 ui.label(format!("Статус: {}", self.status));
                 ui.separator();
+
+                // Провайдер LLM
                 ui.group(|ui| {
-                    ui.label("Агент");
-                    if ui.button("Загрузить снимок экрана…").clicked() {
+                    ui.label("Агент LLM");
+                    match &mut self.ui_agent.provider {
+                        LlmProvider::Gemini { api_key } => {
+                            ui.horizontal(|ui| {
+                                ui.label("Gemini API ключ:");
+                                ui.text_edit_singleline(api_key);
+                            });
+                        }
+                        LlmProvider::Qwen { endpoint, api_key } => {
+                            ui.horizontal(|ui| {
+                                ui.label("Qwen endpoint:");
+                                ui.text_edit_singleline(endpoint);
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("API ключ:");
+                                ui.text_edit_singleline(api_key.get_or_insert_with(String::new));
+                            });
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Gemini").clicked() {
+                        self.ui_agent.provider = LlmProvider::Gemini { api_key: String::new() };
+                    }
+                    if ui.button("Qwen (локально)").clicked() {
+                        self.ui_agent.provider =
+                            LlmProvider::Qwen { endpoint: "http://localhost:11434/v1".to_owned(), api_key: None };
+                    }
+                });
+
+                ui.separator();
+                ui.group(|ui| {
+                    ui.label("Скриншот UI → фигуры");
+                    if ui.button("Загрузить снимок…").clicked() {
                         if let Some(path) = FileDialog::new()
                             .add_filter("Изображение", &["png", "jpg", "jpeg", "bmp", "webp"])
                             .pick_file()
                         {
                             match ScreenAgent::load_image(&path) {
-                                Some(img) => {
-                                    let result =
-                                        ScreenAgent::apply_image_to_canvas(&mut self.free_canvas, &img);
-                                    self.status = format!(
-                                        "Агент: снимок {}×{}, фигур {} (пиксель-в-пиксель)",
-                                        result.image_size.0,
-                                        result.image_size.1,
-                                        result.shapes,
-                                    );
+                                Some(_) => {
+                                    self.screenshot_path = Some(path);
+                                    self.status = "Скриншот загружен, готов к анализу".to_owned();
                                 }
-                                None => self.status = "Агент: не удалось загрузить изображение".to_owned(),
+                                None => self.status = "Не удалось загрузить скриншот".to_owned(),
                             }
+                        }
+                    }
+                    if let Some(path) = &self.screenshot_path {
+                        ui.label(format!("Файл: {:?}", path.file_name().unwrap_or_default()));
+                    }
+                    ui.separator();
+                    if ui.button("Агент: снимок → фигуры").clicked() {
+                        let Some(path) = self.screenshot_path.clone() else {
+                            self.status = "Сначала загрузите скриншот".to_owned();
+                            return;
+                        };
+                        match ScreenAgent::load_image(&path) {
+                            Some(img) => {
+                                match self.ui_agent.analyze(&img) {
+                                    Ok(result) => {
+                                        UiAgent::apply_to_canvas(&mut self.free_canvas, &result);
+                                        self.status = format!(
+                                            "Агент: {} элементов из скриншота",
+                                            result.elements.len()
+                                        );
+                                    }
+                                    Err(e) => self.status = format!("Ошибка агента: {e}"),
+                                }
+                            }
+                            None => self.status = "Не удалось загрузить скриншот".to_owned(),
                         }
                     }
                 });
@@ -146,3 +205,7 @@ fn load_free_canvas(path: &std::path::Path) -> Result<FreeCanvasDoc, Box<dyn std
     let doc = FreeCanvasDoc::load_from_json(&json)?;
     Ok(doc)
 }
+
+// Анализ результата (не используется напрямую, оставлен для ссылки).
+#[allow(dead_code)]
+fn _unused_result(_result: &AnalysisResult) {}
