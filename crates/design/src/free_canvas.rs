@@ -27,6 +27,7 @@ pub struct FreeCanvas {
     pub doc_dirty: bool,
     pub show_code_sidebar: bool,
     pub code_text: String,
+    pub last_applied_code: String,
 }
 
 impl Default for FreeCanvas {
@@ -49,6 +50,7 @@ impl Default for FreeCanvas {
             doc_dirty: false,
             show_code_sidebar: false,
             code_text: String::new(),
+            last_applied_code: String::new(),
         }
     }
 }
@@ -139,11 +141,12 @@ impl FreeCanvas {
                     if ui.button("Код для агента").clicked() {
                         self.show_code_sidebar = true;
                         self.code_text = self.doc.to_json().unwrap_or_default();
+                        self.last_applied_code = self.code_text.clone();
                     }
                 });
             });
 
-        // Левая боковая панель: редактор кода JSON для Агента (двусторонний)
+        // Левая боковая панель: редактор кода JSON для Агента (двусторонний, на лету)
         if self.show_code_sidebar {
             egui::SidePanel::left("code_editor")
                 .default_width(520.0)
@@ -151,23 +154,26 @@ impl FreeCanvas {
                 .show(ctx, |ui| {
                     ui.heading("Код для агента (JSON)");
                     ui.separator();
-                    let text_changed = egui::TextEdit::multiline(&mut self.code_text)
+                    // Поле кода растягивается на всю ширину сайдбара, есть вертикальный скроллбар.
+                    egui::TextEdit::multiline(&mut self.code_text)
                         .desired_rows(18)
-                        .show(ui)
-                        .response
-                        .changed();
-                    if text_changed {
+                        .show(ui);
+                    // Применяем изменения из кода в дизайн «на лету» (без кнопок),
+                    // но только когда текст реально изменился, чтобы не сбрасывать курсор.
+                    if self.code_text != self.last_applied_code {
                         if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
                             self.doc = new_doc;
                             self.recompute_next_id();
                             self.selected = None;
                             self.touch();
+                            self.last_applied_code = self.code_text.clone();
                         }
                     }
                     ui.separator();
                     ui.horizontal(|ui| {
                         if ui.button("Обновить из дизайна").clicked() {
                             self.code_text = self.doc.to_json().unwrap_or_default();
+                            self.last_applied_code = self.code_text.clone();
                         }
                         if ui.button("Применить и закрыть").clicked() {
                             if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
