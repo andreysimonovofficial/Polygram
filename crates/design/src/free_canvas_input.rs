@@ -344,17 +344,14 @@ impl FreeCanvas {
                         }
                     }
                     self.touch();
-                }
-            } else {
-                // Selection box (резиновый прямоугольник) при перетаскивании из пустого места.
-                // Рисуем прямо через painter, как предварительный вид фигуры.
-                if let (Some(start), Some(pos)) = (self.drag_start, response.interact_pointer_pos()) {
-                    let world_start = screen_to_world(start);
-                    let world_pos = screen_to_world(pos);
-                    let x = world_start.x.min(world_pos.x);
-                    let y = world_start.y.min(world_pos.y);
-                    let w = (world_pos.x - world_start.x).abs();
-                    let h = (world_pos.y - world_start.y).abs();
+                } else {
+                    // Selection box (резиновый прямоугольник) при перетаскивании из пустого места.
+                    let world_start = screen_to_world(self.drag_start.unwrap_or(pos));
+                    let world_cursor = screen_to_world(pos);
+                    let x = world_start.x.min(world_cursor.x);
+                    let y = world_start.y.min(world_cursor.y);
+                    let w = (world_cursor.x - world_start.x).abs();
+                    let h = (world_cursor.y - world_start.y).abs();
                     if w > 1.0 && h > 1.0 {
                         let world_rect = Rect::from_min_size(
                             Pos2::new(x, y),

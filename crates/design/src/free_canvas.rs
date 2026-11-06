@@ -242,6 +242,8 @@ impl FreeCanvas {
                             let active = self.tool == tool;
                             if ui.selectable_label(active, label).clicked() {
                                 self.tool = tool;
+                                self.drag_start = None;
+                                self.drag_shape_pos = None;
                             }
                         }
                     });
