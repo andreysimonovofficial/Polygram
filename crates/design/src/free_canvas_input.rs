@@ -1,5 +1,5 @@
 //! Обработка ввода на холсте: зум, панорамирование, перетаскивание, магнитное выравнивание,
-//! создание фигур, предварительный просмотр.
+//! создание фигур, предварительный просмотр, контекстное меню и группировка.
 
 use crate::design_format::{DrawTool, FreeShape, ShapeState};
 use crate::free_canvas::FreeCanvas;
@@ -90,7 +90,7 @@ impl FreeCanvas {
 
         // Отрисовать все фигуры
         for (i, shape) in self.doc.shapes.iter().enumerate() {
-            let is_selected = self.selected == Some(i);
+            let is_selected = self.selected.contains(&i);
             let world_rect = Rect::from_min_size(
                 Pos2::new(shape.x, shape.y),
                 Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
@@ -99,13 +99,7 @@ impl FreeCanvas {
             let screen_clip = screen_rect.intersect(canvas_rect);
             if screen_clip.is_positive() {
                 let state = if self.prototype_mode {
-                    if self.pressed == Some(i) {
-                        ShapeState::Pressed
-                    } else if self.hovered == Some(i) {
-                        ShapeState::Hover
-                    } else {
-                        ShapeState::Normal
-                    }
+                    Self::shape_state(i, shape, &self.doc.shapes, self.hovered, self.pressed)
                 } else {
                     ShapeState::Normal
                 };
@@ -113,8 +107,8 @@ impl FreeCanvas {
             }
         }
 
-        // Выделение
-        if let Some(idx) = self.selected {
+        // Выделение (рамки вокруг всех выделенных фигур)
+        for &idx in &self.selected {
             if let Some(shape) = self.doc.shapes.get(idx) {
                 let world_rect = Rect::from_min_size(
                     Pos2::new(shape.x, shape.y),
@@ -136,6 +130,29 @@ impl FreeCanvas {
             }
         }
 
+        // Контекстное меню правой кнопкой мыши
+        if response.secondary_clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let world_pos = screen_to_world(pos);
+                if let Some(idx) = self.hit_shape(world_pos) {
+                    if !self.selected.contains(&idx) {
+                        self.selected = vec![idx];
+                    }
+                    self.context_menu = Some((pos, idx));
+                    self.touch();
+                } else {
+                    self.selected.clear();
+                    self.context_menu = None;
+                    self.touch();
+                }
+            }
+        }
+
+        // Отрисовать контекстное меню если нужно (через отдельное окно egui)
+        if let Some((menu_pos, target_idx)) = self.context_menu.clone() {
+            self.show_context_menu(ui.ctx(), menu_pos, target_idx);
+        }
+
         // Нажатие мыши — для инструмента Текст размещаем текстовую фигуру по клику
         if response.clicked() && !middle_down {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -151,19 +168,36 @@ impl FreeCanvas {
                     shape.h = 30.0 / zoom;
                     shape.text = "Текст".to_owned();
                     self.doc.shapes.push(shape);
-                    self.selected = Some(self.doc.shapes.len() - 1);
+                    self.selected = vec![self.doc.shapes.len() - 1];
                     self.drag_start = None;
                     self.drag_shape_pos = None;
                     self.touch();
                 } else if self.tool == DrawTool::Select {
                     let world_pos = screen_to_world(pos);
-                    self.selected = self.hit_shape(world_pos);
-                    if let Some(idx) = self.selected {
-                        if let Some(shape) = self.doc.shapes.get(idx) {
-                            self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                    let hit = self.hit_shape(world_pos);
+                    let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+
+                    match hit {
+                        Some(idx) => {
+                            if ctrl {
+                                if self.selected.contains(&idx) {
+                                    self.selected.retain(|&s| s != idx);
+                                } else {
+                                    self.selected.push(idx);
+                                }
+                            } else {
+                                self.selected = vec![idx];
+                            }
+                            if let Some(shape) = self.doc.shapes.get(idx) {
+                                self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                            }
                         }
-                    } else {
-                        self.drag_shape_pos = None;
+                        None => {
+                            if !ctrl {
+                                self.selected.clear();
+                            }
+                            self.drag_shape_pos = None;
+                        }
                     }
                     self.drag_start = response.interact_pointer_pos();
                 }
@@ -176,14 +210,30 @@ impl FreeCanvas {
             if self.tool == DrawTool::Select {
                 if let Some(pos) = self.drag_start {
                     let world_pos = screen_to_world(pos);
-                    self.selected = self.hit_shape(world_pos);
-                    if let Some(idx) = self.selected {
-                        if let Some(shape) = self.doc.shapes.get(idx) {
-                            self.drag_shape_pos =
-                                Some((idx, Pos2::new(shape.x, shape.y)));
+                    let hit = self.hit_shape(world_pos);
+                    let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+
+                    match hit {
+                        Some(idx) => {
+                            if ctrl {
+                                if self.selected.contains(&idx) {
+                                    self.selected.retain(|&s| s != idx);
+                                } else {
+                                    self.selected.push(idx);
+                                }
+                            } else {
+                                self.selected = vec![idx];
+                            }
+                            if let Some(shape) = self.doc.shapes.get(idx) {
+                                self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                            }
                         }
-                    } else {
-                        self.drag_shape_pos = None;
+                        None => {
+                            if !ctrl {
+                                self.selected.clear();
+                            }
+                            self.drag_shape_pos = None;
+                        }
                     }
                 }
             } else {
@@ -191,7 +241,7 @@ impl FreeCanvas {
             }
         }
 
-        // Перетаскивание выделенной фигуры
+        // Перетаскивание выделенных фигур
         if response.dragged() && !middle_down && self.tool == DrawTool::Select {
             if let Some(pos) = response.interact_pointer_pos() {
                 if let Some((idx, origin)) = self.drag_shape_pos {
@@ -205,16 +255,14 @@ impl FreeCanvas {
                             let w = shape.w.max(1.0);
                             let h = shape.h.max(1.0);
                             let thresh = 6.0;
-                            // Магнитится к краям и центрам других фигур
                             for (j, other) in self.doc.shapes.iter().enumerate() {
-                                if j == idx {
+                                if self.selected.contains(&j) {
                                     continue;
                                 }
                                 let or = Rect::from_min_size(
                                     Pos2::new(other.x, other.y),
                                     Vec2::new(other.w.max(1.0), other.h.max(1.0)),
                                 );
-                                // Края по X: левый/правый/центр
                                 for ox in [or.min.x, or.max.x, or.center().x] {
                                     if (nx - ox).abs() < thresh {
                                         nx = ox;
@@ -225,7 +273,6 @@ impl FreeCanvas {
                                         magnetic_lines.push((ox, true));
                                     }
                                 }
-                                // Края по Y: верхний/нижний/центр
                                 for oy in [or.min.y, or.max.y, or.center().y] {
                                     if (ny - oy).abs() < thresh {
                                         ny = oy;
@@ -237,7 +284,6 @@ impl FreeCanvas {
                                     }
                                 }
                             }
-                            // Центр объекта к центру объекта
                             let dragged_center_x = nx + w / 2.0;
                             let dragged_center_y = ny + h / 2.0;
                             for other in &self.doc.shapes {
@@ -255,11 +301,16 @@ impl FreeCanvas {
                         }
                     }
 
-                    if let Some(shape) = self.doc.shapes.get_mut(idx) {
-                        shape.x = nx;
-                        shape.y = ny;
-                        self.touch();
+                    let dx = nx - origin.x;
+                    let dy = ny - origin.y;
+                    for &idx in &self.selected {
+                        if let Some(shape) = self.doc.shapes.get_mut(idx) {
+                            shape.x += dx;
+                            shape.y += dy;
+                        }
                     }
+                    self.drag_shape_pos = Some((idx, Pos2::new(origin.x + dx, origin.y + dy)));
+                    self.touch();
                 }
             }
         }
@@ -315,7 +366,7 @@ impl FreeCanvas {
                         shape.w = w;
                         shape.h = h;
                         self.doc.shapes.push(shape);
-                        self.selected = Some(self.doc.shapes.len() - 1);
+                        self.selected = vec![self.doc.shapes.len() - 1];
                         self.touch();
                     }
                 }
@@ -378,5 +429,142 @@ impl FreeCanvas {
         }
 
         ui.allocate_rect(canvas_rect, Sense::hover());
+    }
+
+    /// Определить визуальное состояние фигуры с учётом группы.
+    fn shape_state(
+        idx: usize,
+        shape: &FreeShape,
+        shapes: &[FreeShape],
+        hovered: Option<usize>,
+        pressed: Option<usize>,
+    ) -> ShapeState {
+        // Нажатие: прямое или по группе
+        if pressed == Some(idx) {
+            return ShapeState::Pressed;
+        }
+        if let Some(p) = pressed {
+            if let Some(pshape) = shapes.get(p) {
+                if let Some(gid) = &pshape.group_id {
+                    if shape.group_id.as_ref() == Some(gid) {
+                        return ShapeState::Pressed;
+                    }
+                }
+            }
+        }
+
+        // Наведение: прямое или по группе
+        if hovered == Some(idx) {
+            return ShapeState::Hover;
+        }
+        if let Some(h) = hovered {
+            if let Some(hshape) = shapes.get(h) {
+                if let Some(gid) = &hshape.group_id {
+                    if shape.group_id.as_ref() == Some(gid) {
+                        return ShapeState::Hover;
+                    }
+                }
+            }
+        }
+
+        ShapeState::Normal
+    }
+
+    /// Показать контекстное меню у заданной позиции на экране.
+    fn show_context_menu(&mut self, ctx: &egui::Context, menu_pos: Pos2, target_idx: usize) {
+        let has_group = self.doc.shapes.get(target_idx)
+            .and_then(|s| s.group_id.as_ref())
+            .is_some();
+        let all_grouped = self.selected.iter()
+            .all(|&i| self.doc.shapes.get(i).and_then(|s| s.group_id.as_ref()).is_some());
+        let any_grouped = self.selected.iter()
+            .any(|&i| self.doc.shapes.get(i).and_then(|s| s.group_id.as_ref()).is_some());
+
+        let mut close_menu = false;
+
+        egui::Window::new("Контекстное меню")
+            .collapsible(false)
+            .resizable(false)
+            .title_bar(false)
+            .default_pos(menu_pos)
+            .show(ctx, |ui| {
+                ui.set_min_width(160.0);
+
+                if ui.button("Удалить фигуру").clicked() {
+                    close_menu = true;
+                }
+
+                ui.separator();
+
+                if has_group {
+                    if ui.button("Разгруппировать").clicked() {
+                        self.ungroup_selected();
+                        close_menu = true;
+                    }
+                } else if self.selected.len() > 1 {
+                    if ui.button("Сгруппировать").clicked() {
+                        self.group_selected();
+                        close_menu = true;
+                    }
+                } else if !all_grouped && !any_grouped {
+                    if ui.button("Сгруппировать").clicked() {
+                        self.group_selected();
+                        close_menu = true;
+                    }
+                }
+
+                if close_menu {
+                    self.context_menu = None;
+                }
+            });
+
+        // Закрыть меню при клике вне его
+        if ctx.input(|i| i.pointer.any_click()) {
+            if !ctx.is_pointer_over_area() {
+                self.context_menu = None;
+            }
+        }
+    }
+
+    /// Сгруппировать выделенные фигуры (присвоить общий group_id).
+    fn group_selected(&mut self) {
+        if self.selected.is_empty() {
+            return;
+        }
+        let group_id = format!("group-{}", self.next_id);
+        self.next_id += 1;
+        for &idx in &self.selected {
+            if let Some(shape) = self.doc.shapes.get_mut(idx) {
+                shape.group_id = Some(group_id.clone());
+            }
+        }
+        self.touch();
+    }
+
+    /// Разгруппировать выделенные фигуры (убрать group_id).
+    fn ungroup_selected(&mut self) {
+        for &idx in &self.selected {
+            if let Some(shape) = self.doc.shapes.get_mut(idx) {
+                shape.group_id = None;
+            }
+        }
+        self.touch();
+    }
+
+    /// Удалить все выделенные фигуры.
+    pub(crate) fn delete_selected(&mut self) {
+        let mut keep: Vec<FreeShape> = Vec::new();
+        for (i, shape) in self.doc.shapes.drain(..).enumerate() {
+            if !self.selected.contains(&i) {
+                keep.push(shape);
+            }
+        }
+        self.doc.shapes = keep;
+        self.selected.clear();
+        self.context_menu = None;
+        self.hovered = None;
+        self.pressed = None;
+        self.recompute_next_id();
+        self.touch();
     }
 }

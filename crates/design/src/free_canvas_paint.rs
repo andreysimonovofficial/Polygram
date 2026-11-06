@@ -42,14 +42,6 @@ impl FreeCanvas {
         None
     }
 
-    pub(crate) fn delete_selected(&mut self) {
-        if let Some(idx) = self.selected.take() {
-            if idx < self.doc.shapes.len() {
-                self.doc.shapes.remove(idx);
-            }
-        }
-    }
-
     /// Нарисовать одну фигуру с учётом визуального состояния (прототип).
     pub(crate) fn paint_shape(
         &self,

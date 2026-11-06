@@ -36,7 +36,7 @@ impl DesignApp {
             ui.horizontal(|ui| {
                 if ui.button("Новый").clicked() {
                     self.free_canvas.doc = FreeCanvasDoc::default();
-                    self.free_canvas.selected = None;
+                    self.free_canvas.selected.clear();
                     self.file_path = None;
                     self.status = "Новый холст создан".to_owned();
                 }
@@ -88,7 +88,7 @@ impl DesignApp {
                             match load_free_canvas(&path) {
                                 Ok(doc) => {
                                     self.free_canvas.doc = doc;
-                                    self.free_canvas.selected = None;
+                                    self.free_canvas.selected.clear();
                                     self.file_path = Some(path);
                                     self.status = format!("Открыто: {:?}", self.file_path);
                                     self.show_open_dialog = false;

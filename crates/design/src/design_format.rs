@@ -345,6 +345,9 @@ pub struct FreeShape {
     /// Переопределения стилей для состояний наведения и нажатия (режим прототипа).
     #[serde(default)]
     pub states: ShapeStates,
+    /// Идентификатор группы. Фигуры с одинаковым group_id реагируют на наведение/нажатие вместе.
+    #[serde(default)]
+    pub group_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -376,6 +379,7 @@ impl Default for FreeShape {
             text_color: Rgba::from_rgb(230, 230, 235),
             text_align: TextAlign::Left,
             states: ShapeStates::default(),
+            group_id: None,
         }
     }
 }

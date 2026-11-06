@@ -19,13 +19,14 @@ impl FreeCanvas {
         ui.separator();
 
         ui.label(format!("Фигуры: {}", self.doc.shapes.len()));
+        ui.label(format!("Выбрано: {}", self.selected.len()));
         if ui.button("Удалить выделенное").clicked() {
             self.delete_selected();
             self.touch();
         }
         if ui.button("Очистить").clicked() {
             self.doc.shapes.clear();
-            self.selected = None;
+            self.selected.clear();
             self.touch();
         }
 
@@ -33,12 +34,12 @@ impl FreeCanvas {
         ui.heading("Свойства фигуры");
         ui.separator();
 
-        match self.selected {
+        match self.selected.first().copied() {
             Some(idx) => {
                 let (changed, delete) = Self::edit_shape(ui, &mut self.doc.shapes[idx]);
                 if delete {
                     self.doc.shapes.remove(idx);
-                    self.selected = None;
+                    self.selected.clear();
                     self.touch();
                 } else if changed {
                     self.touch();
@@ -327,6 +328,25 @@ impl FreeCanvas {
                 .changed();
             if st.stroke_width.is_none() {
                 st.stroke_width = Some(shape.stroke_width);
+            }
+        }
+
+        // Группа
+        ui.separator();
+        ui.label("Группа (прототип):");
+        let mut group_id = shape.group_id.clone().unwrap_or_default();
+        if ui.text_edit_singleline(&mut group_id).changed() {
+            if group_id.is_empty() {
+                shape.group_id = None;
+            } else {
+                shape.group_id = Some(group_id);
+            }
+            changed = true;
+        }
+        if shape.group_id.is_some() {
+            if ui.button("Убрать из группы").clicked() {
+                shape.group_id = None;
+                changed = true;
             }
         }
 

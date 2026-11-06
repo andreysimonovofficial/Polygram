@@ -9,7 +9,7 @@ use egui::{Key, Pos2, Vec2};
 /// Состояние свободного холста.
 pub struct FreeCanvas {
     pub doc: FreeCanvasDoc,
-    pub selected: Option<usize>,
+    pub selected: Vec<usize>,
     pub tool: DrawTool,
     pub magnetic: bool,
     pub camera: Vec2,
@@ -32,13 +32,15 @@ pub struct FreeCanvas {
     pub hovered: Option<usize>,
     /// Индекс зажатой фигуры (только в режиме прототипа).
     pub pressed: Option<usize>,
+    /// Контекстное меню: позиция на экране и индекс целевой фигуры.
+    pub context_menu: Option<(Pos2, usize)>,
 }
 
 impl Default for FreeCanvas {
     fn default() -> Self {
         Self {
             doc: FreeCanvasDoc::default(),
-            selected: None,
+            selected: Vec::new(),
             tool: DrawTool::Select,
             magnetic: false,
             camera: Vec2::ZERO,
@@ -58,6 +60,7 @@ impl Default for FreeCanvas {
             prototype_mode: false,
             hovered: None,
             pressed: None,
+            context_menu: None,
         }
     }
 }
@@ -156,7 +159,7 @@ impl FreeCanvas {
                         if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
                             self.doc = new_doc;
                             self.recompute_next_id();
-                            self.selected = None;
+                            self.selected.clear();
                             self.touch();
                             self.last_applied_code = self.code_text.clone();
                         }
