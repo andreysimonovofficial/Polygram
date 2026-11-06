@@ -114,11 +114,12 @@ impl FreeCanvas {
         ui.separator();
         ui.label("Заливка:");
         if let Some(fill) = &mut shape.fill {
-            let mut color = Color32::from_rgb(fill.r, fill.g, fill.b);
+            let mut color = Color32::from_rgba_unmultiplied(fill.r, fill.g, fill.b, fill.a);
             if ui.color_edit_button_srgba(&mut color).changed() {
                 fill.r = color.r();
                 fill.g = color.g();
                 fill.b = color.b();
+                fill.a = color.a();
                 changed = true;
             }
         } else {
