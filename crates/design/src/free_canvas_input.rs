@@ -3,7 +3,7 @@
 
 use crate::design_format::{DrawTool, FreeShape, ShapeState};
 use crate::free_canvas::FreeCanvas;
-use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Key, PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
 
 impl FreeCanvas {
@@ -17,6 +17,15 @@ impl FreeCanvas {
         let painter = ui.painter();
 
         let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
+
+        // Горячие клавиши Undo/Redo
+        let modifiers = ui.ctx().input(|i| i.modifiers);
+        if modifiers.command && ui.ctx().input(|i| i.key_pressed(Key::Z)) {
+            self.undo();
+        }
+        if modifiers.command && ui.ctx().input(|i| i.key_pressed(Key::Y)) {
+            self.redo();
+        }
 
         // Приближение/отдаление колёсиком мыши к курсору.
         let scroll = ui.ctx().input(|i| i.raw_scroll_delta);
@@ -175,6 +184,7 @@ impl FreeCanvas {
         if response.clicked() && !middle_down && !menu_was_open {
             if let Some(pos) = response.interact_pointer_pos() {
                 if self.tool == DrawTool::Text {
+                    self.save_history();
                     let mut shape = FreeShape::default();
                     shape.id = format!("shape-{}", self.next_id);
                     self.next_id += 1;
@@ -246,6 +256,7 @@ impl FreeCanvas {
                             if let Some(shape) = self.doc.shapes.get(idx) {
                                 self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
                             }
+                            self.save_history();
                         }
                         None => {
                             if !ctrl {
@@ -320,15 +331,13 @@ impl FreeCanvas {
                         }
                     }
 
-                    let dx = nx - origin.x;
-                    let dy = ny - origin.y;
                     for &idx in &self.selected {
                         if let Some(shape) = self.doc.shapes.get_mut(idx) {
-                            shape.x += dx;
-                            shape.y += dy;
+                            shape.x = nx;
+                            shape.y = ny;
                         }
                     }
-                    self.drag_shape_pos = Some((idx, Pos2::new(origin.x + dx, origin.y + dy)));
+                    self.drag_shape_pos = Some((idx, Pos2::new(nx, ny)));
                     self.touch();
                 }
             } else {
@@ -364,6 +373,7 @@ impl FreeCanvas {
                     let w = (world_end.x - world_start.x).abs();
                     let h = (world_end.y - world_start.y).abs();
                     if w > 4.0 && h > 4.0 {
+                        self.save_history();
                         let sel_rect = Rect::from_min_size(
                             Pos2::new(x, y),
                             Vec2::new(w.max(1.0), h.max(1.0)),
@@ -431,6 +441,7 @@ impl FreeCanvas {
                     }
 
                     if w > 4.0 && h > 4.0 {
+                        self.save_history();
                         let mut shape = FreeShape::default();
                         shape.id = format!("shape-{}", self.next_id);
                         self.next_id += 1;
@@ -576,6 +587,17 @@ impl FreeCanvas {
 
                 ui.separator();
 
+                if ui.button("Копировать").clicked() {
+                    self.copy_selected();
+                    close_menu = true;
+                }
+                if self.clipboard.is_some() && ui.button("Вставить").clicked() {
+                    self.paste_from_clipboard();
+                    close_menu = true;
+                }
+
+                ui.separator();
+
                 if has_group {
                     if ui.button("Разгруппировать").clicked() {
                         self.ungroup_selected();
@@ -604,6 +626,7 @@ impl FreeCanvas {
         if self.selected.is_empty() {
             return;
         }
+        self.save_history();
         let group_id = format!("group-{}", self.next_id);
         self.next_id += 1;
         for &idx in &self.selected {
@@ -616,6 +639,7 @@ impl FreeCanvas {
 
     /// Разгруппировать выделенные фигуры (убрать group_id).
     fn ungroup_selected(&mut self) {
+        self.save_history();
         for &idx in &self.selected {
             if let Some(shape) = self.doc.shapes.get_mut(idx) {
                 shape.group_id = None;
@@ -626,6 +650,7 @@ impl FreeCanvas {
 
     /// Удалить все выделенные фигуры.
     pub(crate) fn delete_selected(&mut self) {
+        self.save_history();
         let mut keep: Vec<FreeShape> = Vec::new();
         for (i, shape) in self.doc.shapes.drain(..).enumerate() {
             if !self.selected.contains(&i) {

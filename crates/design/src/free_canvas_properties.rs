@@ -11,6 +11,7 @@ impl FreeCanvas {
         ui.separator();
 
         ui.label("Цвет фона холста:");
+        self.save_history();
         Self::color_picker(ui, &mut self.doc.bg);
         self.touch();
         ui.separator();
@@ -25,6 +26,7 @@ impl FreeCanvas {
             self.touch();
         }
         if ui.button("Очистить").clicked() {
+            self.save_history();
             self.doc.shapes.clear();
             self.selected.clear();
             self.touch();
@@ -36,6 +38,7 @@ impl FreeCanvas {
 
         match self.selected.first().copied() {
             Some(idx) => {
+                self.save_history();
                 let (changed, delete) = Self::edit_shape(ui, &mut self.doc.shapes[idx]);
                 if delete {
                     self.doc.shapes.remove(idx);

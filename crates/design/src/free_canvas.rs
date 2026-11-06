@@ -34,6 +34,17 @@ pub struct FreeCanvas {
     pub pressed: Option<usize>,
     /// Контекстное меню: позиция на экране и индекс целевой фигуры.
     pub context_menu: Option<(Pos2, usize)>,
+    /// Экранный прямоугольник selection box (рисуется в конце canvas_panel, верхний слой).
+    pub selection_box_screen: Option<egui::Rect>,
+
+    /// История изменений для Undo/Redo.
+    pub history: Vec<FreeCanvasDoc>,
+    /// Текущая позиция в истории.
+    pub history_index: usize,
+    /// Максимальный размер истории.
+    pub max_history: usize,
+    /// Буфер обмена (JSON-строка скопированных фигур).
+    pub clipboard: Option<String>,
 }
 
 impl Default for FreeCanvas {
@@ -61,6 +72,11 @@ impl Default for FreeCanvas {
             hovered: None,
             pressed: None,
             context_menu: None,
+            selection_box_screen: None,
+            history: Vec::new(),
+            history_index: 0,
+            max_history: 50,
+            clipboard: None,
         }
     }
 }
@@ -68,6 +84,88 @@ impl Default for FreeCanvas {
 impl FreeCanvas {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Сохранить текущее состояние документа в историю перед изменением.
+    pub fn save_history(&mut self) {
+        if self.history_index < self.history.len() - 1 {
+            self.history.truncate(self.history_index + 1);
+        }
+        if self.history.len() >= self.max_history {
+            self.history.remove(0);
+        } else {
+            self.history_index += 1;
+        }
+        self.history.push(self.doc.clone());
+    }
+
+    /// Можно ли отменить последнее изменение.
+    pub fn can_undo(&self) -> bool {
+        self.history_index > 0
+    }
+
+    /// Можно ли повторить отменённое изменение.
+    pub fn can_redo(&self) -> bool {
+        self.history_index < self.history.len() - 1
+    }
+
+    /// Отменить последнее изменение.
+    pub fn undo(&mut self) {
+        if !self.can_undo() {
+            return;
+        }
+        self.history_index -= 1;
+        self.doc = self.history[self.history_index].clone();
+        self.recompute_next_id();
+        self.selected.clear();
+        self.touch();
+    }
+
+    /// Повторить отменённое изменение.
+    pub fn redo(&mut self) {
+        if !self.can_redo() {
+            return;
+        }
+        self.history_index += 1;
+        self.doc = self.history[self.history_index].clone();
+        self.recompute_next_id();
+        self.selected.clear();
+        self.touch();
+    }
+
+    /// Скопировать выделенные фигуры в буфер обмена (JSON).
+    pub fn copy_selected(&mut self) {
+        if self.selected.is_empty() {
+            return;
+        }
+        let selected_shapes: Vec<&FreeShape> = self.selected.iter()
+            .filter_map(|&i| self.doc.shapes.get(i))
+            .collect();
+        if let Ok(json) = serde_json::to_string(&selected_shapes) {
+            self.clipboard = Some(json);
+        }
+    }
+
+    /// Вставить фигуры из буфера обмена.
+    pub fn paste_from_clipboard(&mut self) {
+        self.save_history();
+        let Some(json) = &self.clipboard else { return };
+        let Ok(shapes): Result<Vec<FreeShape>, _> = serde_json::from_str(json) else { return };
+        let shapes_len = shapes.len();
+        for shape in &shapes {
+            let mut new_shape = shape.clone();
+            new_shape.id = format!("shape-{}", self.next_id);
+            self.next_id += 1;
+            // Смещаем вставленные фигуры чуть вправо-вниз, чтобы они не лежали точно поверх исходных
+            new_shape.x += 20.0;
+            new_shape.y += 20.0;
+            self.doc.shapes.push(new_shape);
+        }
+        self.selected.clear();
+        for i in (self.doc.shapes.len() - shapes_len)..self.doc.shapes.len() {
+            self.selected.push(i);
+        }
+        self.touch();
     }
 
     /// Отобразить нижнюю панель инструментов, правую боковую панель свойств,
@@ -124,6 +222,13 @@ impl FreeCanvas {
                         self.prototype_mode = self.doc.prototype_mode;
                         self.hovered = None;
                         self.pressed = None;
+                    }
+                    ui.separator();
+                    if ui.button("↶ Отменить (Ctrl+Z)").clicked() && self.can_undo() {
+                        self.undo();
+                    }
+                    if ui.button("↷ Повторить (Ctrl+Y)").clicked() && self.can_redo() {
+                        self.redo();
                     }
                 });
             });
