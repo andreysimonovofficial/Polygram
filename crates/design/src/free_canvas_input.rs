@@ -356,12 +356,13 @@ impl FreeCanvas {
                     let y = world_start.y.min(world_pos.y);
                     let w = (world_pos.x - world_start.x).abs();
                     let h = (world_pos.y - world_start.y).abs();
-                    if w > 2.0 && h > 2.0 {
+                    if w > 1.0 && h > 1.0 {
                         let world_rect = Rect::from_min_size(
                             Pos2::new(x, y),
                             Vec2::new(w.max(1.0), h.max(1.0)),
                         );
                         self.selection_box_screen = Some(world_rect_to_screen(world_rect));
+                        ui.ctx().request_repaint();
                     }
                 }
             }
@@ -498,7 +499,7 @@ impl FreeCanvas {
 
         // Отрисовать selection box на самом верхнем слое (без заливки, только контур 1px)
         if let Some(screen_rect) = self.selection_box_screen {
-            painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(0, 217, 255)));
+            painter.rect_stroke(screen_rect, 0.0, Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)));
         }
 
         // Предварительный вид фигуры во время рисования
