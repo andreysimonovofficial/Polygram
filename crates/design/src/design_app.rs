@@ -10,6 +10,7 @@ use eframe::Frame;
 use egui::Context;
 use rfd::FileDialog;
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 /// Состояние инструмента дизайна (только свободный холст).
 pub struct DesignApp {
@@ -20,6 +21,8 @@ pub struct DesignApp {
     pub ui_agent: UiAgent,
     /// Путь к последнему загруженному скриншоту.
     pub screenshot_path: Option<PathBuf>,
+    /// Получатель результата фонового анализа (если поток ещё работает).
+    pub analysis_receiver: Option<mpsc::Receiver<Result<AnalysisResult, String>>>,
 }
 
 impl DesignApp {
@@ -30,11 +33,30 @@ impl DesignApp {
             status: "Готов".to_owned(),
             ui_agent: UiAgent::new(LlmProvider::default()),
             screenshot_path: None,
+            analysis_receiver: None,
         }
     }
 
     /// Отобразить весь интерфейс инструмента дизайна.
     pub fn ui(&mut self, ctx: &Context, frame: &mut Frame) {
+        // Проверяем, пришёл ли результат фонового анализа.
+        if let Some(rx) = &self.analysis_receiver {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(analysis) => {
+                        UiAgent::apply_to_canvas(&mut self.free_canvas, &analysis);
+                        self.status = format!(
+                            "Агент: {} элементов из скриншота",
+                            analysis.elements.len()
+                        );
+                    }
+                    Err(e) => self.status = format!("Ошибка агента: {e}"),
+                }
+                self.analysis_receiver = None;
+                ctx.request_repaint();
+            }
+        }
+
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("Новый").clicked() {
@@ -134,23 +156,24 @@ impl DesignApp {
                         ui.label(format!("Файл: {:?}", path.file_name().unwrap_or_default()));
                     }
                     ui.separator();
-                    if ui.button("Агент: снимок → фигуры").clicked() {
+                    let analysing = self.analysis_receiver.is_some();
+                    let btn = if analysing { "Анализирую…" } else { "Агент: снимок → фигуры" };
+                    if ui.button(btn).clicked() && !analysing {
                         let Some(path) = self.screenshot_path.clone() else {
                             self.status = "Сначала загрузите скриншот".to_owned();
                             return;
                         };
                         match ScreenAgent::load_image(&path) {
                             Some(img) => {
-                                match self.ui_agent.analyze(&img) {
-                                    Ok(result) => {
-                                        UiAgent::apply_to_canvas(&mut self.free_canvas, &result);
-                                        self.status = format!(
-                                            "Агент: {} элементов из скриншота",
-                                            result.elements.len()
-                                        );
-                                    }
-                                    Err(e) => self.status = format!("Ошибка агента: {e}"),
-                                }
+                                let provider = self.ui_agent.provider.clone();
+                                let (tx, rx) = mpsc::channel();
+                                std::thread::spawn(move || {
+                                    let agent = UiAgent::new(provider);
+                                    let result = agent.analyze(&img);
+                                    let _ = tx.send(result);
+                                });
+                                self.analysis_receiver = Some(rx);
+                                self.status = "Агент: анализирую скриншот…".to_owned();
                             }
                             None => self.status = "Не удалось загрузить скриншот".to_owned(),
                         }
@@ -210,7 +233,3 @@ fn load_free_canvas(path: &std::path::Path) -> Result<FreeCanvasDoc, Box<dyn std
     let doc = FreeCanvasDoc::load_from_json(&json)?;
     Ok(doc)
 }
-
-// Анализ результата (не используется напрямую, оставлен для ссылки).
-#[allow(dead_code)]
-fn _unused_result(_result: &AnalysisResult) {}
