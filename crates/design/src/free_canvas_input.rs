@@ -789,7 +789,19 @@ impl FreeCanvas {
             }
         }
 
+        // Запомнить старые id по старым индексам до замены вектора.
+        let old_ids: Vec<String> = self.doc.shapes.iter().map(|s| s.id.clone()).collect();
         let new_shapes: Vec<FreeShape> = order.into_iter().map(|i| self.doc.shapes[i].clone()).collect();
+        let id_to_new_idx: std::collections::HashMap<&str, usize> = new_shapes
+            .iter()
+            .enumerate()
+            .map(|(new_i, s)| (s.id.as_str(), new_i))
+            .collect();
+        // Перенаправить выделенные индексы на новые позиции по id фигур.
+        self.selected.retain_mut(|idx| {
+            let old_id = old_ids.get(*idx).map(|s| s.as_str()).unwrap_or("");
+            id_to_new_idx.get(old_id).copied().map_or(false, |new_i| { *idx = new_i; true })
+        });
         self.doc.shapes = new_shapes;
     }
 }
