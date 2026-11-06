@@ -139,9 +139,11 @@ impl FreeCanvas {
                     });
                     ui.separator();
                     if ui.button("Код для агента").clicked() {
-                        self.show_code_sidebar = true;
-                        self.code_text = self.doc.to_json().unwrap_or_default();
-                        self.last_applied_code = self.code_text.clone();
+                        self.show_code_sidebar = !self.show_code_sidebar;
+                        if self.show_code_sidebar {
+                            self.code_text = self.doc.to_json().unwrap_or_default();
+                            self.last_applied_code = self.code_text.clone();
+                        }
                     }
                 });
             });
@@ -161,12 +163,15 @@ impl FreeCanvas {
                         self.last_applied_code = current_json;
                     }
 
-                    // Поле кода растягивается на всю ширину сайдбара с вертикальным скроллбаром.
-                    let available_width = ui.available_width();
-                    egui::TextEdit::multiline(&mut self.code_text)
-                        .desired_rows(18)
-                        .desired_width(available_width)
-                        .show(ui);
+                    // Поле кода с вертикальным скроллом, ограниченное по высоте экрана.
+                    egui::ScrollArea::vertical()
+                        .max_height(ui.available_height())
+                        .show(ui, |ui| {
+                            let available_width = ui.available_width();
+                            egui::TextEdit::multiline(&mut self.code_text)
+                                .desired_width(available_width)
+                                .show(ui);
+                        });
 
                     // Применяем изменения из кода в дизайн «на лету» (код → дизайн),
                     // но только когда текст реально изменился, чтобы не сбрасывать курсор.
@@ -179,26 +184,6 @@ impl FreeCanvas {
                             self.last_applied_code = self.code_text.clone();
                         }
                     }
-
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        if ui.button("Обновить из дизайна").clicked() {
-                            self.code_text = self.doc.to_json().unwrap_or_default();
-                            self.last_applied_code = self.code_text.clone();
-                        }
-                        if ui.button("Применить и закрыть").clicked() {
-                            if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
-                                self.doc = new_doc;
-                                self.recompute_next_id();
-                                self.selected = None;
-                                self.touch();
-                            }
-                            self.show_code_sidebar = false;
-                        }
-                        if ui.button("Закрыть").clicked() {
-                            self.show_code_sidebar = false;
-                        }
-                    });
                 });
         }
 
