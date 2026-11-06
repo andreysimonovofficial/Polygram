@@ -100,7 +100,12 @@ impl DesignApp {
                     }
                     ui.separator();
                     if ui.button("Gemini").clicked() {
-                        self.ui_agent.provider = LlmProvider::Gemini { api_key: String::new() };
+                        self.ui_agent.provider = match &self.ui_agent.provider {
+                            LlmProvider::Gemini { api_key } => {
+                                LlmProvider::Gemini { api_key: api_key.clone() }
+                            }
+                            _ => LlmProvider::Gemini { api_key: String::new() },
+                        };
                     }
                     if ui.button("Qwen (локально)").clicked() {
                         self.ui_agent.provider =

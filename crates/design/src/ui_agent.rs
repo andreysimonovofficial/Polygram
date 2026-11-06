@@ -127,18 +127,20 @@ impl UiAgent {
         )
     }
 
-    /// Вызов Gemini API (блокирующий).
+    /// Вызов Gemini API (блокирующий) с перебором моделей при 503.
     fn call_gemini(
         api_key: &str,
         base64_img: &str,
         prompt: &str,
     ) -> Result<AnalysisResult, String> {
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-            api_key
-        );
+        let models = [
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+        ];
 
-        let request = serde_json::json!({
+        let request_body = serde_json::json!({
             "contents": [{
                 "parts": [
                     {"text": prompt},
@@ -155,33 +157,61 @@ impl UiAgent {
         });
 
         let client = reqwest::blocking::Client::new();
-        let resp = client
-            .post(&url)
-            .json(&request)
-            .send()
-            .map_err(|e| format!("Gemini request error: {e}"))?;
+        let mut last_error: Option<String> = None;
 
-        let status = resp.status();
-        let body: serde_json::Value = resp
-            .json()
-            .map_err(|e| format!("Gemini response parse error: {e}"))?;
+        for model in models.iter().cycle().take(models.len() * 3) {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={}",
+                api_key
+            );
 
-        if !status.is_success() {
-            return Err(format!("Gemini API error {}: {:?}", status, body));
+            let resp = match client
+                .post(&url)
+                .json(&request_body)
+                .send()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    last_error = Some(format!("Gemini request error ({model}): {e}"));
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            let body: serde_json::Value = match resp.json() {
+                Ok(b) => b,
+                Err(e) => {
+                    last_error = Some(format!("Gemini response parse error ({model}): {e}"));
+                    continue;
+                }
+            };
+
+            if status.is_success() {
+                let text = body
+                    .get("candidates")
+                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.get("content"))
+                    .and_then(|c| c.get("parts"))
+                    .and_then(|p| p.get(0))
+                    .and_then(|p| p.get("text"))
+                    .and_then(|t| t.as_str())
+                    .ok_or_else(|| "Gemini: no text in response".to_owned())?;
+
+                let elements = Self::parse_json_response(text)?;
+                return Ok(AnalysisResult { elements, image_size: (0, 0) });
+            }
+
+            // 503 — пробуем следующую модель
+            if status.as_u16() == 503 {
+                last_error = Some(format!("Gemini 503 on {model}: {:?}", body));
+                continue;
+            }
+
+            return Err(format!("Gemini API error {status} on {model}: {body:?}", status = status, model = model, body = body));
         }
 
-        let text = body
-            .get("candidates")
-            .and_then(|c| c.get(0))
-            .and_then(|c| c.get("content"))
-            .and_then(|c| c.get("parts"))
-            .and_then(|p| p.get(0))
-            .and_then(|p| p.get("text"))
-            .and_then(|t| t.as_str())
-            .ok_or_else(|| "Gemini: no text in response".to_owned())?;
-
-        let elements = Self::parse_json_response(text)?;
-        Ok(AnalysisResult { elements, image_size: (0, 0) })
+        Err(last_error
+            .unwrap_or_else(|| "Gemini: все модели недоступны".to_owned()))
     }
 
     /// Вызов Qwen (OpenAI-совместимый API, блокирующий).
