@@ -4,6 +4,7 @@
 
 use crate::design_format::*;
 use crate::free_canvas::FreeCanvas;
+use crate::screen_agent::{ScreenAgent, ScreenAgentConfig};
 use eframe::Frame;
 use egui::Context;
 use rfd::FileDialog;
@@ -14,6 +15,8 @@ pub struct DesignApp {
     pub free_canvas: FreeCanvas,
     pub file_path: Option<PathBuf>,
     pub status: String,
+    /// Настройки агента «Снимок экрана → фигуры».
+    pub screen_agent_config: ScreenAgentConfig,
 }
 
 impl DesignApp {
@@ -22,6 +25,10 @@ impl DesignApp {
             free_canvas: FreeCanvas::new(),
             file_path: None,
             status: "Готов".to_owned(),
+            screen_agent_config: ScreenAgentConfig {
+                min_area: 2000,
+                color_tolerance: 40,
+            },
         }
     }
 
@@ -67,6 +74,40 @@ impl DesignApp {
                 }
                 ui.separator();
                 ui.label(format!("Статус: {}", self.status));
+                ui.separator();
+                ui.group(|ui| {
+                    ui.label("Агент");
+                    if ui.button("Снимок экрана → фигуры").clicked() {
+                        match ScreenAgent::capture_screen() {
+                            Some(img) => {
+                                ScreenAgent::apply_to_canvas(
+                                    &mut self.free_canvas,
+                                    &img,
+                                    self.screen_agent_config,
+                                );
+                                self.status = format!(
+                                    "Агент: снимок {}, фигур {}",
+                                    self.free_canvas.doc.shapes.len(),
+                                    self.free_canvas.doc.shapes.len(),
+                                );
+                            }
+                            None => self.status = "Агент: не удалось сделать снимок экрана".to_owned(),
+                        }
+                    }
+                    ui.separator();
+                    ui.label("Мин. площадь:");
+                    ui.add(
+                        egui::DragValue::new(&mut self.screen_agent_config.min_area)
+                            .range(50..=100_000)
+                            .speed(100.0),
+                    );
+                    ui.label("Толерант цвет:");
+                    ui.add(
+                        egui::DragValue::new(&mut self.screen_agent_config.color_tolerance)
+                            .range(0..=255)
+                            .speed(5.0),
+                    );
+                });
             });
         });
 
