@@ -40,7 +40,6 @@ pub struct FreeCanvas {
     /// Контекстное меню: позиция на экране и опциональный индекс целевой фигуры.
     pub context_menu: Option<(Pos2, Option<usize>)>,
     /// Экранный прямоугольник selection box (рисуется в конце canvas_panel, верхний слой).
-    pub selection_box_screen: Option<egui::Rect>,
 
     /// Стек состояний для Undo (состояние ДО каждого действия).
     pub undo_stack: Vec<FreeCanvasDoc>,
@@ -81,7 +80,6 @@ impl Default for FreeCanvas {
             hovered: HashSet::new(),
             pressed: HashSet::new(),
             context_menu: None,
-            selection_box_screen: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             max_history: 50,

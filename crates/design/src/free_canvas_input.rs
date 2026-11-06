@@ -348,7 +348,7 @@ impl FreeCanvas {
                 }
             } else {
                 // Selection box (резиновый прямоугольник) при перетаскивании из пустого места.
-                // Сохраняем экранный прямоугольник для отрисовки в конце (верхний слой).
+                // Рисуем прямо через painter, как предварительный вид фигуры.
                 if let (Some(start), Some(pos)) = (self.drag_start, response.interact_pointer_pos()) {
                     let world_start = screen_to_world(start);
                     let world_pos = screen_to_world(pos);
@@ -361,8 +361,12 @@ impl FreeCanvas {
                             Pos2::new(x, y),
                             Vec2::new(w.max(1.0), h.max(1.0)),
                         );
-                        self.selection_box_screen = Some(world_rect_to_screen(world_rect));
-                        ui.ctx().request_repaint();
+                        let screen_rect = world_rect_to_screen(world_rect);
+                        painter.rect_stroke(
+                            screen_rect,
+                            0.0,
+                            Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)),
+                        );
                     }
                 }
             }
@@ -460,13 +464,7 @@ impl FreeCanvas {
                         self.doc.shapes.push(shape);
                         self.selected = vec![self.doc.shapes.len() - 1];
                         self.touch();
-                    }
-                }
             }
-            self.drag_start = None;
-            self.drag_shape_pos = None;
-            self.selection_box_screen = None;
-            self.drag_history_saved = false;
         }
 
         // Магнитные красные линии выравнивания (в экранных координатах)
