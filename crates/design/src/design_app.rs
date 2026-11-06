@@ -6,15 +6,13 @@ use crate::design_format::*;
 use crate::free_canvas::FreeCanvas;
 use eframe::Frame;
 use egui::Context;
+use rfd::FileDialog;
 use std::path::PathBuf;
 
 /// Состояние инструмента дизайна (только свободный холст).
 pub struct DesignApp {
     pub free_canvas: FreeCanvas,
     pub file_path: Option<PathBuf>,
-    pub show_open_dialog: bool,
-    pub show_save_as_dialog: bool,
-    pub dialog_path: String,
     pub status: String,
 }
 
@@ -23,9 +21,6 @@ impl DesignApp {
         Self {
             free_canvas: FreeCanvas::new(),
             file_path: None,
-            show_open_dialog: false,
-            show_save_as_dialog: false,
-            dialog_path: String::new(),
             status: "Готов".to_owned(),
         }
     }
@@ -41,8 +36,20 @@ impl DesignApp {
                     self.status = "Новый холст создан".to_owned();
                 }
                 if ui.button("Открыть").clicked() {
-                    self.dialog_path = self.file_path.as_ref().map_or(String::new(), |p| p.to_string_lossy().to_string());
-                    self.show_open_dialog = true;
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("JSON", &["json"])
+                        .pick_file()
+                    {
+                        match load_free_canvas(&path) {
+                            Ok(doc) => {
+                                self.free_canvas.doc = doc;
+                                self.free_canvas.selected.clear();
+                                self.file_path = Some(path);
+                                self.status = format!("Открыто: {:?}", self.file_path);
+                            }
+                            Err(e) => self.status = format!("Ошибка открытия: {e}"),
+                        }
+                    }
                 }
                 if ui.button("Сохранить").clicked() {
                     if let Some(path) = &self.file_path {
@@ -52,85 +59,38 @@ impl DesignApp {
                             self.status = format!("Сохранено в {:?}", path);
                         }
                     } else {
-                        self.show_save_as_dialog = true;
-                        self.dialog_path = String::new();
+                        self.save_as();
                     }
                 }
                 if ui.button("Сохранить как…").clicked() {
-                    self.dialog_path = self.file_path.as_ref().map_or(String::new(), |p| p.to_string_lossy().to_string());
-                    self.show_save_as_dialog = true;
+                    self.save_as();
                 }
                 ui.separator();
                 ui.label(format!("Статус: {}", self.status));
             });
         });
 
-        self.file_dialogs(ctx);
-
         self.free_canvas.ui(ctx, frame);
     }
 
-    /// Диалоги открытия и сохранения файла дизайна (JSON).
-    fn file_dialogs(&mut self, ctx: &Context) {
-        if self.show_open_dialog {
-            egui::Window::new("Открыть файл дизайна")
-                .collapsible(false)
-                .resizable(true)
-                .default_size([500.0, 180.0])
-                .show(ctx, |ui| {
-                    ui.label("Путь к JSON-файлу дизайна:");
-                    ui.separator();
-                    ui.text_edit_singleline(&mut self.dialog_path);
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        if ui.button("Открыть").clicked() {
-                            let path = std::path::PathBuf::from(self.dialog_path.trim());
-                            match load_free_canvas(&path) {
-                                Ok(doc) => {
-                                    self.free_canvas.doc = doc;
-                                    self.free_canvas.selected.clear();
-                                    self.file_path = Some(path);
-                                    self.status = format!("Открыто: {:?}", self.file_path);
-                                    self.show_open_dialog = false;
-                                }
-                                Err(e) => self.status = format!("Ошибка открытия: {e}"),
-                            }
-                        }
-                        if ui.button("Отмена").clicked() {
-                            self.show_open_dialog = false;
-                        }
-                    });
-                });
-        }
-
-        if self.show_save_as_dialog {
-            egui::Window::new("Сохранить дизайн как…")
-                .collapsible(false)
-                .resizable(true)
-                .default_size([500.0, 180.0])
-                .show(ctx, |ui| {
-                    ui.label("Путь для сохранения JSON-файла:");
-                    ui.separator();
-                    ui.text_edit_singleline(&mut self.dialog_path);
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        if ui.button("Сохранить").clicked() {
-                            let path = std::path::PathBuf::from(self.dialog_path.trim());
-                            if path.as_os_str().is_empty() {
-                                self.status = "Укажите путь к файлу".to_owned();
-                            } else if let Err(e) = save_to_free_canvas(&self.free_canvas.doc, &path) {
-                                self.status = format!("Ошибка сохранения: {e}");
-                            } else {
-                                self.file_path = Some(path.clone());
-                                self.status = format!("Сохранено в {:?}", path);
-                                self.show_save_as_dialog = false;
-                            }
-                        }
-                        if ui.button("Отмена").clicked() {
-                            self.show_save_as_dialog = false;
-                        }
-                    });
-                });
+    /// Сохранить файл с выбором пути через стандартный диалог ОС.
+    fn save_as(&mut self) {
+        let default_name = self
+            .file_path
+            .as_ref()
+            .and_then(|p| p.file_name().and_then(|n| n.to_str()))
+            .unwrap_or("design.json");
+        if let Some(path) = FileDialog::new()
+            .add_filter("JSON", &["json"])
+            .set_file_name(default_name)
+            .save_file()
+        {
+            if let Err(e) = save_to_free_canvas(&self.free_canvas.doc, &path) {
+                self.status = format!("Ошибка сохранения: {e}");
+            } else {
+                self.file_path = Some(path.clone());
+                self.status = format!("Сохранено в {:?}", path);
+            }
         }
     }
 }
