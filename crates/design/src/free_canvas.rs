@@ -382,9 +382,9 @@ impl FreeCanvas {
                 );
                 let screen_rect = world_rect_to_screen(world_rect);
                 painter.rect_stroke(
-                    screen_rect.expand(3.0 / zoom),
-                    2.0 / zoom,
-                    Stroke::new(1.5_f32 / zoom.max(0.1), Color32::from_rgb(100, 180, 255)),
+                    screen_rect.expand(3.0),
+                    0.0,
+                    Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)),
                 );
             }
         }
