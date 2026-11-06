@@ -107,18 +107,30 @@ impl FreeCanvas {
             }
         }
 
-        // Выделение (рамки вокруг всех выделенных фигур)
-        for &idx in &self.selected {
-            if let Some(shape) = self.doc.shapes.get(idx) {
+        // Единый фрейм выделения вокруг всех выделенных фигур
+        if !self.selected.is_empty() {
+            let mut min_x = f32::INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            for &idx in &self.selected {
+                if let Some(shape) = self.doc.shapes.get(idx) {
+                    min_x = min_x.min(shape.x);
+                    min_y = min_y.min(shape.y);
+                    max_x = max_x.max(shape.x + shape.w);
+                    max_y = max_y.max(shape.y + shape.h);
+                }
+            }
+            if min_x.is_finite() {
                 let world_rect = Rect::from_min_size(
-                    Pos2::new(shape.x, shape.y),
-                    Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
+                    Pos2::new(min_x, min_y),
+                    Vec2::new(max_x - min_x, max_y - min_y),
                 );
                 let screen_rect = world_rect_to_screen(world_rect);
                 painter.rect_stroke(
-                    screen_rect.expand(3.0),
+                    screen_rect.expand(4.0),
                     0.0,
-                    Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)),
+                    Stroke::new(1.5_f32, Color32::from_rgb(100, 180, 255)),
                 );
             }
         }
@@ -148,13 +160,19 @@ impl FreeCanvas {
             }
         }
 
-        // Отрисовать контекстное меню если нужно (через отдельное окно egui)
+        // Отрисовать контекстное меню если нужно
         if let Some((menu_pos, target_idx)) = self.context_menu.clone() {
             self.show_context_menu(ui.ctx(), menu_pos, target_idx);
         }
 
+        // Закрыть контекстное меню при левом клике вне меню
+        let menu_was_open = self.context_menu.is_some();
+        if response.clicked() && menu_was_open {
+            self.context_menu = None;
+        }
+
         // Нажатие мыши — для инструмента Текст размещаем текстовую фигуру по клику
-        if response.clicked() && !middle_down {
+        if response.clicked() && !middle_down && !menu_was_open {
             if let Some(pos) = response.interact_pointer_pos() {
                 if self.tool == DrawTool::Text {
                     let mut shape = FreeShape::default();
@@ -312,12 +330,68 @@ impl FreeCanvas {
                     self.drag_shape_pos = Some((idx, Pos2::new(origin.x + dx, origin.y + dy)));
                     self.touch();
                 }
+            } else {
+                // Selection box (резиновый прямоугольник) при перетаскивании из пустого места
+                if let (Some(start), Some(pos)) = (self.drag_start, response.interact_pointer_pos()) {
+                    let world_start = screen_to_world(start);
+                    let world_pos = screen_to_world(pos);
+                    let x = world_start.x.min(world_pos.x);
+                    let y = world_start.y.min(world_pos.y);
+                    let w = (world_pos.x - world_start.x).abs();
+                    let h = (world_pos.y - world_start.y).abs();
+                    if w > 2.0 && h > 2.0 {
+                        let world_rect = Rect::from_min_size(
+                            Pos2::new(x, y),
+                            Vec2::new(w.max(1.0), h.max(1.0)),
+                        );
+                        let screen_rect = world_rect_to_screen(world_rect);
+                        painter.rect_filled(screen_rect, 0.0, Color32::from_rgba_unmultiplied(100, 180, 255, 30));
+                        painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)));
+                    }
+                }
             }
         }
 
-        // Завершение перетаскивания — создать новую фигуру (кроме Select и Text)
+        // Завершение перетаскивания — создать новую фигуру или выделить по box
         if response.drag_stopped() && !middle_down {
-            if self.tool != DrawTool::Select && self.tool != DrawTool::Text {
+            if self.tool == DrawTool::Select && self.drag_shape_pos.is_none() {
+                // Selection box: выделить все фигуры внутри резинового прямоугольника
+                if let (Some(start), Some(end)) = (self.drag_start, response.interact_pointer_pos()) {
+                    let world_start = screen_to_world(start);
+                    let world_end = screen_to_world(end);
+                    let x = world_start.x.min(world_end.x);
+                    let y = world_start.y.min(world_end.y);
+                    let w = (world_end.x - world_start.x).abs();
+                    let h = (world_end.y - world_start.y).abs();
+                    if w > 4.0 && h > 4.0 {
+                        let sel_rect = Rect::from_min_size(
+                            Pos2::new(x, y),
+                            Vec2::new(w.max(1.0), h.max(1.0)),
+                        );
+                        let mut newly_selected: Vec<usize> = Vec::new();
+                        for (i, shape) in self.doc.shapes.iter().enumerate() {
+                            let shape_rect = Rect::from_min_size(
+                                Pos2::new(shape.x, shape.y),
+                                Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
+                            );
+                            if sel_rect.intersects(shape_rect) {
+                                newly_selected.push(i);
+                            }
+                        }
+                        let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+                        if ctrl {
+                            for &idx in &newly_selected {
+                                if !self.selected.contains(&idx) {
+                                    self.selected.push(idx);
+                                }
+                            }
+                        } else {
+                            self.selected = newly_selected;
+                        }
+                        self.touch();
+                    }
+                }
+            } else if self.tool != DrawTool::Select && self.tool != DrawTool::Text {
                 if let (Some(start), Some(end)) = (self.drag_start, response.interact_pointer_pos()) {
                     let world_start = screen_to_world(start);
                     let world_end = screen_to_world(end);
@@ -517,13 +591,6 @@ impl FreeCanvas {
                     self.context_menu = None;
                 }
             });
-
-        // Закрыть меню при клике вне его
-        if ctx.input(|i| i.pointer.any_click()) {
-            if !ctx.is_pointer_over_area() {
-                self.context_menu = None;
-            }
-        }
     }
 
     /// Сгруппировать выделенные фигуры (присвоить общий group_id).
