@@ -570,6 +570,19 @@ impl FreeCanvas {
                     close_menu = true;
                 }
 
+                if has_selection {
+                    ui.separator();
+
+                    if ui.button("На передний план").clicked() {
+                        self.send_to_front();
+                        close_menu = true;
+                    }
+                    if ui.button("На задний план").clicked() {
+                        self.send_to_back();
+                        close_menu = true;
+                    }
+                }
+
                 ui.separator();
 
                 if ui.button("Копировать").clicked() {
@@ -632,6 +645,61 @@ impl FreeCanvas {
                 shape.group_id = None;
             }
         }
+        self.touch();
+    }
+
+    /// Переместить выделенные фигуры на передний план (в конец списка shapes).
+    pub(crate) fn send_to_front(&mut self) {
+        if self.selected.is_empty() {
+            return;
+        }
+        self.save_undo_state();
+        let selected_ids: Vec<String> = self.selected.iter()
+            .filter_map(|&i| self.doc.shapes.get(i).map(|s| s.id.clone()))
+            .collect();
+        let mut selected_shapes: Vec<FreeShape> = Vec::new();
+        let mut remaining: Vec<FreeShape> = Vec::new();
+        for (i, shape) in self.doc.shapes.drain(..).enumerate() {
+            if self.selected.contains(&i) {
+                selected_shapes.push(shape);
+            } else {
+                remaining.push(shape);
+            }
+        }
+        remaining.extend(selected_shapes);
+        self.doc.shapes = remaining;
+        self.selected = self.doc.shapes.iter()
+            .enumerate()
+            .filter_map(|(i, s)| if selected_ids.contains(&s.id) { Some(i) } else { None })
+            .collect();
+        self.touch();
+    }
+
+    /// Переместить выделенные фигуры на задний план (в начало списка shapes).
+    pub(crate) fn send_to_back(&mut self) {
+        if self.selected.is_empty() {
+            return;
+        }
+        self.save_undo_state();
+        let selected_ids: Vec<String> = self.selected.iter()
+            .filter_map(|&i| self.doc.shapes.get(i).map(|s| s.id.clone()))
+            .collect();
+        let mut selected_shapes: Vec<FreeShape> = Vec::new();
+        let mut remaining: Vec<FreeShape> = Vec::new();
+        for (i, shape) in self.doc.shapes.drain(..).enumerate() {
+            if self.selected.contains(&i) {
+                selected_shapes.push(shape);
+            } else {
+                remaining.push(shape);
+            }
+        }
+        let mut new_shapes = selected_shapes;
+        new_shapes.extend(remaining);
+        self.doc.shapes = new_shapes;
+        self.selected = self.doc.shapes.iter()
+            .enumerate()
+            .filter_map(|(i, s)| if selected_ids.contains(&s.id) { Some(i) } else { None })
+            .collect();
         self.touch();
     }
 

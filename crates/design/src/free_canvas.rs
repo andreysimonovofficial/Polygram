@@ -270,6 +270,14 @@ impl FreeCanvas {
                     if ui.button("↷ Повторить (Ctrl+Y)").clicked() && self.can_redo() {
                         self.redo();
                     }
+                    ui.separator();
+                    let has_sel = !self.selected.is_empty();
+                    if ui.button("На передний план").clicked() && has_sel {
+                        self.send_to_front();
+                    }
+                    if ui.button("На задний план").clicked() && has_sel {
+                        self.send_to_back();
+                    }
                 });
             });
         // Левая боковая панель: редактор кода JSON для Агента (двусторонний, на лету)

@@ -46,12 +46,19 @@ impl FreeCanvas {
                 if changed {
                     self.push_undo_state(prev_doc);
                     self.touch();
-                    // Переиндексировать иерархию, чтобы родитель шёл раньше детей (корректный hit-тест).
                     self.reindex_containment();
                 } else if delete {
                     self.doc.shapes.remove(idx);
                     self.selected.clear();
                     self.touch();
+                }
+
+                ui.separator();
+                if ui.button("На передний план").clicked() {
+                    self.send_to_front();
+                }
+                if ui.button("На задний план").clicked() {
+                    self.send_to_back();
                 }
             }
             None => {
