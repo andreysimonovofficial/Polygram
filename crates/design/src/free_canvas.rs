@@ -171,7 +171,11 @@ impl FreeCanvas {
             .min_width(200.0)
             .max_width(1000.0)
             .show(ctx, |ui| {
-                self.properties_panel(ui);
+                egui::ScrollArea::vertical()
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        self.properties_panel(ui);
+                    });
             });
         let panel_width = response.response.rect.width();
         if (panel_width - self.sidebar_width).abs() > 0.5 {
