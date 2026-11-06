@@ -226,6 +226,22 @@ impl FreeCanvas {
                         .range(4.0..=200.0),
                 )
                 .changed();
+            changed |= ui
+                .add(
+                    DragValue::new(&mut shape.line_height)
+                        .prefix("Line height: ")
+                        .speed(0.1)
+                        .range(0.5..=3.0),
+                )
+                .changed();
+            changed |= ui
+                .add(
+                    DragValue::new(&mut shape.letter_spacing)
+                        .prefix("Letter spacing: ")
+                        .speed(0.5)
+                        .range(-50.0..=100.0),
+                )
+                .changed();
             ui.horizontal(|ui| {
                 ui.label("Цвет текста:");
                 let mut text_color = Color32::from_rgb(

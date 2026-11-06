@@ -363,6 +363,8 @@ pub struct FreeShape {
     pub font_size: f32,
     pub text_color: Rgba,
     pub text_align: TextAlign,
+    pub line_height: f32,
+    pub letter_spacing: f32,
     /// Переопределения стилей для состояний наведения и нажатия (режим прототипа).
     #[serde(default)]
     pub states: ShapeStates,
@@ -414,6 +416,8 @@ impl Default for FreeShape {
             font_size: 14.0,
             text_color: Rgba::from_rgb(230, 230, 235),
             text_align: TextAlign::Left,
+            line_height: 1.4,
+            letter_spacing: 0.0,
             states: ShapeStates::default(),
             group_id: None,
             parent_id: None,

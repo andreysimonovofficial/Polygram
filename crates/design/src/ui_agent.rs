@@ -45,6 +45,10 @@ pub struct UiElement {
     pub font_size: Option<f32>,
     #[serde(default)]
     pub text_align: Option<String>,
+    #[serde(default)]
+    pub line_height: Option<f32>,
+    #[serde(default)]
+    pub letter_spacing: Option<f32>,
 }
 
 /// Результат анализа.
@@ -121,6 +125,8 @@ impl UiAgent {
   "stroke_width": число или null,
   "text": строка или null (для kind="text"),
   "font_size": число или null,
+  "line_height": число или null (примерно 1.2-1.6),
+  "letter_spacing": число или null,
   "text_align": "left" | "center" | "right" или null
 }}
 
@@ -430,22 +436,24 @@ impl UiAgent {
             }
             "text" => {
                 shape.tool = DrawTool::Text;
-                shape.fill = elem.fill.map(|c| Rgba::from_rgba(c[0], c[1], c[2], c[3]));
+                // Текст в Figma — прозрачный фон, только цвет glyph'ов
+                shape.fill = None;
                 shape.text = elem.text.clone().unwrap_or_default();
                 shape.font_size = elem.font_size.unwrap_or(14.0);
-                shape.text_color = elem
-                    .fill
-                    .map(|c| Rgba::from_rgba(c[0], c[1], c[2], c[3]))
+                shape.line_height = elem.line_height.unwrap_or(1.4);
+                shape.letter_spacing = elem.letter_spacing.unwrap_or(0.0);
+                // Цвет текста — контрастный к фону (или fill если задан, иначе светлый)
+                let bg = elem.fill.map(|c| Rgba::from_rgba(c[0], c[1], c[2], c[3]));
+                shape.text_color = bg
+                    .map(|c| Self::contrast_color(c))
                     .unwrap_or_else(|| Rgba::from_rgb(230, 230, 235));
                 shape.text_align = match elem.text_align.as_deref() {
                     Some("center") => TextAlign::Center,
                     Some("right") => TextAlign::Right,
                     _ => TextAlign::Left,
                 };
-                if let Some(s) = elem.stroke {
-                    shape.stroke = Rgba::from_rgba(s[0], s[1], s[2], s[3]);
-                }
-                shape.stroke_width = elem.stroke_width.unwrap_or(0.0);
+                shape.stroke = Rgba::from_rgba(0, 0, 0, 0);
+                shape.stroke_width = 0.0;
             }
             "ellipse" => {
                 shape.tool = DrawTool::Ellipse;
@@ -474,5 +482,15 @@ impl UiAgent {
         }
 
         shape
+    }
+
+    /// Контрастный цвет текста к фону: если фон тёмный — светлый текст, и наоборот.
+    fn contrast_color(bg: Rgba) -> Rgba {
+        let lum = 0.299 * bg.r as f32 + 0.587 * bg.g as f32 + 0.114 * bg.b as f32;
+        if lum > 186.0 {
+            Rgba::from_rgb(30, 30, 35)
+        } else {
+            Rgba::from_rgb(230, 230, 235)
+        }
     }
 }
