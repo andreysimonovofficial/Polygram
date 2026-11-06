@@ -15,6 +15,7 @@ impl FreeCanvas {
             if let Ok(doc) = FreeCanvasDoc::load_from_json(&json) {
                 self.doc = doc;
                 self.recompute_next_id();
+                self.reindex_containment();
             }
         }
     }

@@ -288,6 +288,27 @@ pub struct Glow {
     pub size: f32,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+/// Как рамка-контейнер распространяет наведение/нажатие на детей.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChildReactMode {
+    /// Все дети с reacts_to_parent = true горят вместе с родителем (по умолчанию).
+    All,
+    /// Только дети из child_react_allow + reacts_to_parent.
+    List,
+    /// Дети не горят с родителем (только прямое попадание).
+    None,
+}
+
+impl Default for ChildReactMode {
+    fn default() -> Self {
+        ChildReactMode::All
+    }
+}
+
 /// Инструмент рисования свободной фигуры (аналог Figma).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DrawTool {
@@ -348,6 +369,21 @@ pub struct FreeShape {
     /// Идентификатор группы. Фигуры с одинаковым group_id реагируют на наведение/нажатие вместе.
     #[serde(default)]
     pub group_id: Option<String>,
+    /// Логический родитель (рамка/контейнер). Если Some — фигура дочерняя.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// Является ли фигура рамкой-контейнером (распространяет состояние на детей).
+    #[serde(default)]
+    pub is_container: bool,
+    /// Реагировать ли этому ребёнку на состояние родителя (по умолчанию true).
+    #[serde(default = "default_true")]
+    pub reacts_to_parent: bool,
+    /// Как рамка распространяет состояние на детей.
+    #[serde(default)]
+    pub child_react_mode: ChildReactMode,
+    /// Список id детей, которые реагируют, когда child_react_mode == List.
+    #[serde(default)]
+    pub child_react_allow: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -380,6 +416,11 @@ impl Default for FreeShape {
             text_align: TextAlign::Left,
             states: ShapeStates::default(),
             group_id: None,
+            parent_id: None,
+            is_container: false,
+            reacts_to_parent: true,
+            child_react_mode: ChildReactMode::All,
+            child_react_allow: Vec::new(),
         }
     }
 }

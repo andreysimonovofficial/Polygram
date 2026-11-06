@@ -5,6 +5,7 @@
 use crate::design_format::*;
 use eframe::egui;
 use egui::{Key, Pos2, Vec2};
+use std::collections::HashSet;
 
 /// Состояние свободного холста.
 pub struct FreeCanvas {
@@ -28,10 +29,14 @@ pub struct FreeCanvas {
     pub last_applied_code: String,
     /// Режим прототипа (синхронизируется с doc.prototype_mode).
     pub prototype_mode: bool,
-    /// Индекс фигуры под курсором (только в режиме прототипа).
-    pub hovered: Option<usize>,
-    /// Индекс зажатой фигуры (только в режиме прототипа).
-    pub pressed: Option<usize>,
+    /// Прямая цель наведения (topmost hit под курсором).
+    pub direct_hover: Option<usize>,
+    /// Прямая цель нажатия.
+    pub direct_press: Option<usize>,
+    /// Активное множество наведения: цель + дети + группа.
+    pub hovered: HashSet<usize>,
+    /// Активное множество нажатия: цель + дети + группа.
+    pub pressed: HashSet<usize>,
     /// Контекстное меню: позиция на экране и опциональный индекс целевой фигуры.
     pub context_menu: Option<(Pos2, Option<usize>)>,
     /// Экранный прямоугольник selection box (рисуется в конце canvas_panel, верхний слой).
@@ -71,8 +76,10 @@ impl Default for FreeCanvas {
             code_text: String::new(),
             last_applied_code: String::new(),
             prototype_mode: false,
-            hovered: None,
-            pressed: None,
+            direct_hover: None,
+            direct_press: None,
+            hovered: HashSet::new(),
+            pressed: HashSet::new(),
             context_menu: None,
             selection_box_screen: None,
             undo_stack: Vec::new(),
@@ -131,8 +138,10 @@ impl FreeCanvas {
         self.recompute_next_id();
         self.selected.clear();
         self.context_menu = None;
-        self.hovered = None;
-        self.pressed = None;
+        self.hovered.clear();
+        self.pressed.clear();
+        self.direct_hover = None;
+        self.direct_press = None;
         self.touch();
     }
 
@@ -148,8 +157,10 @@ impl FreeCanvas {
         self.recompute_next_id();
         self.selected.clear();
         self.context_menu = None;
-        self.hovered = None;
-        self.pressed = None;
+        self.hovered.clear();
+        self.pressed.clear();
+        self.direct_hover = None;
+        self.direct_press = None;
         self.touch();
     }
 
@@ -249,8 +260,8 @@ impl FreeCanvas {
                     if ui.button(proto_label).clicked() {
                         self.doc.prototype_mode = !self.doc.prototype_mode;
                         self.prototype_mode = self.doc.prototype_mode;
-                        self.hovered = None;
-                        self.pressed = None;
+                        self.hovered.clear();
+                        self.pressed.clear();
                     }
                     ui.separator();
                     if ui.button("↶ Отменить (Ctrl+Z)").clicked() && self.can_undo() {

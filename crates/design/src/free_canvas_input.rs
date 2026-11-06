@@ -1,10 +1,11 @@
 //! Обработка ввода на холсте: зум, панорамирование, перетаскивание, магнитное выравнивание,
 //! создание фигур, предварительный просмотр, контекстное меню и группировка.
 
-use crate::design_format::{DrawTool, FreeShape, ShapeState};
+use crate::design_format::{DrawTool, FreeShape, ShapeState, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
+use std::collections::HashSet;
 
 impl FreeCanvas {
     /// Центральная область: холст с обработкой ввода.
@@ -66,23 +67,34 @@ impl FreeCanvas {
             if let Some(cursor) = ui.ctx().pointer_hover_pos() {
                 if canvas_rect.contains(cursor) {
                     let world_cursor = screen_to_world(cursor);
-                    self.hovered = self.hit_shape(world_cursor);
+                    let direct = self.direct_hit(world_cursor);
+                    self.direct_hover = direct;
+                    self.hovered = self.active_set(direct);
                 } else {
-                    self.hovered = None;
+                    self.direct_hover = None;
+                    self.hovered.clear();
                 }
+            } else {
+                self.direct_hover = None;
+                self.hovered.clear();
             }
-            if ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary)) {
-                if self.pressed.is_none() {
-                    if let Some(h) = self.hovered {
-                        self.pressed = Some(h);
+            let mouse_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary));
+            if mouse_down {
+                if self.pressed.is_empty() {
+                    if let Some(direct) = self.direct_hover {
+                        self.direct_press = Some(direct);
+                        self.pressed = self.active_set(Some(direct));
                     }
                 }
-            } else if self.pressed.is_some() {
-                self.pressed = None;
+            } else if !self.pressed.is_empty() {
+                self.direct_press = None;
+                self.pressed.clear();
             }
         } else {
-            self.hovered = None;
-            self.pressed = None;
+            self.direct_hover = None;
+            self.direct_press = None;
+            self.hovered.clear();
+            self.pressed.clear();
         }
 
         // Магнитные линии (отображаются поверх всего в конце)
@@ -99,7 +111,7 @@ impl FreeCanvas {
             let screen_clip = screen_rect.intersect(canvas_rect);
             if screen_clip.is_positive() {
                 let state = if self.prototype_mode {
-                    Self::shape_state(i, shape, &self.doc.shapes, self.hovered, self.pressed)
+                    Self::shape_state(&self.hovered, &self.pressed, i)
                 } else {
                     ShapeState::Normal
                 };
@@ -517,43 +529,19 @@ impl FreeCanvas {
         ui.allocate_rect(canvas_rect, Sense::hover());
     }
 
-    /// Определить визуальное состояние фигуры с учётом группы.
+    /// Определить визуальное состояние фигуры с учётом множеств наведения/нажатия.
     fn shape_state(
+        hovered: &HashSet<usize>,
+        pressed: &HashSet<usize>,
         idx: usize,
-        shape: &FreeShape,
-        shapes: &[FreeShape],
-        hovered: Option<usize>,
-        pressed: Option<usize>,
     ) -> ShapeState {
-        // Нажатие: прямое или по группе
-        if pressed == Some(idx) {
-            return ShapeState::Pressed;
+        if pressed.contains(&idx) {
+            ShapeState::Pressed
+        } else if hovered.contains(&idx) {
+            ShapeState::Hover
+        } else {
+            ShapeState::Normal
         }
-        if let Some(p) = pressed {
-            if let Some(pshape) = shapes.get(p) {
-                if let Some(gid) = &pshape.group_id {
-                    if shape.group_id.as_ref() == Some(gid) {
-                        return ShapeState::Pressed;
-                    }
-                }
-            }
-        }
-
-        // Наведение: прямое или по группе
-        if hovered == Some(idx) {
-            return ShapeState::Hover;
-        }
-        if let Some(h) = hovered {
-            if let Some(hshape) = shapes.get(h) {
-                if let Some(gid) = &hshape.group_id {
-                    if shape.group_id.as_ref() == Some(gid) {
-                        return ShapeState::Hover;
-                    }
-                }
-            }
-        }
-
-        ShapeState::Normal
     }
 
     /// Показать контекстное меню у заданной позиции на экране.
@@ -659,9 +647,149 @@ impl FreeCanvas {
         self.doc.shapes = keep;
         self.selected.clear();
         self.context_menu = None;
-        self.hovered = None;
-        self.pressed = None;
+        self.hovered.clear();
+        self.pressed.clear();
+        self.direct_hover = None;
+        self.direct_press = None;
         self.recompute_next_id();
         self.touch();
+    }
+
+    /// Прямой topmost hit без распространения (верхняя фигура под курсором).
+    fn direct_hit(&self, world: Pos2) -> Option<usize> {
+        self.hit_shape(world)
+    }
+
+    /// Активное множество: цель + её дети (по иерархии containment) + группа (горизонтально).
+    fn active_set(&self, hit: Option<usize>) -> HashSet<usize> {
+        let mut set = HashSet::new();
+        let Some(idx) = hit else { return set };
+
+        set.insert(idx);
+
+        // Группировка по group_id (горизонтальная связь, существовавшая раньше).
+        if let Some(gid) = &self.doc.shapes[idx].group_id {
+            for (j, s) in self.doc.shapes.iter().enumerate() {
+                if s.group_id.as_ref() == Some(gid) {
+                    set.insert(j);
+                }
+            }
+        }
+
+        // Распространение вниз по дереву containment (родитель -> дети).
+        if self.is_container(idx) && self.child_react_mode(idx) != ChildReactMode::None {
+            self.collect_descendants(idx, &mut set);
+        }
+
+        set
+    }
+
+    /// Все подходящие потомки (рекурсивно вниз).
+    fn collect_descendants(&self, idx: usize, out: &mut HashSet<usize>) {
+        let parent_id = &self.doc.shapes[idx].id;
+        let mode = self.child_react_mode(idx);
+        let allow = &self.doc.shapes[idx].child_react_allow;
+
+        for (j, child) in self.doc.shapes.iter().enumerate() {
+            if child.parent_id.as_ref() != Some(parent_id) {
+                continue;
+            }
+
+            let allowed = match mode {
+                ChildReactMode::All => child.reacts_to_parent,
+                ChildReactMode::List => child.reacts_to_parent && allow.contains(&child.id),
+                ChildReactMode::None => false,
+            };
+
+            if allowed {
+                out.insert(j);
+                self.collect_descendants(j, out);
+            }
+        }
+    }
+
+    /// Является ли фигура рамкой-контейнером.
+    fn is_container(&self, idx: usize) -> bool {
+        self.doc.shapes.get(idx).map(|s| s.is_container).unwrap_or(false)
+    }
+
+    /// Режим распространения состояния на детей.
+    fn child_react_mode(&self, idx: usize) -> ChildReactMode {
+        self.doc.shapes
+            .get(idx)
+            .map(|s| s.child_react_mode)
+            .unwrap_or(ChildReactMode::All)
+    }
+
+    /// Проверить, не создаст ли установка родителя цикл в иерархии.
+    fn would_create_cycle(&self, idx: usize, new_parent_id: &str) -> bool {
+        let mut cur = self
+            .doc
+            .shapes
+            .iter()
+            .position(|s| s.id == new_parent_id);
+        while let Some(p) = cur {
+            if p == idx {
+                return true;
+            }
+            cur = self.doc.shapes[p]
+                .parent_id
+                .as_ref()
+                .and_then(|id| self.doc.shapes.iter().position(|s| s.id == *id));
+        }
+        false
+    }
+
+    /// Перестроить порядок фигур так, чтобы родитель шел раньше всех потомков.
+    /// Необходимо для корректного hit-теста (обратный обход должен находить ребёнка раньше родителя).
+    pub(crate) fn reindex_containment(&mut self) {
+        let n = self.doc.shapes.len();
+        let id_to_idx: std::collections::HashMap<String, usize> = self
+            .doc
+            .shapes
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.id.clone(), i))
+            .collect();
+
+        let mut parent_idx: Vec<Option<usize>> = vec![None; n];
+        for (i, s) in self.doc.shapes.iter().enumerate() {
+            if let Some(pid) = &s.parent_id {
+                parent_idx[i] = id_to_idx.get(pid).copied();
+            }
+        }
+
+        // Topological sort: родитель před ребёнком (Kahn's algorithm).
+        let mut remaining_deps: Vec<usize> = vec![0; n];
+        for i in 0..n {
+            if parent_idx[i].is_some() {
+                remaining_deps[i] = 1;
+            }
+        }
+
+        let mut queue: Vec<usize> = (0..n).filter(|&i| remaining_deps[i] == 0).collect();
+        let mut order = Vec::with_capacity(n);
+
+        while let Some(i) = queue.pop() {
+            order.push(i);
+            for j in 0..n {
+                if parent_idx[j] == Some(i) {
+                    remaining_deps[j] -= 1;
+                    if remaining_deps[j] == 0 {
+                        queue.push(j);
+                    }
+                }
+            }
+        }
+
+        // Остальные (сироты с пропавшим родителем или циклы) — в конец.
+        for i in 0..n {
+            if !order.contains(&i) {
+                order.push(i);
+            }
+        }
+
+        let new_shapes: Vec<FreeShape> = order.into_iter().map(|i| self.doc.shapes[i].clone()).collect();
+        self.doc.shapes = new_shapes;
     }
 }
