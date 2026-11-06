@@ -113,7 +113,7 @@ impl FreeCanvas {
                     .unwrap_or(Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a)),
                 ShapeState::Normal => Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a),
             };
-            let font = FontId::proportional(shape.font_size.max(6.0));
+            let font = FontId::proportional(shape.font_size.max(6.0) * zoom);
             let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
             let text_w = galley.size().x;
             let text_h = galley.size().y;

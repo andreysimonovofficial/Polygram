@@ -228,7 +228,7 @@ impl FreeCanvas {
                 .changed();
             ui.label("Выравнивание по горизонтали:");
             let mut align = shape.text_align.clone();
-            egui::ComboBox::from_label("")
+            egui::ComboBox::new("text_align_h", "")
                 .selected_text(match align {
                     TextAlign::Left => "По левому",
                     TextAlign::Center => "По центру",
@@ -248,7 +248,7 @@ impl FreeCanvas {
             shape.text_align = align;
             ui.label("Выравнивание по вертикали:");
             let mut align_v = shape.text_align_v;
-            egui::ComboBox::from_label("")
+            egui::ComboBox::new("text_align_v", "")
                 .selected_text(match align_v {
                     TextAlignV::Top => "По верхнему",
                     TextAlignV::Middle => "По центру",
