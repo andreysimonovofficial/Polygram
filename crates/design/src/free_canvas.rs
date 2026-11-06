@@ -32,8 +32,8 @@ pub struct FreeCanvas {
     pub hovered: Option<usize>,
     /// Индекс зажатой фигуры (только в режиме прототипа).
     pub pressed: Option<usize>,
-    /// Контекстное меню: позиция на экране и индекс целевой фигуры.
-    pub context_menu: Option<(Pos2, usize)>,
+    /// Контекстное меню: позиция на экране и опциональный индекс целевой фигуры.
+    pub context_menu: Option<(Pos2, Option<usize>)>,
     /// Экранный прямоугольник selection box (рисуется в конце canvas_panel, верхний слой).
     pub selection_box_screen: Option<egui::Rect>,
 

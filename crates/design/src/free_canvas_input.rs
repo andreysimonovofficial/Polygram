@@ -20,10 +20,10 @@ impl FreeCanvas {
 
         // Горячие клавиши Undo/Redo
         let modifiers = ui.ctx().input(|i| i.modifiers);
-        if modifiers.command && ui.ctx().input(|i| i.key_pressed(Key::Z)) {
+        if modifiers.ctrl && ui.ctx().input(|i| i.key_pressed(Key::Z)) {
             self.undo();
         }
-        if modifiers.command && ui.ctx().input(|i| i.key_pressed(Key::Y)) {
+        if modifiers.ctrl && ui.ctx().input(|i| i.key_pressed(Key::Y)) {
             self.redo();
         }
 
@@ -159,11 +159,11 @@ impl FreeCanvas {
                     if !self.selected.contains(&idx) {
                         self.selected = vec![idx];
                     }
-                    self.context_menu = Some((pos, idx));
+                    self.context_menu = Some((pos, Some(idx)));
                     self.touch();
                 } else {
                     self.selected.clear();
-                    self.context_menu = None;
+                    self.context_menu = Some((pos, None));
                     self.touch();
                 }
             }
@@ -337,7 +337,6 @@ impl FreeCanvas {
                             shape.y = ny;
                         }
                     }
-                    self.drag_shape_pos = Some((idx, Pos2::new(nx, ny)));
                     self.touch();
                 }
             } else {
@@ -562,14 +561,16 @@ impl FreeCanvas {
     }
 
     /// Показать контекстное меню у заданной позиции на экране.
-    fn show_context_menu(&mut self, ctx: &egui::Context, menu_pos: Pos2, target_idx: usize) {
-        let has_group = self.doc.shapes.get(target_idx)
+    fn show_context_menu(&mut self, ctx: &egui::Context, menu_pos: Pos2, target_idx: Option<usize>) {
+        let has_group = target_idx
+            .and_then(|i| self.doc.shapes.get(i))
             .and_then(|s| s.group_id.as_ref())
             .is_some();
         let all_grouped = self.selected.iter()
             .all(|&i| self.doc.shapes.get(i).and_then(|s| s.group_id.as_ref()).is_some());
         let any_grouped = self.selected.iter()
             .any(|&i| self.doc.shapes.get(i).and_then(|s| s.group_id.as_ref()).is_some());
+        let has_selection = !self.selected.is_empty();
 
         let mut close_menu = false;
 
@@ -581,7 +582,7 @@ impl FreeCanvas {
             .show(ctx, |ui| {
                 ui.set_min_width(160.0);
 
-                if ui.button("Удалить фигуру").clicked() {
+                if has_selection && ui.button("Удалить фигуру").clicked() {
                     close_menu = true;
                 }
 
@@ -598,20 +599,22 @@ impl FreeCanvas {
 
                 ui.separator();
 
-                if has_group {
-                    if ui.button("Разгруппировать").clicked() {
-                        self.ungroup_selected();
-                        close_menu = true;
-                    }
-                } else if self.selected.len() > 1 {
-                    if ui.button("Сгруппировать").clicked() {
-                        self.group_selected();
-                        close_menu = true;
-                    }
-                } else if !all_grouped && !any_grouped {
-                    if ui.button("Сгруппировать").clicked() {
-                        self.group_selected();
-                        close_menu = true;
+                if target_idx.is_some() {
+                    if has_group {
+                        if ui.button("Разгруппировать").clicked() {
+                            self.ungroup_selected();
+                            close_menu = true;
+                        }
+                    } else if self.selected.len() > 1 {
+                        if ui.button("Сгруппировать").clicked() {
+                            self.group_selected();
+                            close_menu = true;
+                        }
+                    } else if !all_grouped && !any_grouped {
+                        if ui.button("Сгруппировать").clicked() {
+                            self.group_selected();
+                            close_menu = true;
+                        }
                     }
                 }
 
