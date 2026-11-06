@@ -247,7 +247,7 @@ impl FreeCanvas {
                             if let Some(shape) = self.doc.shapes.get(idx) {
                                 self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
                             }
-                            self.save_history();
+                            self.drag_history_saved = false;
                         }
                         None => {
                             if !ctrl {
@@ -264,6 +264,10 @@ impl FreeCanvas {
 
         // Перетаскивание выделенных фигур
         if response.dragged() && !middle_down && self.tool == DrawTool::Select {
+            if !self.drag_history_saved {
+                self.save_history();
+                self.drag_history_saved = true;
+            }
             if let Some(pos) = response.interact_pointer_pos() {
                 if let Some((idx, origin)) = self.drag_shape_pos {
                     let world_cursor = screen_to_world(pos);
@@ -449,6 +453,7 @@ impl FreeCanvas {
             self.drag_start = None;
             self.drag_shape_pos = None;
             self.selection_box_screen = None;
+            self.drag_history_saved = false;
         }
 
         // Магнитные красные линии выравнивания (в экранных координатах)

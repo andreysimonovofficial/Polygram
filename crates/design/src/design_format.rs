@@ -78,7 +78,7 @@ impl Default for ThemeDesign {
 }
 
 /// RGBA цвет.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rgba {
     pub r: u8,
     pub g: u8,

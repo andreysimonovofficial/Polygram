@@ -45,6 +45,8 @@ pub struct FreeCanvas {
     pub max_history: usize,
     /// Буфер обмена (JSON-строка скопированных фигур).
     pub clipboard: Option<String>,
+    /// Флаг: история уже сохранена для текущего перетаскивания.
+    pub drag_history_saved: bool,
 }
 
 impl Default for FreeCanvas {
@@ -77,6 +79,7 @@ impl Default for FreeCanvas {
             history_index: 0,
             max_history: 50,
             clipboard: None,
+            drag_history_saved: false,
         }
     }
 }
@@ -88,6 +91,11 @@ impl FreeCanvas {
 
     /// Сохранить текущее состояние документа в историю перед изменением.
     pub fn save_history(&mut self) {
+        self.save_history_for(self.doc.clone());
+    }
+
+    /// Сохранить заданное состояние документа в историю (состояние ДО изменения).
+    pub fn save_history_for(&mut self, doc: FreeCanvasDoc) {
         if !self.history.is_empty() && self.history_index < self.history.len() - 1 {
             self.history.truncate(self.history_index + 1);
         }
@@ -96,7 +104,7 @@ impl FreeCanvas {
         } else {
             self.history_index += 1;
         }
-        self.history.push(self.doc.clone());
+        self.history.push(doc);
     }
 
     /// Можно ли отменить последнее изменение.
