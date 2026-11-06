@@ -88,7 +88,7 @@ impl FreeCanvas {
 
     /// Сохранить текущее состояние документа в историю перед изменением.
     pub fn save_history(&mut self) {
-        if self.history_index < self.history.len() - 1 {
+        if !self.history.is_empty() && self.history_index < self.history.len() - 1 {
             self.history.truncate(self.history_index + 1);
         }
         if self.history.len() >= self.max_history {
