@@ -7,8 +7,13 @@ mod design_app;
 mod design_format;
 mod exporter;
 mod free_canvas;
+mod free_canvas_input;
+mod free_canvas_paint;
+mod free_canvas_properties;
+mod free_canvas_state;
 
 pub use design_app::DesignApp;
 pub use design_format::*;
 pub use exporter::export_design;
 pub use free_canvas::FreeCanvas;
+pub use free_canvas_paint::dist_point_segment;
