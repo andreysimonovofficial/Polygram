@@ -50,9 +50,12 @@ impl FreeCanvas {
         rect: Rect,
         _is_selected: bool,
         state: ShapeState,
+        zoom: f32,
     ) {
         let (fill, stroke_color, stroke_width) = Self::resolve_style(shape, state);
-        let stroke = Stroke::new(stroke_width.max(0.0), stroke_color);
+        // Толщина обводки масштабируется с зумом, чтобы при приближении она была толще,
+        // как на снимке экрана.
+        let stroke = Stroke::new(stroke_width.max(0.0) * zoom, stroke_color);
 
         let rounding = if shape.corner_tl == shape.corner_tr
             && shape.corner_tr == shape.corner_bl

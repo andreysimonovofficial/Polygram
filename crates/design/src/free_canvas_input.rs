@@ -124,7 +124,7 @@ impl FreeCanvas {
                 } else {
                     ShapeState::Normal
                 };
-                self.paint_shape(painter, shape, screen_rect, is_selected, state);
+                self.paint_shape(painter, shape, screen_rect, is_selected, state, zoom);
             }
         }
 
@@ -151,7 +151,7 @@ impl FreeCanvas {
                 painter.rect_stroke(
                     screen_rect.expand(4.0),
                     0.0,
-                    Stroke::new(1.5_f32, Color32::from_rgb(100, 180, 255)),
+                    Stroke::new(1.5_f32 * zoom, Color32::from_rgb(100, 180, 255)),
                 );
             }
         }
@@ -522,7 +522,7 @@ impl FreeCanvas {
                         Vec2::new(w.max(1.0), h.max(1.0)),
                     );
                     let screen_rect = world_rect_to_screen(world_rect);
-                    self.paint_shape(painter, &preview, screen_rect, false, ShapeState::Normal);
+                    self.paint_shape(painter, &preview, screen_rect, false, ShapeState::Normal, zoom);
                 }
             }
         }
