@@ -189,6 +189,7 @@ impl FreeCanvas {
                     self.selected = vec![self.doc.shapes.len() - 1];
                     self.drag_start = None;
                     self.drag_shape_pos = None;
+                    self.selection_box_screen = None;
                     self.touch();
                 } else if self.tool == DrawTool::Select {
                     let world_pos = screen_to_world(pos);
@@ -331,7 +332,8 @@ impl FreeCanvas {
                     self.touch();
                 }
             } else {
-                // Selection box (резиновый прямоугольник) при перетаскивании из пустого места
+                // Selection box (резиновый прямоугольник) при перетаскивании из пустого места.
+                // Сохраняем экранный прямоугольник для отрисовки в конце (верхний слой).
                 if let (Some(start), Some(pos)) = (self.drag_start, response.interact_pointer_pos()) {
                     let world_start = screen_to_world(start);
                     let world_pos = screen_to_world(pos);
@@ -344,9 +346,7 @@ impl FreeCanvas {
                             Pos2::new(x, y),
                             Vec2::new(w.max(1.0), h.max(1.0)),
                         );
-                        let screen_rect = world_rect_to_screen(world_rect);
-                        painter.rect_filled(screen_rect, 0.0, Color32::from_rgba_unmultiplied(100, 180, 255, 100));
-                        painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)));
+                        self.selection_box_screen = Some(world_rect_to_screen(world_rect));
                     }
                 }
             }
@@ -447,6 +447,7 @@ impl FreeCanvas {
             }
             self.drag_start = None;
             self.drag_shape_pos = None;
+            self.selection_box_screen = None;
         }
 
         // Магнитные красные линии выравнивания (в экранных координатах)
@@ -475,6 +476,11 @@ impl FreeCanvas {
                     );
                 }
             }
+        }
+
+        // Отрисовать selection box на самом верхнем слое (без заливки, только контур 1px)
+        if let Some(screen_rect) = self.selection_box_screen {
+            painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)));
         }
 
         // Предварительный вид фигуры во время рисования
