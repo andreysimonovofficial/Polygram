@@ -345,7 +345,7 @@ impl FreeCanvas {
                             Vec2::new(w.max(1.0), h.max(1.0)),
                         );
                         let screen_rect = world_rect_to_screen(world_rect);
-                        painter.rect_filled(screen_rect, 0.0, Color32::from_rgba_unmultiplied(100, 180, 255, 30));
+                        painter.rect_filled(screen_rect, 0.0, Color32::from_rgba_unmultiplied(100, 180, 255, 100));
                         painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)));
                     }
                 }
