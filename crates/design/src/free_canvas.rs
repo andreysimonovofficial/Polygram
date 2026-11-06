@@ -1,6 +1,6 @@
 //! Figma-подобный свободный холст: рисуем прямоугольники, линии, эллипсы, текст,
 //! перетаскиваем элементы, магнитное выравнивание, панорамирование, зум колёсиком,
-//! экспорт JSON для Агента.
+//! автосохранение последнего проекта и двусторонний редактор кода для Агента.
 
 use crate::design_format::*;
 use eframe::egui;
@@ -24,6 +24,9 @@ pub struct FreeCanvas {
     pub grid_size: f32,
     pub sidebar_width: f32,
     pub settings_loaded: bool,
+    pub doc_dirty: bool,
+    pub show_code_sidebar: bool,
+    pub code_text: String,
 }
 
 impl Default for FreeCanvas {
@@ -43,6 +46,9 @@ impl Default for FreeCanvas {
             grid_size: 20.0,
             sidebar_width: 300.0,
             settings_loaded: false,
+            doc_dirty: false,
+            show_code_sidebar: false,
+            code_text: String::new(),
         }
     }
 }
@@ -52,25 +58,54 @@ impl FreeCanvas {
         Self::default()
     }
 
-    /// Загрузить сохранённую ширину боковой панели из хранилища eframe.
+    /// Загрузить настройки и последний проект из хранилища eframe.
     fn load_settings(&mut self, storage: &dyn eframe::Storage) {
         if let Some(s) = storage.get_string("polygram_design/sidebar_width") {
             if let Ok(w) = s.parse::<f32>() {
                 self.sidebar_width = w.clamp(200.0, 1000.0);
             }
         }
+        if let Some(json) = storage.get_string("polygram_design/last_doc") {
+            if let Ok(doc) = FreeCanvasDoc::load_from_json(&json) {
+                self.doc = doc;
+                self.recompute_next_id();
+            }
+        }
     }
 
-    /// Сохранить ширину боковой панели в хранилище eframe.
-    fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
+    /// Сохранить настройки и последний проект в хранилище eframe.
+    pub fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("polygram_design/sidebar_width", self.sidebar_width.to_string());
+        storage.set_string("polygram_design/last_doc", self.doc.to_json().unwrap_or_default());
     }
 
-    /// Отобразить нижнюю панель инструментов, правую боковую панель и холст.
+    /// Пересчитать next_id на основе загруженных фигур.
+    fn recompute_next_id(&mut self) {
+        let mut max: u64 = 0;
+        for shape in &self.doc.shapes {
+            if let Some(num) = shape.id.strip_prefix("shape-") {
+                if let Ok(n) = num.parse::<u64>() {
+                    if n > max {
+                        max = n;
+                    }
+                }
+            }
+        }
+        self.next_id = max + 1;
+    }
+
+    /// Отметить документ изменённым (для автосохранения).
+    fn touch(&mut self) {
+        self.doc_dirty = true;
+    }
+
+    /// Отобразить нижнюю панель инструментов, правую боковую панель свойств,
+    /// левую боковую панель кода и холст.
     pub fn ui(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Удаление выделенного по клавише Delete
         if ctx.input(|i| i.key_pressed(Key::Delete)) {
             self.delete_selected();
+            self.touch();
         }
 
         // Загрузка настроек при первом кадре
@@ -100,10 +135,57 @@ impl FreeCanvas {
                             }
                         }
                     });
+                    ui.separator();
+                    if ui.button("Код для агента").clicked() {
+                        self.show_code_sidebar = true;
+                        self.code_text = self.doc.to_json().unwrap_or_default();
+                    }
                 });
             });
 
-        // Центральная область: холст + правая боковая панель
+        // Левая боковая панель: редактор кода JSON для Агента (двусторонний)
+        if self.show_code_sidebar {
+            egui::SidePanel::left("code_editor")
+                .default_width(520.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.heading("Код для агента (JSON)");
+                    ui.separator();
+                    let text_changed = egui::TextEdit::multiline(&mut self.code_text)
+                        .desired_rows(18)
+                        .show(ui)
+                        .response
+                        .changed();
+                    if text_changed {
+                        if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
+                            self.doc = new_doc;
+                            self.recompute_next_id();
+                            self.selected = None;
+                            self.touch();
+                        }
+                    }
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("Обновить из дизайна").clicked() {
+                            self.code_text = self.doc.to_json().unwrap_or_default();
+                        }
+                        if ui.button("Применить и закрыть").clicked() {
+                            if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
+                                self.doc = new_doc;
+                                self.recompute_next_id();
+                                self.selected = None;
+                                self.touch();
+                            }
+                            self.show_code_sidebar = false;
+                        }
+                        if ui.button("Закрыть").clicked() {
+                            self.show_code_sidebar = false;
+                        }
+                    });
+                });
+        }
+
+        // Правая боковая панель: свойства
         let response = egui::SidePanel::right("properties")
             .resizable(true)
             .default_width(self.sidebar_width)
@@ -115,14 +197,20 @@ impl FreeCanvas {
         let panel_width = response.response.rect.width();
         if (panel_width - self.sidebar_width).abs() > 0.5 {
             self.sidebar_width = panel_width;
-            if let Some(storage) = frame.storage_mut() {
-                self.save_settings(storage);
-            }
         }
 
+        // Центральная область: холст
         egui::CentralPanel::default().show(ctx, |ui| {
             self.canvas_panel(ui);
         });
+
+        // Автосохранение последнего проекта при изменениях
+        if self.doc_dirty {
+            if let Some(storage) = frame.storage_mut() {
+                self.save_settings(storage);
+            }
+            self.doc_dirty = false;
+        }
     }
 
     /// Панель свойств выделенной фигуры (справа).
@@ -132,6 +220,7 @@ impl FreeCanvas {
 
         ui.label("Цвет фона холста:");
         Self::color_picker(ui, &mut self.doc.bg);
+        self.touch();
         ui.separator();
 
         ui.checkbox(&mut self.magnetic, "Магнитное выравнивание");
@@ -140,10 +229,12 @@ impl FreeCanvas {
         ui.label(format!("Фигуры: {}", self.doc.shapes.len()));
         if ui.button("Удалить выделенное").clicked() {
             self.delete_selected();
+            self.touch();
         }
         if ui.button("Очистить").clicked() {
             self.doc.shapes.clear();
             self.selected = None;
+            self.touch();
         }
 
         ui.separator();
@@ -152,147 +243,13 @@ impl FreeCanvas {
 
         match self.selected {
             Some(idx) => {
-                let shape = &mut self.doc.shapes[idx];
-                ui.label(format!("Фигура #{}", shape.id));
-                ui.separator();
-
-                ui.label("Инструмент:");
-                egui::ComboBox::from_label("")
-                    .selected_text(format!("{:?}", shape.tool))
-                    .show_ui(ui, |ui| {
-                        for t in [DrawTool::Rect, DrawTool::Line, DrawTool::Ellipse, DrawTool::Text] {
-                            ui.selectable_value(&mut shape.tool, t, format!("{:?}", t));
-                        }
-                    });
-
-                ui.horizontal(|ui| {
-                    ui.label("X:");
-                    ui.add(egui::DragValue::new(&mut shape.x).speed(1.0));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Y:");
-                    ui.add(egui::DragValue::new(&mut shape.y).speed(1.0));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Ширина:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.w)
-                            .speed(1.0)
-                            .range(0.0..=10000.0),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Высота:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.h)
-                            .speed(1.0)
-                            .range(0.0..=10000.0),
-                    );
-                });
-
-                ui.separator();
-                ui.label("Заливка:");
-                if let Some(fill) = &mut shape.fill {
-                    Self::color_picker(ui, fill);
-                } else {
-                    if ui.button("Добавить заливку").clicked() {
-                        shape.fill = Some(Rgba { r: 0, g: 0, b: 0, a: 255 });
-                    }
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Обводка:");
-                    Self::color_picker(ui, &mut shape.stroke);
-                });
-                ui.add(
-                    egui::DragValue::new(&mut shape.stroke_width)
-                        .prefix("Толщина обводки: ")
-                        .speed(0.1)
-                        .range(0.0..=20.0),
-                );
-
-                ui.separator();
-                ui.label("Скругление углов:");
-                let mut all = shape.corner_radius;
-                if ui
-                    .add(
-                        egui::DragValue::new(&mut all)
-                            .prefix("Все углы: ")
-                            .speed(0.5)
-                            .range(0.0..=100.0),
-                    )
-                    .changed()
-                {
-                    shape.corner_tl = all;
-                    shape.corner_tr = all;
-                    shape.corner_bl = all;
-                    shape.corner_br = all;
-                    shape.corner_radius = all;
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Левый верхний:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.corner_tl)
-                            .speed(0.5)
-                            .range(0.0..=100.0),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Правый верхний:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.corner_tr)
-                            .speed(0.5)
-                            .range(0.0..=100.0),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Левый нижний:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.corner_bl)
-                            .speed(0.5)
-                            .range(0.0..=100.0),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Правый нижний:");
-                    ui.add(
-                        egui::DragValue::new(&mut shape.corner_br)
-                            .speed(0.5)
-                            .range(0.0..=100.0),
-                    );
-                });
-
-                if shape.tool == DrawTool::Text {
-                    ui.separator();
-                    ui.label("Текст:");
-                    ui.text_edit_singleline(&mut shape.text);
-                    ui.add(
-                        egui::DragValue::new(&mut shape.font_size)
-                            .prefix("Размер шрифта: ")
-                            .speed(0.5)
-                            .range(4.0..=200.0),
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label("Цвет текста:");
-                        Self::color_picker(ui, &mut shape.text_color);
-                    });
-                    ui.label("Выравнивание:");
-                    egui::ComboBox::from_label("")
-                        .selected_text(match shape.text_align {
-                            TextAlign::Left => "По левому",
-                            TextAlign::Center => "По центру",
-                            TextAlign::Right => "По правому",
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut shape.text_align, TextAlign::Left, "По левому");
-                            ui.selectable_value(&mut shape.text_align, TextAlign::Center, "По центру");
-                            ui.selectable_value(&mut shape.text_align, TextAlign::Right, "По правому");
-                        });
-                }
-
-                ui.separator();
-                if ui.button("Удалить фигуру").clicked() {
+                let (changed, delete) = Self::edit_shape(ui, &mut self.doc.shapes[idx]);
+                if delete {
                     self.doc.shapes.remove(idx);
                     self.selected = None;
+                    self.touch();
+                } else if changed {
+                    self.touch();
                 }
             }
             None => {
@@ -300,6 +257,207 @@ impl FreeCanvas {
                 ui.label("Нажмите на фигуру на холсте, чтобы выбрать.");
             }
         }
+    }
+
+    /// Редактировать свойства одной фигуры. Возвращает (изменено, удалить).
+    fn edit_shape(ui: &mut egui::Ui, shape: &mut FreeShape) -> (bool, bool) {
+        let mut changed = false;
+        let mut delete = false;
+
+        ui.label(format!("Фигура #{}", shape.id));
+        ui.separator();
+
+        ui.label("Инструмент:");
+        let mut tool = shape.tool;
+        egui::ComboBox::from_label("")
+            .selected_text(format!("{:?}", tool))
+            .show_ui(ui, |ui| {
+                for t in [DrawTool::Rect, DrawTool::Line, DrawTool::Ellipse, DrawTool::Text] {
+                    if ui.selectable_value(&mut tool, t, format!("{:?}", t)).changed() {
+                        changed = true;
+                    }
+                }
+            });
+        shape.tool = tool;
+
+        ui.horizontal(|ui| {
+            ui.label("X:");
+            changed |= ui.add(egui::DragValue::new(&mut shape.x).speed(1.0)).changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Y:");
+            changed |= ui.add(egui::DragValue::new(&mut shape.y).speed(1.0)).changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Ширина:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.w)
+                        .speed(1.0)
+                        .range(0.0..=10000.0),
+                )
+                .changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Высота:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.h)
+                        .speed(1.0)
+                        .range(0.0..=10000.0),
+                )
+                .changed();
+        });
+
+        ui.separator();
+        ui.label("Заливка:");
+        if let Some(fill) = &mut shape.fill {
+            let mut color = Color32::from_rgb(fill.r, fill.g, fill.b);
+            if ui.color_edit_button_srgba(&mut color).changed() {
+                fill.r = color.r();
+                fill.g = color.g();
+                fill.b = color.b();
+                changed = true;
+            }
+        } else {
+            if ui.button("Добавить заливку").clicked() {
+                shape.fill = Some(Rgba { r: 0, g: 0, b: 0, a: 255 });
+                changed = true;
+            }
+        }
+        ui.horizontal(|ui| {
+            ui.label("Обводка:");
+            let mut stroke_color = Color32::from_rgb(shape.stroke.r, shape.stroke.g, shape.stroke.b);
+            if ui.color_edit_button_srgba(&mut stroke_color).changed() {
+                shape.stroke.r = stroke_color.r();
+                shape.stroke.g = stroke_color.g();
+                shape.stroke.b = stroke_color.b();
+                changed = true;
+            }
+        });
+        changed |= ui
+            .add(
+                egui::DragValue::new(&mut shape.stroke_width)
+                    .prefix("Толщина обводки: ")
+                    .speed(0.1)
+                    .range(0.0..=20.0),
+            )
+            .changed();
+
+        ui.separator();
+        ui.label("Скругление углов:");
+        let mut all = shape.corner_radius;
+        if ui
+            .add(
+                egui::DragValue::new(&mut all)
+                    .prefix("Все углы: ")
+                    .speed(0.5)
+                    .range(0.0..=100.0),
+            )
+            .changed()
+        {
+            shape.corner_tl = all;
+            shape.corner_tr = all;
+            shape.corner_bl = all;
+            shape.corner_br = all;
+            shape.corner_radius = all;
+            changed = true;
+        }
+        ui.horizontal(|ui| {
+            ui.label("Левый верхний:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.corner_tl)
+                        .speed(0.5)
+                        .range(0.0..=100.0),
+                )
+                .changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Правый верхний:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.corner_tr)
+                        .speed(0.5)
+                        .range(0.0..=100.0),
+                )
+                .changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Левый нижний:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.corner_bl)
+                        .speed(0.5)
+                        .range(0.0..=100.0),
+                )
+                .changed();
+        });
+        ui.horizontal(|ui| {
+            ui.label("Правый нижний:");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.corner_br)
+                        .speed(0.5)
+                        .range(0.0..=100.0),
+                )
+                .changed();
+        });
+
+        if shape.tool == DrawTool::Text {
+            ui.separator();
+            ui.label("Текст:");
+            changed |= ui.text_edit_singleline(&mut shape.text).changed();
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut shape.font_size)
+                        .prefix("Размер шрифта: ")
+                        .speed(0.5)
+                        .range(4.0..=200.0),
+                )
+                .changed();
+            ui.horizontal(|ui| {
+                ui.label("Цвет текста:");
+                let mut text_color = Color32::from_rgb(
+                    shape.text_color.r,
+                    shape.text_color.g,
+                    shape.text_color.b,
+                );
+                if ui.color_edit_button_srgba(&mut text_color).changed() {
+                    shape.text_color.r = text_color.r();
+                    shape.text_color.g = text_color.g();
+                    shape.text_color.b = text_color.b();
+                    changed = true;
+                }
+            });
+            ui.label("Выравнивание:");
+            let mut align = shape.text_align.clone();
+            egui::ComboBox::from_label("")
+                .selected_text(match align {
+                    TextAlign::Left => "По левому",
+                    TextAlign::Center => "По центру",
+                    TextAlign::Right => "По правому",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut align, TextAlign::Left, "По левому").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut align, TextAlign::Center, "По центру").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut align, TextAlign::Right, "По правому").changed() {
+                        changed = true;
+                    }
+                });
+            shape.text_align = align;
+        }
+
+        ui.separator();
+        if ui.button("Удалить фигуру").clicked() {
+            delete = true;
+        }
+
+        (changed, delete)
     }
 
     fn canvas_panel(&mut self, ui: &mut egui::Ui) {
@@ -414,6 +572,7 @@ impl FreeCanvas {
                     self.selected = Some(self.doc.shapes.len() - 1);
                     self.drag_start = None;
                     self.drag_shape_pos = None;
+                    self.touch();
                 } else if self.tool == DrawTool::Select {
                     let world_pos = screen_to_world(pos);
                     self.selected = self.hit_shape(world_pos);
@@ -517,6 +676,7 @@ impl FreeCanvas {
                     if let Some(shape) = self.doc.shapes.get_mut(idx) {
                         shape.x = nx;
                         shape.y = ny;
+                        self.touch();
                     }
                 }
             }
@@ -574,6 +734,7 @@ impl FreeCanvas {
                         shape.h = h;
                         self.doc.shapes.push(shape);
                         self.selected = Some(self.doc.shapes.len() - 1);
+                        self.touch();
                     }
                 }
             }
