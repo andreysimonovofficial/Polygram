@@ -19,11 +19,11 @@ impl FreeCanvas {
         let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
 
         // Горячие клавиши Undo/Redo
-        let modifiers = ui.ctx().input(|i| i.modifiers);
-        if modifiers.ctrl && ui.ctx().input(|i| i.key_pressed(Key::Z)) {
+        let (ctrl, z_pressed, y_pressed) = ui.ctx().input(|i| (i.modifiers.ctrl, i.key_pressed(Key::Z), i.key_pressed(Key::Y)));
+        if ctrl && z_pressed {
             self.undo();
         }
-        if modifiers.ctrl && ui.ctx().input(|i| i.key_pressed(Key::Y)) {
+        if ctrl && y_pressed {
             self.redo();
         }
 
