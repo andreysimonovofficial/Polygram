@@ -4,6 +4,7 @@
 
 use crate::design_format::*;
 use crate::free_canvas::FreeCanvas;
+use eframe::Frame;
 use egui::Context;
 use std::path::PathBuf;
 
@@ -34,7 +35,7 @@ impl DesignApp {
     }
 
     /// Отобразить весь интерфейс инструмента дизайна.
-    pub fn ui(&mut self, ctx: &Context) {
+    pub fn ui(&mut self, ctx: &Context, frame: &mut Frame) {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("Новый").clicked() {
@@ -74,9 +75,7 @@ impl DesignApp {
 
         self.file_dialogs(ctx);
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.free_canvas.ui(ui);
-        });
+        self.free_canvas.ui(ctx, frame);
 
         if self.show_export_dialog {
             self.export_dialog(ctx);
@@ -181,8 +180,8 @@ impl Default for DesignApp {
 }
 
 impl eframe::App for DesignApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        self.ui(ctx);
+    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+        self.ui(ctx, frame);
         ctx.request_repaint();
     }
 }

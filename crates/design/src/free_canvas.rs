@@ -3,6 +3,7 @@
 //! экспорт JSON для Агента.
 
 use crate::design_format::*;
+use eframe::egui;
 use egui::{
     Color32, FontId, Key, PointerButton, Pos2, Rect, Rounding, Sense, Shape, Stroke, Vec2,
 };
@@ -21,6 +22,8 @@ pub struct FreeCanvas {
     pub drag_shape_pos: Option<(usize, Pos2)>,
     pub next_id: u64,
     pub grid_size: f32,
+    pub sidebar_width: f32,
+    pub settings_loaded: bool,
 }
 
 impl Default for FreeCanvas {
@@ -38,6 +41,8 @@ impl Default for FreeCanvas {
             drag_shape_pos: None,
             next_id: 1,
             grid_size: 20.0,
+            sidebar_width: 300.0,
+            settings_loaded: false,
         }
     }
 }
@@ -47,48 +52,91 @@ impl FreeCanvas {
         Self::default()
     }
 
-    /// Отобразить панель свойств слева и холст справа.
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    /// Загрузить сохранённую ширину боковой панели из хранилища eframe.
+    fn load_settings(&mut self, storage: &dyn eframe::Storage) {
+        if let Some(s) = storage.get_string("polygram_design/sidebar_width") {
+            if let Ok(w) = s.parse::<f32>() {
+                self.sidebar_width = w.clamp(200.0, 1000.0);
+            }
+        }
+    }
+
+    /// Сохранить ширину боковой панели в хранилище eframe.
+    fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string("polygram_design/sidebar_width", self.sidebar_width.to_string());
+    }
+
+    /// Отобразить нижнюю панель инструментов, правую боковую панель и холст.
+    pub fn ui(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Удаление выделенного по клавише Delete
-        if ui.ctx().input(|i| i.key_pressed(Key::Delete)) {
+        if ctx.input(|i| i.key_pressed(Key::Delete)) {
             self.delete_selected();
         }
 
-        ui.columns(2, |cols: &mut [egui::Ui]| {
-            cols[0].vertical(|ui| {
-                ui.set_min_width(300.0);
+        // Загрузка настроек при первом кадре
+        if !self.settings_loaded {
+            if let Some(storage) = frame.storage() {
+                self.load_settings(storage);
+            }
+            self.settings_loaded = true;
+        }
+
+        // Нижняя панель инструментов
+        egui::TopBottomPanel::bottom("tools")
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.group(|ui| {
+                        ui.label("Инструмент:");
+                        for (tool, label) in [
+                            (DrawTool::Select, "Выделить"),
+                            (DrawTool::Rect, "Прямоугольник"),
+                            (DrawTool::Line, "Линия"),
+                            (DrawTool::Ellipse, "Элипс"),
+                            (DrawTool::Text, "Текст"),
+                        ] {
+                            let active = self.tool == tool;
+                            if ui.selectable_label(active, label).clicked() {
+                                self.tool = tool;
+                            }
+                        }
+                    });
+                });
+            });
+
+        // Центральная область: холст + правая боковая панель
+        let response = egui::SidePanel::right("properties")
+            .resizable(true)
+            .default_width(self.sidebar_width)
+            .min_width(200.0)
+            .max_width(1000.0)
+            .show(ctx, |ui| {
                 self.properties_panel(ui);
             });
-            cols[1].vertical(|ui| {
-                self.canvas_panel(ui);
-            });
-        });
-    }
-
-    /// Панель инструментов и свойств выделенной фигуры.
-    fn properties_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Инструменты");
-        ui.separator();
-
-        for (tool, label) in [
-            (DrawTool::Select, "Выделить"),
-            (DrawTool::Rect, "Прямоугольник"),
-            (DrawTool::Line, "Линия"),
-            (DrawTool::Ellipse, "Эллипс"),
-            (DrawTool::Text, "Текст"),
-        ] {
-            let active = self.tool == tool;
-            if ui.selectable_label(active, label).clicked() {
-                self.tool = tool;
+        let panel_width = response.response.rect.width();
+        if (panel_width - self.sidebar_width).abs() > 0.5 {
+            self.sidebar_width = panel_width;
+            if let Some(storage) = frame.storage_mut() {
+                self.save_settings(storage);
             }
         }
 
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.canvas_panel(ui);
+        });
+    }
+
+    /// Панель свойств выделенной фигуры (справа).
+    fn properties_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Свойства");
         ui.separator();
-        ui.checkbox(&mut self.magnetic, "Магнитное выравнивание");
-        ui.separator();
+
         ui.label("Цвет фона холста:");
         Self::color_picker(ui, &mut self.doc.bg);
         ui.separator();
+
+        ui.checkbox(&mut self.magnetic, "Магнитное выравнивание");
+        ui.separator();
+
         ui.label(format!("Фигуры: {}", self.doc.shapes.len()));
         if ui.button("Удалить выделенное").clicked() {
             self.delete_selected();
@@ -164,7 +212,6 @@ impl FreeCanvas {
 
                 ui.separator();
                 ui.label("Скругление углов:");
-                // Мастер-контроль «все углы»
                 let mut all = shape.corner_radius;
                 if ui
                     .add(
@@ -261,12 +308,12 @@ impl FreeCanvas {
 
         // Обработка ввода сначала (избегаем конфликта заимствований с painter)
         let response = ui.allocate_rect(canvas_rect, Sense::click_and_drag());
-        let pointer_pos = response.hover_pos();
         let painter = ui.painter();
 
         let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
 
-        // Приближение/отдаление колёсиком мыши к курсору
+        // Приближение/отдаление колёсиком мыши к курсору.
+        // Скролл вниз (от себя) — отдаление, скролл вверх (на себя) — приближение.
         let scroll = ui.ctx().input(|i| i.raw_scroll_delta);
         if scroll.y.abs() > 0.001 {
             if let Some(cursor) = ui.ctx().pointer_hover_pos() {
@@ -274,7 +321,7 @@ impl FreeCanvas {
                     let zoom = self.zoom.clamp(0.1, 10.0);
                     let camera = self.camera;
                     let world_cursor = (cursor - camera) / zoom;
-                    let factor = (-scroll.y * 0.01).exp();
+                    let factor = (scroll.y * 0.01).exp();
                     let new_zoom = (zoom * factor).clamp(0.1, 10.0);
                     self.camera = cursor - world_cursor * new_zoom;
                     self.zoom = new_zoom;
@@ -283,22 +330,22 @@ impl FreeCanvas {
             }
         }
 
-        let camera = self.camera;
-        let zoom = self.zoom.clamp(0.1, 10.0);
-
         // Панорамирование средней кнопкой мыши
         if response.drag_started() && middle_down {
-            self.pan_start = pointer_pos;
+            self.pan_start = response.interact_pointer_pos();
             self.pan_camera_start = self.camera;
         }
         if response.dragged() && middle_down {
-            if let (Some(start), Some(pos)) = (self.pan_start, pointer_pos) {
+            if let (Some(start), Some(pos)) = (self.pan_start, response.interact_pointer_pos()) {
                 self.camera = self.pan_camera_start + (pos - start);
             }
         }
         if response.drag_stopped() && middle_down {
             self.pan_start = None;
         }
+
+        let camera = self.camera;
+        let zoom = self.zoom.clamp(0.1, 10.0);
 
         // Вспомогательные замыкания для перевода координат
         let screen_to_world = |p: Pos2| (p - camera) / zoom;
@@ -351,7 +398,7 @@ impl FreeCanvas {
 
         // Нажатие мыши — для инструмента Текст размещаем текстовую фигуру по клику
         if response.clicked() && !middle_down {
-            if let Some(pos) = pointer_pos {
+            if let Some(pos) = response.interact_pointer_pos() {
                 if self.tool == DrawTool::Text {
                     let mut shape = FreeShape::default();
                     shape.id = format!("shape-{}", self.next_id);
@@ -368,25 +415,23 @@ impl FreeCanvas {
                     self.drag_start = None;
                     self.drag_shape_pos = None;
                 } else if self.tool == DrawTool::Select {
-                    if let Some(pos) = pointer_pos {
-                        let world_pos = screen_to_world(pos);
-                        self.selected = self.hit_shape(world_pos);
-                        if let Some(idx) = self.selected {
-                            if let Some(shape) = self.doc.shapes.get(idx) {
-                                self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
-                            }
-                        } else {
-                            self.drag_shape_pos = None;
+                    let world_pos = screen_to_world(pos);
+                    self.selected = self.hit_shape(world_pos);
+                    if let Some(idx) = self.selected {
+                        if let Some(shape) = self.doc.shapes.get(idx) {
+                            self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
                         }
-                        self.drag_start = pointer_pos;
+                    } else {
+                        self.drag_shape_pos = None;
                     }
+                    self.drag_start = response.interact_pointer_pos();
                 }
             }
         }
 
         // Начало перетаскивания / рисования (только левая кнопка)
         if response.drag_started() && !middle_down {
-            self.drag_start = pointer_pos;
+            self.drag_start = response.interact_pointer_pos();
             if self.tool == DrawTool::Select {
                 if let Some(pos) = self.drag_start {
                     let world_pos = screen_to_world(pos);
@@ -407,7 +452,7 @@ impl FreeCanvas {
 
         // Перетаскивание выделенной фигуры
         if response.dragged() && !middle_down && self.tool == DrawTool::Select {
-            if let Some(pos) = pointer_pos {
+            if let Some(pos) = response.interact_pointer_pos() {
                 if let Some((idx, origin)) = self.drag_shape_pos {
                     let world_cursor = screen_to_world(pos);
                     let drag_world_start = screen_to_world(self.drag_start.unwrap_or(pos));
@@ -480,7 +525,7 @@ impl FreeCanvas {
         // Завершение перетаскивания — создать новую фигуру (кроме Select и Text)
         if response.drag_stopped() && !middle_down {
             if self.tool != DrawTool::Select && self.tool != DrawTool::Text {
-                if let (Some(start), Some(end)) = (self.drag_start, pointer_pos) {
+                if let (Some(start), Some(end)) = (self.drag_start, response.interact_pointer_pos()) {
                     let world_start = screen_to_world(start);
                     let world_end = screen_to_world(end);
                     let mut x = world_start.x.min(world_end.x);
