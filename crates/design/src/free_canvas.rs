@@ -1,9 +1,10 @@
 //! Figma-подобный свободный холст: рисуем прямоугольники, линии, эллипсы, текст,
-//! перетаскиваем элементы, магнитное выравнивание, экспорт JSON для Агента.
+//! перетаскиваем элементы, магнитное выравнивание, панорамирование, зум колёсиком,
+//! экспорт JSON для Агента.
 
 use crate::design_format::*;
 use egui::{
-    Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke, Vec2,
+    Color32, FontId, Key, PointerButton, Pos2, Rect, Rounding, Sense, Shape, Stroke, Vec2,
 };
 
 /// Состояние свободного холста.
@@ -12,10 +13,13 @@ pub struct FreeCanvas {
     pub selected: Option<usize>,
     pub tool: DrawTool,
     pub magnetic: bool,
+    pub camera: Vec2,
+    pub zoom: f32,
+    pub pan_start: Option<Pos2>,
+    pub pan_camera_start: Vec2,
     pub drag_start: Option<Pos2>,
     pub drag_shape_pos: Option<(usize, Pos2)>,
     pub next_id: u64,
-    pub show_grid: bool,
     pub grid_size: f32,
 }
 
@@ -26,10 +30,13 @@ impl Default for FreeCanvas {
             selected: None,
             tool: DrawTool::Select,
             magnetic: false,
+            camera: Vec2::ZERO,
+            zoom: 1.0,
+            pan_start: None,
+            pan_camera_start: Vec2::ZERO,
             drag_start: None,
             drag_shape_pos: None,
             next_id: 1,
-            show_grid: true,
             grid_size: 20.0,
         }
     }
@@ -42,6 +49,11 @@ impl FreeCanvas {
 
     /// Отобразить панель свойств слева и холст справа.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        // Удаление выделенного по клавише Delete
+        if ui.ctx().input(|i| i.key_pressed(Key::Delete)) {
+            self.delete_selected();
+        }
+
         ui.columns(2, |cols: &mut [egui::Ui]| {
             cols[0].vertical(|ui| {
                 ui.set_min_width(300.0);
@@ -73,6 +85,9 @@ impl FreeCanvas {
 
         ui.separator();
         ui.checkbox(&mut self.magnetic, "Магнитное выравнивание");
+        ui.separator();
+        ui.label("Цвет фона холста:");
+        Self::color_picker(ui, &mut self.doc.bg);
         ui.separator();
         ui.label(format!("Фигуры: {}", self.doc.shapes.len()));
         if ui.button("Удалить выделенное").clicked() {
@@ -146,12 +161,58 @@ impl FreeCanvas {
                         .speed(0.1)
                         .range(0.0..=20.0),
                 );
-                ui.add(
-                    egui::DragValue::new(&mut shape.corner_radius)
-                        .prefix("Скругление: ")
-                        .speed(0.5)
-                        .range(0.0..=100.0),
-                );
+
+                ui.separator();
+                ui.label("Скругление углов:");
+                // Мастер-контроль «все углы»
+                let mut all = shape.corner_radius;
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut all)
+                            .prefix("Все углы: ")
+                            .speed(0.5)
+                            .range(0.0..=100.0),
+                    )
+                    .changed()
+                {
+                    shape.corner_tl = all;
+                    shape.corner_tr = all;
+                    shape.corner_bl = all;
+                    shape.corner_br = all;
+                    shape.corner_radius = all;
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Левый верхний:");
+                    ui.add(
+                        egui::DragValue::new(&mut shape.corner_tl)
+                            .speed(0.5)
+                            .range(0.0..=100.0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Правый верхний:");
+                    ui.add(
+                        egui::DragValue::new(&mut shape.corner_tr)
+                            .speed(0.5)
+                            .range(0.0..=100.0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Левый нижний:");
+                    ui.add(
+                        egui::DragValue::new(&mut shape.corner_bl)
+                            .speed(0.5)
+                            .range(0.0..=100.0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Правый нижний:");
+                    ui.add(
+                        egui::DragValue::new(&mut shape.corner_br)
+                            .speed(0.5)
+                            .range(0.0..=100.0),
+                    );
+                });
 
                 if shape.tool == DrawTool::Text {
                     ui.separator();
@@ -200,46 +261,67 @@ impl FreeCanvas {
 
         // Обработка ввода сначала (избегаем конфликта заимствований с painter)
         let response = ui.allocate_rect(canvas_rect, Sense::click_and_drag());
+        let pointer_pos = response.hover_pos();
         let painter = ui.painter();
 
-        // Фон холста
+        let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
+
+        // Приближение/отдаление колёсиком мыши к курсору
+        let scroll = ui.ctx().input(|i| i.raw_scroll_delta);
+        if scroll.y.abs() > 0.001 {
+            if let Some(cursor) = ui.ctx().pointer_hover_pos() {
+                if canvas_rect.contains(cursor) {
+                    let zoom = self.zoom.clamp(0.1, 10.0);
+                    let camera = self.camera;
+                    let world_cursor = (cursor - camera) / zoom;
+                    let factor = (-scroll.y * 0.01).exp();
+                    let new_zoom = (zoom * factor).clamp(0.1, 10.0);
+                    self.camera = cursor - world_cursor * new_zoom;
+                    self.zoom = new_zoom;
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+
+        let camera = self.camera;
+        let zoom = self.zoom.clamp(0.1, 10.0);
+
+        // Панорамирование средней кнопкой мыши
+        if response.drag_started() && middle_down {
+            self.pan_start = pointer_pos;
+            self.pan_camera_start = self.camera;
+        }
+        if response.dragged() && middle_down {
+            if let (Some(start), Some(pos)) = (self.pan_start, pointer_pos) {
+                self.camera = self.pan_camera_start + (pos - start);
+            }
+        }
+        if response.drag_stopped() && middle_down {
+            self.pan_start = None;
+        }
+
+        // Вспомогательные замыкания для перевода координат
+        let screen_to_world = |p: Pos2| (p - camera) / zoom;
+        let world_rect_to_screen = |r: Rect| Rect::from_min_size(r.min * zoom + camera, r.size() * zoom);
+
+        // Фон холста (весь viewport)
         painter.rect_filled(canvas_rect, 0.0, egui::Color32::from_rgb(
             self.doc.bg.r, self.doc.bg.g, self.doc.bg.b,
         ));
 
-        // Сетка
-        if self.doc.show_grid {
-            let grid_color = egui::Color32::from_rgb(self.doc.grid.r, self.doc.grid.g, self.doc.grid.b);
-            let mut x = canvas_rect.min.x - (canvas_rect.min.x % self.grid_size);
-            while x < canvas_rect.max.x {
-                painter.line_segment(
-                    [Pos2::new(x, canvas_rect.min.y), Pos2::new(x, canvas_rect.max.y)],
-                    Stroke::new(0.5_f32, grid_color),
-                );
-                x += self.grid_size;
-            }
-            let mut y = canvas_rect.min.y - (canvas_rect.min.y % self.grid_size);
-            while y < canvas_rect.max.y {
-                painter.line_segment(
-                    [Pos2::new(canvas_rect.min.x, y), Pos2::new(canvas_rect.max.x, y)],
-                    Stroke::new(0.5_f32, grid_color),
-                );
-                y += self.grid_size;
-            }
-        }
-
         // Магнитные линии (отображаются поверх всего в конце)
-        let mut magnetic_lines: Vec<(f32, bool)> = Vec::new(); // (координата, вертикальная)
+        let mut magnetic_lines: Vec<(f32, bool)> = Vec::new(); // (мировая координата, вертикальная)
 
         // Отрисовать все фигуры
         for (i, shape) in self.doc.shapes.iter().enumerate() {
             let is_selected = self.selected == Some(i);
-            let rect = Rect::from_min_size(
+            let world_rect = Rect::from_min_size(
                 Pos2::new(shape.x, shape.y),
                 Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
             );
-            let screen_rect = rect.intersect(canvas_rect);
-            if screen_rect.is_positive() {
+            let screen_rect = world_rect_to_screen(world_rect);
+            let screen_clip = screen_rect.intersect(canvas_rect);
+            if screen_clip.is_positive() {
                 self.paint_shape(painter, shape, screen_rect, is_selected);
             }
         }
@@ -247,14 +329,15 @@ impl FreeCanvas {
         // Выделение
         if let Some(idx) = self.selected {
             if let Some(shape) = self.doc.shapes.get(idx) {
-                let rect = Rect::from_min_size(
+                let world_rect = Rect::from_min_size(
                     Pos2::new(shape.x, shape.y),
                     Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
                 );
+                let screen_rect = world_rect_to_screen(world_rect);
                 painter.rect_stroke(
-                    rect.expand(3.0),
-                    2.0,
-                    Stroke::new(1.5_f32, Color32::from_rgb(100, 180, 255)),
+                    screen_rect.expand(3.0 / zoom),
+                    2.0 / zoom,
+                    Stroke::new(1.5_f32 / zoom.max(0.1), Color32::from_rgb(100, 180, 255)),
                 );
             }
         }
@@ -267,25 +350,27 @@ impl FreeCanvas {
         }
 
         // Нажатие мыши — для инструмента Текст размещаем текстовую фигуру по клику
-        if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
+        if response.clicked() && !middle_down {
+            if let Some(pos) = pointer_pos {
                 if self.tool == DrawTool::Text {
                     let mut shape = FreeShape::default();
                     shape.id = format!("shape-{}", self.next_id);
                     self.next_id += 1;
                     shape.tool = DrawTool::Text;
-                    shape.x = pos.x;
-                    shape.y = pos.y;
-                    shape.w = 140.0;
-                    shape.h = 30.0;
+                    let wp = screen_to_world(pos);
+                    shape.x = wp.x;
+                    shape.y = wp.y;
+                    shape.w = 140.0 / zoom;
+                    shape.h = 30.0 / zoom;
                     shape.text = "Текст".to_owned();
                     self.doc.shapes.push(shape);
                     self.selected = Some(self.doc.shapes.len() - 1);
                     self.drag_start = None;
                     self.drag_shape_pos = None;
                 } else if self.tool == DrawTool::Select {
-                    if let Some(pos) = response.interact_pointer_pos() {
-                        self.selected = self.hit_shape(pos);
+                    if let Some(pos) = pointer_pos {
+                        let world_pos = screen_to_world(pos);
+                        self.selected = self.hit_shape(world_pos);
                         if let Some(idx) = self.selected {
                             if let Some(shape) = self.doc.shapes.get(idx) {
                                 self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
@@ -293,21 +378,23 @@ impl FreeCanvas {
                         } else {
                             self.drag_shape_pos = None;
                         }
-                        self.drag_start = response.interact_pointer_pos();
+                        self.drag_start = pointer_pos;
                     }
                 }
             }
         }
 
-        // Начало перетаскивания / рисования
-        if response.drag_started() && self.tool != DrawTool::Text {
-            self.drag_start = response.interact_pointer_pos();
+        // Начало перетаскивания / рисования (только левая кнопка)
+        if response.drag_started() && !middle_down {
+            self.drag_start = pointer_pos;
             if self.tool == DrawTool::Select {
                 if let Some(pos) = self.drag_start {
-                    self.selected = self.hit_shape(pos);
+                    let world_pos = screen_to_world(pos);
+                    self.selected = self.hit_shape(world_pos);
                     if let Some(idx) = self.selected {
                         if let Some(shape) = self.doc.shapes.get(idx) {
-                            self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                            self.drag_shape_pos =
+                                Some((idx, Pos2::new(shape.x, shape.y)));
                         }
                     } else {
                         self.drag_shape_pos = None;
@@ -318,19 +405,21 @@ impl FreeCanvas {
             }
         }
 
-        // Перетаскивание
-        if response.dragged() && self.tool == DrawTool::Select {
-            if let Some(pos) = response.interact_pointer_pos() {
+        // Перетаскивание выделенной фигуры
+        if response.dragged() && !middle_down && self.tool == DrawTool::Select {
+            if let Some(pos) = pointer_pos {
                 if let Some((idx, origin)) = self.drag_shape_pos {
-                    let mut nx = origin.x + (pos.x - self.drag_start.unwrap_or(pos).x);
-                    let mut ny = origin.y + (pos.y - self.drag_start.unwrap_or(pos).y);
+                    let world_cursor = screen_to_world(pos);
+                    let drag_world_start = screen_to_world(self.drag_start.unwrap_or(pos));
+                    let mut nx = origin.x + (world_cursor.x - drag_world_start.x);
+                    let mut ny = origin.y + (world_cursor.y - drag_world_start.y);
 
                     if self.magnetic {
                         if let Some(shape) = self.doc.shapes.get(idx) {
                             let w = shape.w.max(1.0);
                             let h = shape.h.max(1.0);
                             let thresh = 6.0;
-                            // Магнитится к краям других фигур
+                            // Магнитится к краям и центрам других фигур
                             for (j, other) in self.doc.shapes.iter().enumerate() {
                                 if j == idx {
                                     continue;
@@ -339,7 +428,7 @@ impl FreeCanvas {
                                     Pos2::new(other.x, other.y),
                                     Vec2::new(other.w.max(1.0), other.h.max(1.0)),
                                 );
-                                // Левый край к левому/правому/центру
+                                // Края по X: левый/правый/центр
                                 for ox in [or.min.x, or.max.x, or.center().x] {
                                     if (nx - ox).abs() < thresh {
                                         nx = ox;
@@ -350,7 +439,7 @@ impl FreeCanvas {
                                         magnetic_lines.push((ox, true));
                                     }
                                 }
-                                // Верхний край к верхнему/нижнему/центру
+                                // Края по Y: верхний/нижний/центр
                                 for oy in [or.min.y, or.max.y, or.center().y] {
                                     if (ny - oy).abs() < thresh {
                                         ny = oy;
@@ -360,6 +449,21 @@ impl FreeCanvas {
                                         ny = oy - h;
                                         magnetic_lines.push((oy, false));
                                     }
+                                }
+                            }
+                            // Центр объекта к центру объекта
+                            let dragged_center_x = nx + w / 2.0;
+                            let dragged_center_y = ny + h / 2.0;
+                            for other in &self.doc.shapes {
+                                let ocx = other.x + other.w.max(1.0) / 2.0;
+                                let ocy = other.y + other.h.max(1.0) / 2.0;
+                                if (dragged_center_x - ocx).abs() < thresh {
+                                    nx = ocx - w / 2.0;
+                                    magnetic_lines.push((ocx, true));
+                                }
+                                if (dragged_center_y - ocy).abs() < thresh {
+                                    ny = ocy - h / 2.0;
+                                    magnetic_lines.push((ocy, false));
                                 }
                             }
                         }
@@ -374,13 +478,15 @@ impl FreeCanvas {
         }
 
         // Завершение перетаскивания — создать новую фигуру (кроме Select и Text)
-        if response.drag_stopped() {
+        if response.drag_stopped() && !middle_down {
             if self.tool != DrawTool::Select && self.tool != DrawTool::Text {
-                if let (Some(start), Some(end)) = (self.drag_start, response.interact_pointer_pos()) {
-                    let mut x = start.x.min(end.x);
-                    let mut y = start.y.min(end.y);
-                    let mut w = (end.x - start.x).abs();
-                    let mut h = (end.y - start.y).abs();
+                if let (Some(start), Some(end)) = (self.drag_start, pointer_pos) {
+                    let world_start = screen_to_world(start);
+                    let world_end = screen_to_world(end);
+                    let mut x = world_start.x.min(world_end.x);
+                    let mut y = world_start.y.min(world_end.y);
+                    let w = (world_end.x - world_start.x).abs();
+                    let h = (world_end.y - world_start.y).abs();
 
                     if self.magnetic && w > 4.0 && h > 4.0 {
                         for other in &self.doc.shapes {
@@ -430,18 +536,29 @@ impl FreeCanvas {
             self.drag_shape_pos = None;
         }
 
-        // Магнитные красные линии выравнивания
+        // Магнитные красные линии выравнивания (в экранных координатах)
         if self.magnetic {
             for (coord, vertical) in &magnetic_lines {
+                let screen_coord = if *vertical {
+                    *coord * zoom + camera.x
+                } else {
+                    *coord * zoom + camera.y
+                };
                 if *vertical {
                     painter.line_segment(
-                        [Pos2::new(*coord, canvas_rect.min.y), Pos2::new(*coord, canvas_rect.max.y)],
-                        Stroke::new(1.0_f32, Color32::from_rgb(255, 0, 0)),
+                        [
+                            Pos2::new(screen_coord, canvas_rect.min.y),
+                            Pos2::new(screen_coord, canvas_rect.max.y),
+                        ],
+                        Stroke::new(1.0_f32 / zoom.max(0.1), Color32::from_rgb(255, 0, 0)),
                     );
                 } else {
                     painter.line_segment(
-                        [Pos2::new(canvas_rect.min.x, *coord), Pos2::new(canvas_rect.max.x, *coord)],
-                        Stroke::new(1.0_f32, Color32::from_rgb(255, 0, 0)),
+                        [
+                            Pos2::new(canvas_rect.min.x, screen_coord),
+                            Pos2::new(canvas_rect.max.x, screen_coord),
+                        ],
+                        Stroke::new(1.0_f32 / zoom.max(0.1), Color32::from_rgb(255, 0, 0)),
                     );
                 }
             }
@@ -450,18 +567,24 @@ impl FreeCanvas {
         // Предварительный вид фигуры во время рисования
         if self.tool != DrawTool::Select && self.tool != DrawTool::Text {
             if let (Some(start), Some(pos)) = (self.drag_start, response.hover_pos()) {
-                let x = start.x.min(pos.x);
-                let y = start.y.min(pos.y);
-                let w = (pos.x - start.x).abs();
-                let h = (pos.y - start.y).abs();
+                let world_start = screen_to_world(start);
+                let world_pos = screen_to_world(pos);
+                let x = world_start.x.min(world_pos.x);
+                let y = world_start.y.min(world_pos.y);
+                let w = (world_pos.x - world_start.x).abs();
+                let h = (world_pos.y - world_start.y).abs();
                 if w > 2.0 && h > 2.0 {
                     let preview = FreeShape {
                         tool: self.tool,
                         x, y, w, h,
                         ..FreeShape::default()
                     };
-                    let rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w.max(1.0), h.max(1.0)));
-                    self.paint_shape(painter, &preview, rect, false);
+                    let world_rect = Rect::from_min_size(
+                        Pos2::new(x, y),
+                        Vec2::new(w.max(1.0), h.max(1.0)),
+                    );
+                    let screen_rect = world_rect_to_screen(world_rect);
+                    self.paint_shape(painter, &preview, screen_rect, false);
                 }
             }
         }
@@ -469,7 +592,7 @@ impl FreeCanvas {
         ui.allocate_rect(canvas_rect, Sense::hover());
     }
 
-    /// Проверка попадания курсора в фигуру.
+    /// Проверка попадания курсора в фигуру (мировые координаты).
     fn hit_shape(&self, pos: Pos2) -> Option<usize> {
         for (i, shape) in self.doc.shapes.iter().enumerate().rev() {
             let rect = Rect::from_min_size(
@@ -517,12 +640,26 @@ impl FreeCanvas {
         let stroke_color = Color32::from_rgb(shape.stroke.r, shape.stroke.g, shape.stroke.b);
         let stroke = Stroke::new(shape.stroke_width.max(0.0), stroke_color);
 
+        let rounding = if shape.corner_tl == shape.corner_tr
+            && shape.corner_tr == shape.corner_bl
+            && shape.corner_bl == shape.corner_br
+        {
+            Rounding::same(shape.corner_tl)
+        } else {
+            Rounding {
+                nw: shape.corner_tl,
+                ne: shape.corner_tr,
+                sw: shape.corner_bl,
+                se: shape.corner_br,
+            }
+        };
+
         match shape.tool {
             DrawTool::Select => {}
             DrawTool::Rect | DrawTool::Text => {
-                painter.rect_filled(rect, shape.corner_radius, fill);
+                painter.rect_filled(rect, rounding, fill);
                 if shape.stroke_width > 0.0 {
-                    painter.rect_stroke(rect, shape.corner_radius, stroke);
+                    painter.rect_stroke(rect, rounding, stroke);
                 }
             }
             DrawTool::Ellipse => {
