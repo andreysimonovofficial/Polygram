@@ -1,6 +1,6 @@
 //! Панель свойств выделенной фигуры (справа).
 
-use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign, ChildReactMode};
+use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign, TextAlignV, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{Color32, DragValue};
 
@@ -226,37 +226,7 @@ impl FreeCanvas {
                         .range(4.0..=200.0),
                 )
                 .changed();
-            changed |= ui
-                .add(
-                    DragValue::new(&mut shape.line_height)
-                        .prefix("Line height: ")
-                        .speed(0.1)
-                        .range(0.5..=3.0),
-                )
-                .changed();
-            changed |= ui
-                .add(
-                    DragValue::new(&mut shape.letter_spacing)
-                        .prefix("Letter spacing: ")
-                        .speed(0.5)
-                        .range(-50.0..=100.0),
-                )
-                .changed();
-            ui.horizontal(|ui| {
-                ui.label("Цвет текста:");
-                let mut text_color = Color32::from_rgb(
-                    shape.text_color.r,
-                    shape.text_color.g,
-                    shape.text_color.b,
-                );
-                if ui.color_edit_button_srgba(&mut text_color).changed() {
-                    shape.text_color.r = text_color.r();
-                    shape.text_color.g = text_color.g();
-                    shape.text_color.b = text_color.b();
-                    changed = true;
-                }
-            });
-            ui.label("Выравнивание:");
+            ui.label("Выравнивание по горизонтали:");
             let mut align = shape.text_align.clone();
             egui::ComboBox::from_label("")
                 .selected_text(match align {
@@ -276,6 +246,41 @@ impl FreeCanvas {
                     }
                 });
             shape.text_align = align;
+            ui.label("Выравнивание по вертикали:");
+            let mut align_v = shape.text_align_v;
+            egui::ComboBox::from_label("")
+                .selected_text(match align_v {
+                    TextAlignV::Top => "По верхнему",
+                    TextAlignV::Middle => "По центру",
+                    TextAlignV::Bottom => "По нижнему",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut align_v, TextAlignV::Top, "По верхнему").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut align_v, TextAlignV::Middle, "По центру").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut align_v, TextAlignV::Bottom, "По нижнему").changed() {
+                        changed = true;
+                    }
+                });
+            shape.text_align_v = align_v;
+            ui.horizontal(|ui| {
+                ui.label("Цвет текста:");
+                let mut text_color = Color32::from_rgb(
+                    shape.text_color.r,
+                    shape.text_color.g,
+                    shape.text_color.b,
+                );
+                if ui.color_edit_button_srgba(&mut text_color).changed() {
+                    shape.text_color.r = text_color.r();
+                    shape.text_color.g = text_color.g();
+                    shape.text_color.b = text_color.b();
+                    changed = true;
+                }
+            });
+
         }
 
         ui.separator();

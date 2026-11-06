@@ -45,10 +45,6 @@ pub struct UiElement {
     pub font_size: Option<f32>,
     #[serde(default)]
     pub text_align: Option<String>,
-    #[serde(default)]
-    pub line_height: Option<f32>,
-    #[serde(default)]
-    pub letter_spacing: Option<f32>,
 }
 
 /// Результат анализа.
@@ -125,8 +121,6 @@ impl UiAgent {
   "stroke_width": число или null,
   "text": строка или null (для kind="text"),
   "font_size": число или null,
-  "line_height": число или null (примерно 1.2-1.6),
-  "letter_spacing": число или null,
   "text_align": "left" | "center" | "right" или null
 }}
 
@@ -440,8 +434,6 @@ impl UiAgent {
                 shape.fill = None;
                 shape.text = elem.text.clone().unwrap_or_default();
                 shape.font_size = elem.font_size.unwrap_or(14.0);
-                shape.line_height = elem.line_height.unwrap_or(1.4);
-                shape.letter_spacing = elem.letter_spacing.unwrap_or(0.0);
                 // Цвет текста — контрастный к фону (или fill если задан, иначе светлый)
                 let bg = elem.fill.map(|c| Rgba::from_rgba(c[0], c[1], c[2], c[3]));
                 shape.text_color = bg

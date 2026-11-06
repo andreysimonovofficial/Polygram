@@ -1,6 +1,6 @@
 //! Отрисовка фигур, проверка попадания и удаление выделенного.
 
-use crate::design_format::{DrawTool, FreeShape, ShapeState, TextAlign};
+use crate::design_format::{DrawTool, FreeShape, ShapeState, TextAlign, TextAlignV};
 use crate::free_canvas::FreeCanvas;
 use egui::{Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use egui::Color32;
@@ -115,12 +115,19 @@ impl FreeCanvas {
             };
             let font = FontId::proportional(shape.font_size.max(6.0));
             let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
-            let pos = match shape.text_align {
-                TextAlign::Left => rect.min + Vec2::new(8.0, rect.height() / 2.0),
-                TextAlign::Center => rect.center() - Vec2::new(galley.size().x / 2.0, galley.size().y / 2.0),
-                TextAlign::Right => rect.max - Vec2::new(galley.size().x + 8.0, rect.height() / 2.0),
+            let text_w = galley.size().x;
+            let text_h = galley.size().y;
+            let x = match shape.text_align {
+                TextAlign::Left => rect.min.x + 8.0,
+                TextAlign::Center => rect.center().x - text_w / 2.0,
+                TextAlign::Right => rect.max.x - text_w - 8.0,
             };
-            painter.galley(pos, galley, text_color);
+            let y = match shape.text_align_v {
+                TextAlignV::Top => rect.min.y,
+                TextAlignV::Middle => rect.center().y - text_h / 2.0,
+                TextAlignV::Bottom => rect.max.y - text_h,
+            };
+            painter.galley(Pos2::new(x, y), galley, text_color);
         }
     }
 

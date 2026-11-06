@@ -204,8 +204,10 @@ impl FreeCanvas {
                     let wp = screen_to_world(pos);
                     shape.x = wp.x;
                     shape.y = wp.y;
-                    shape.w = 140.0 / zoom;
-                    shape.h = 30.0 / zoom;
+                    shape.w = 140.0;
+                    shape.h = 30.0;
+                    shape.fill = None;
+                    shape.stroke_width = 0.0;
                     shape.text = "Текст".to_owned();
                     self.doc.shapes.push(shape);
                     self.selected = vec![self.doc.shapes.len() - 1];

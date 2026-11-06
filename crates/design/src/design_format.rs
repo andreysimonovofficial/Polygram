@@ -363,8 +363,7 @@ pub struct FreeShape {
     pub font_size: f32,
     pub text_color: Rgba,
     pub text_align: TextAlign,
-    pub line_height: f32,
-    pub letter_spacing: f32,
+    pub text_align_v: TextAlignV,
     /// Переопределения стилей для состояний наведения и нажатия (режим прототипа).
     #[serde(default)]
     pub states: ShapeStates,
@@ -395,6 +394,20 @@ pub enum TextAlign {
     Right,
 }
 
+/// Вертикальное выравнивание текста внутри рамки.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextAlignV {
+    Top,
+    Middle,
+    Bottom,
+}
+
+impl Default for TextAlignV {
+    fn default() -> Self {
+        TextAlignV::Middle
+    }
+}
+
 impl Default for FreeShape {
     fn default() -> Self {
         Self {
@@ -416,8 +429,7 @@ impl Default for FreeShape {
             font_size: 14.0,
             text_color: Rgba::from_rgb(230, 230, 235),
             text_align: TextAlign::Left,
-            line_height: 1.4,
-            letter_spacing: 0.0,
+            text_align_v: TextAlignV::Middle,
             states: ShapeStates::default(),
             group_id: None,
             parent_id: None,
