@@ -22,7 +22,8 @@ impl FreeCanvas {
 
         // Сброс drag_start если левая кнопка мыши отпущена и нет активного перетаскивания.
         // Защита от "залипания" состояния, из-за которого preview фигуры рисуется без зажатия мыши.
-        if !primary_down && !response.dragged() {
+        // Не сбрасываем во время drag_stopped, чтобы фигура успела создатьс€.
+        if !primary_down && !response.dragged() && !response.drag_stopped() {
             self.drag_start = None;
             self.drag_shape_pos = None;
         }
