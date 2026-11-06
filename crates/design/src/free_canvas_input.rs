@@ -498,7 +498,7 @@ impl FreeCanvas {
 
         // Отрисовать selection box на самом верхнем слое (без заливки, только контур 1px)
         if let Some(screen_rect) = self.selection_box_screen {
-            painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(100, 180, 255)));
+            painter.rect_stroke(screen_rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(0, 217, 255)));
         }
 
         // Предварительный вид фигуры во время рисования
