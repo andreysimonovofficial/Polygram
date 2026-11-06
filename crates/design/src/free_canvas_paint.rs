@@ -99,16 +99,16 @@ impl FreeCanvas {
                     .hover
                     .as_ref()
                     .and_then(|s| s.fill)
-                    .map(|c| Color32::from_rgb(c.r, c.g, c.b))
-                    .unwrap_or(Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b)),
+                    .map(|c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a))
+                    .unwrap_or(Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a)),
                 ShapeState::Pressed => shape
                     .states
                     .pressed
                     .as_ref()
                     .and_then(|s| s.fill)
-                    .map(|c| Color32::from_rgb(c.r, c.g, c.b))
-                    .unwrap_or(Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b)),
-                ShapeState::Normal => Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b),
+                    .map(|c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a))
+                    .unwrap_or(Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a)),
+                ShapeState::Normal => Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a),
             };
             let font = FontId::proportional(shape.font_size.max(6.0));
             let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
