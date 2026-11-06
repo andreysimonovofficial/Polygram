@@ -23,16 +23,27 @@ impl Default for LlmProvider {
 /// Элемент интерфейса, обнаруженный LLM.
 #[derive(Clone, Debug, Deserialize)]
 pub struct UiElement {
+    #[serde(default)]
     pub kind: String, // "rect", "text", "ellipse", "line"
+    #[serde(default)]
     pub x: f32,
+    #[serde(default)]
     pub y: f32,
+    #[serde(default)]
     pub w: f32,
+    #[serde(default)]
     pub h: f32,
+    #[serde(default)]
     pub fill: Option<[u8; 4]>,
+    #[serde(default)]
     pub stroke: Option<[u8; 4]>,
+    #[serde(default)]
     pub stroke_width: Option<f32>,
+    #[serde(default)]
     pub text: Option<String>,
+    #[serde(default)]
     pub font_size: Option<f32>,
+    #[serde(default)]
     pub text_align: Option<String>,
 }
 
@@ -274,6 +285,7 @@ impl UiAgent {
     }
 
     /// Распарсить JSON-ответ LLM в список элементов.
+    /// Устойчиво к обрезанным ответам: вытаскивает целые объекты даже если массив обрезан.
     fn parse_json_response(text: &str) -> Result<Vec<UiElement>, String> {
         // Удаляем возможные markdown-обёртки
         let cleaned = text
@@ -284,9 +296,118 @@ impl UiAgent {
             .unwrap_or(text.trim())
             .trim();
 
-        let elements: Vec<UiElement> = serde_json::from_str(cleaned)
-            .map_err(|e| format!("JSON parse error: {e}. Response: {}", &cleaned[..cleaned.len().min(200)]))?;
+        // Сначала пытаемся распарсить весь ответ как JSON-массив.
+        if let Ok(elements) = serde_json::from_str::<Vec<UiElement>>(cleaned) {
+            return Ok(elements);
+        }
+
+        // Если ответ обрезан, вытаскиваем целые объекты { ... } с балансом скобок.
+        let mut elements: Vec<UiElement> = Vec::new();
+        let bytes = cleaned.as_bytes();
+        let mut depth: i32 = 0;
+        let mut start: Option<usize> = None;
+        let mut in_string = false;
+        let mut escaped = false;
+
+        for (i, &b) in bytes.iter().enumerate() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if b == b'\\' {
+                    escaped = true;
+                } else if b == b'"' {
+                    in_string = false;
+                }
+                continue;
+            }
+
+            match b {
+                b'"' => in_string = true,
+                b'{' => {
+                    if depth == 0 {
+                        start = Some(i);
+                    }
+                    depth += 1;
+                }
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        if let Some(s) = start {
+                            let obj_str = &cleaned[s..=i];
+                            // Пробуем распарсить объект как есть, и если не выходит — обрезаем хвост.
+                            if let Ok(elem) = Self::parse_single_object(obj_str) {
+                                elements.push(elem);
+                            } else if let Some(repaired) = Self::repair_object(obj_str) {
+                                if let Ok(elem) = Self::parse_single_object(&repaired) {
+                                    elements.push(elem);
+                                }
+                            }
+                            start = None;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if elements.is_empty() {
+            return Err(format!(
+                "JSON parse error. Response (first 300 chars): {}",
+                &cleaned[..cleaned.len().min(300)]
+            ));
+        }
         Ok(elements)
+    }
+
+    /// Распарсить один объект UiElement.
+    fn parse_single_object(s: &str) -> Result<UiElement, serde_json::Error> {
+        serde_json::from_str(s)
+    }
+
+    /// Попробовать починить обрезанный объект: убрать неполное последнее поле.
+    fn repair_object(s: &str) -> Option<String> {
+        let mut result = s.to_owned();
+        // Убираем завершающую }
+        if !result.ends_with('}') {
+            return None;
+        }
+        result.pop(); // убираем }
+
+        // Ищем последнюю запятую, которая предшествует ключу (,"...)
+        // Обрезаем до неё и добавляем }
+        let bytes = result.as_bytes();
+        let mut in_string = false;
+        let mut escaped = false;
+        let mut last_comma: Option<usize> = None;
+
+        for (i, &b) in bytes.iter().enumerate().rev() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if b == b'\\' {
+                    escaped = true;
+                } else if b == b'"' {
+                    in_string = false;
+                }
+                continue;
+            }
+            match b {
+                b'"' => in_string = true,
+                b',' => {
+                    last_comma = Some(i);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(comma_idx) = last_comma {
+            result.truncate(comma_idx);
+            result.push('}');
+            Some(result)
+        } else {
+            None
+        }
     }
 
     /// Преобразовать элемент LLM в FreeShape.
