@@ -1,6 +1,6 @@
 //! Панель свойств выделенной фигуры (справа).
 
-use crate::design_format::{DrawTool, FreeShape, Rgba, TextAlign};
+use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign};
 use crate::free_canvas::FreeCanvas;
 use egui::{Color32, DragValue};
 
@@ -242,6 +242,92 @@ impl FreeCanvas {
                     }
                 });
             shape.text_align = align;
+        }
+
+        ui.separator();
+        ui.heading("Состояния (прототип)");
+        ui.separator();
+
+        // Наведение
+        ui.label("Наведение (Hover):");
+        let mut hover_enabled = shape.states.hover.is_some();
+        if ui.checkbox(&mut hover_enabled, "Переопределить стиль при наведении").changed() {
+            if hover_enabled {
+                shape.states.hover = Some(StateStyle::default());
+            } else {
+                shape.states.hover = None;
+            }
+            changed = true;
+        }
+        if let Some(st) = shape.states.hover.as_mut() {
+            ui.horizontal(|ui| {
+                ui.label("  Заливка:");
+                let mut color = Color32::from_rgb(st.fill.map_or(0, |c| c.r), st.fill.map_or(0, |c| c.g), st.fill.map_or(0, |c| c.b));
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    st.fill = Some(Rgba { r: color.r(), g: color.g(), b: color.b(), a: 255 });
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("  Обводка:");
+                let mut color = Color32::from_rgb(st.stroke.map_or(0, |c| c.r), st.stroke.map_or(0, |c| c.g), st.stroke.map_or(0, |c| c.b));
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    st.stroke = Some(Rgba { r: color.r(), g: color.g(), b: color.b(), a: 255 });
+                    changed = true;
+                }
+            });
+            changed |= ui
+                .add(
+                    DragValue::new(&mut st.stroke_width.unwrap_or(shape.stroke_width))
+                        .prefix("  Толщина обводки: ")
+                        .speed(0.1)
+                        .range(0.0..=20.0),
+                )
+                .changed();
+            if st.stroke_width.is_none() {
+                st.stroke_width = Some(shape.stroke_width);
+            }
+        }
+
+        // Нажатие
+        ui.label("Нажатие (Pressed):");
+        let mut pressed_enabled = shape.states.pressed.is_some();
+        if ui.checkbox(&mut pressed_enabled, "Переопределить стиль при нажатии").changed() {
+            if pressed_enabled {
+                shape.states.pressed = Some(StateStyle::default());
+            } else {
+                shape.states.pressed = None;
+            }
+            changed = true;
+        }
+        if let Some(st) = shape.states.pressed.as_mut() {
+            ui.horizontal(|ui| {
+                ui.label("  Заливка:");
+                let mut color = Color32::from_rgb(st.fill.map_or(0, |c| c.r), st.fill.map_or(0, |c| c.g), st.fill.map_or(0, |c| c.b));
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    st.fill = Some(Rgba { r: color.r(), g: color.g(), b: color.b(), a: 255 });
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("  Обводка:");
+                let mut color = Color32::from_rgb(st.stroke.map_or(0, |c| c.r), st.stroke.map_or(0, |c| c.g), st.stroke.map_or(0, |c| c.b));
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    st.stroke = Some(Rgba { r: color.r(), g: color.g(), b: color.b(), a: 255 });
+                    changed = true;
+                }
+            });
+            changed |= ui
+                .add(
+                    DragValue::new(&mut st.stroke_width.unwrap_or(shape.stroke_width))
+                        .prefix("  Толщина обводки: ")
+                        .speed(0.1)
+                        .range(0.0..=20.0),
+                )
+                .changed();
+            if st.stroke_width.is_none() {
+                st.stroke_width = Some(shape.stroke_width);
+            }
         }
 
         ui.separator();

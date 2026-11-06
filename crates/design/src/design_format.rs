@@ -298,6 +298,29 @@ pub enum DrawTool {
     Text,
 }
 
+/// Визуальное состояние элемента.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShapeState {
+    Normal,
+    Hover,
+    Pressed,
+}
+
+/// Переопределение стиля для состояния наведения или нажатия.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct StateStyle {
+    pub fill: Option<Rgba>,
+    pub stroke: Option<Rgba>,
+    pub stroke_width: Option<f32>,
+}
+
+/// Стили для состояний наведения и нажатия (нормальное состояние — основные поля фигуры).
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct ShapeStates {
+    pub hover: Option<StateStyle>,
+    pub pressed: Option<StateStyle>,
+}
+
 /// Свободная фигура с абсолютной позицией (в пикселях) — отрисовывается агентом в точности.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FreeShape {
@@ -319,6 +342,9 @@ pub struct FreeShape {
     pub font_size: f32,
     pub text_color: Rgba,
     pub text_align: TextAlign,
+    /// Переопределения стилей для состояний наведения и нажатия (режим прототипа).
+    #[serde(default)]
+    pub states: ShapeStates,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -349,6 +375,7 @@ impl Default for FreeShape {
             font_size: 14.0,
             text_color: Rgba::from_rgb(230, 230, 235),
             text_align: TextAlign::Left,
+            states: ShapeStates::default(),
         }
     }
 }
@@ -362,6 +389,9 @@ pub struct FreeCanvasDoc {
     pub grid: Rgba,
     pub show_grid: bool,
     pub shapes: Vec<FreeShape>,
+    /// Режим прототипа: симуляция наведения/нажатия с визуальными изменениями.
+    #[serde(default)]
+    pub prototype_mode: bool,
 }
 
 impl Default for FreeCanvasDoc {
@@ -373,6 +403,7 @@ impl Default for FreeCanvasDoc {
             grid: Rgba::from_rgb(35, 35, 42),
             show_grid: true,
             shapes: Vec::new(),
+            prototype_mode: false,
         }
     }
 }

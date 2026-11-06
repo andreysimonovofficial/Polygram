@@ -1,6 +1,6 @@
 //! Отрисовка фигур, проверка попадания и удаление выделенного.
 
-use crate::design_format::{DrawTool, FreeShape, TextAlign};
+use crate::design_format::{DrawTool, FreeShape, ShapeState, TextAlign};
 use crate::free_canvas::FreeCanvas;
 use egui::{Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use egui::Color32;
@@ -50,20 +50,17 @@ impl FreeCanvas {
         }
     }
 
-    /// Нарисовать одну фигуру.
+    /// Нарисовать одну фигуру с учётом визуального состояния (прототип).
     pub(crate) fn paint_shape(
         &self,
         painter: &egui::Painter,
         shape: &FreeShape,
         rect: Rect,
         _is_selected: bool,
+        state: ShapeState,
     ) {
-        let fill = shape
-            .fill
-            .map(|c| Color32::from_rgb(c.r, c.g, c.b))
-            .unwrap_or(Color32::TRANSPARENT);
-        let stroke_color = Color32::from_rgb(shape.stroke.r, shape.stroke.g, shape.stroke.b);
-        let stroke = Stroke::new(shape.stroke_width.max(0.0), stroke_color);
+        let (fill, stroke_color, stroke_width) = Self::resolve_style(shape, state);
+        let stroke = Stroke::new(stroke_width.max(0.0), stroke_color);
 
         let rounding = if shape.corner_tl == shape.corner_tr
             && shape.corner_tr == shape.corner_bl
@@ -83,7 +80,7 @@ impl FreeCanvas {
             DrawTool::Select => {}
             DrawTool::Rect | DrawTool::Text => {
                 painter.rect_filled(rect, rounding, fill);
-                if shape.stroke_width > 0.0 {
+                if stroke_width > 0.0 {
                     painter.rect_stroke(rect, rounding, stroke);
                 }
             }
@@ -91,7 +88,7 @@ impl FreeCanvas {
                 let center = rect.center();
                 let radii = Vec2::new(rect.width() / 2.0, rect.height() / 2.0);
                 painter.add(Shape::ellipse_filled(center, radii, fill));
-                if shape.stroke_width > 0.0 {
+                if stroke_width > 0.0 {
                     painter.add(Shape::ellipse_stroke(center, radii, stroke));
                 }
             }
@@ -104,8 +101,23 @@ impl FreeCanvas {
 
         // Текст
         if !shape.text.is_empty() {
-            let text_color =
-                Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b);
+            let text_color = match state {
+                ShapeState::Hover => shape
+                    .states
+                    .hover
+                    .as_ref()
+                    .and_then(|s| s.fill)
+                    .map(|c| Color32::from_rgb(c.r, c.g, c.b))
+                    .unwrap_or(Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b)),
+                ShapeState::Pressed => shape
+                    .states
+                    .pressed
+                    .as_ref()
+                    .and_then(|s| s.fill)
+                    .map(|c| Color32::from_rgb(c.r, c.g, c.b))
+                    .unwrap_or(Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b)),
+                ShapeState::Normal => Color32::from_rgb(shape.text_color.r, shape.text_color.g, shape.text_color.b),
+            };
             let font = FontId::proportional(shape.font_size.max(6.0));
             let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
             let pos = match shape.text_align {
@@ -114,6 +126,34 @@ impl FreeCanvas {
                 TextAlign::Right => rect.max - Vec2::new(galley.size().x + 8.0, rect.height() / 2.0),
             };
             painter.galley(pos, galley, text_color);
+        }
+    }
+
+    /// Разрешить цвета и толщину обводки для данного состояния.
+    fn resolve_style(shape: &FreeShape, state: ShapeState) -> (Color32, Color32, f32) {
+        let base_fill = shape
+            .fill
+            .map(|c| Color32::from_rgb(c.r, c.g, c.b))
+            .unwrap_or(Color32::TRANSPARENT);
+        let base_stroke = Color32::from_rgb(shape.stroke.r, shape.stroke.g, shape.stroke.b);
+        let base_width = shape.stroke_width.max(0.0);
+
+        match state {
+            ShapeState::Normal => (base_fill, base_stroke, base_width),
+            ShapeState::Hover => {
+                let s = shape.states.hover.as_ref();
+                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let width = s.and_then(|st| st.stroke_width).unwrap_or(base_width);
+                (fill, stroke, width)
+            }
+            ShapeState::Pressed => {
+                let s = shape.states.pressed.as_ref();
+                let fill = s.and_then(|st| st.fill).map_or(base_fill, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let stroke = s.and_then(|st| st.stroke).map_or(base_stroke, |c| Color32::from_rgb(c.r, c.g, c.b));
+                let width = s.and_then(|st| st.stroke_width).unwrap_or(base_width);
+                (fill, stroke, width)
+            }
         }
     }
 }

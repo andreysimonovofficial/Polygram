@@ -1,7 +1,7 @@
 //! Обработка ввода на холсте: зум, панорамирование, перетаскивание, магнитное выравнивание,
 //! создание фигур, предварительный просмотр.
 
-use crate::design_format::{DrawTool, FreeShape};
+use crate::design_format::{DrawTool, FreeShape, ShapeState};
 use crate::free_canvas::FreeCanvas;
 use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
@@ -61,6 +61,30 @@ impl FreeCanvas {
             self.doc.bg.r, self.doc.bg.g, self.doc.bg.b,
         ));
 
+        // Отслеживание наведения и нажатия в режиме прототипа.
+        if self.prototype_mode {
+            if let Some(cursor) = ui.ctx().pointer_hover_pos() {
+                if canvas_rect.contains(cursor) {
+                    let world_cursor = screen_to_world(cursor);
+                    self.hovered = self.hit_shape(world_cursor);
+                } else {
+                    self.hovered = None;
+                }
+            }
+            if ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary)) {
+                if self.pressed.is_none() {
+                    if let Some(h) = self.hovered {
+                        self.pressed = Some(h);
+                    }
+                }
+            } else if self.pressed.is_some() {
+                self.pressed = None;
+            }
+        } else {
+            self.hovered = None;
+            self.pressed = None;
+        }
+
         // Магнитные линии (отображаются поверх всего в конце)
         let mut magnetic_lines: Vec<(f32, bool)> = Vec::new(); // (мировая координата, вертикальная)
 
@@ -74,7 +98,18 @@ impl FreeCanvas {
             let screen_rect = world_rect_to_screen(world_rect);
             let screen_clip = screen_rect.intersect(canvas_rect);
             if screen_clip.is_positive() {
-                self.paint_shape(painter, shape, screen_rect, is_selected);
+                let state = if self.prototype_mode {
+                    if self.pressed == Some(i) {
+                        ShapeState::Pressed
+                    } else if self.hovered == Some(i) {
+                        ShapeState::Hover
+                    } else {
+                        ShapeState::Normal
+                    }
+                } else {
+                    ShapeState::Normal
+                };
+                self.paint_shape(painter, shape, screen_rect, is_selected, state);
             }
         }
 
@@ -337,7 +372,7 @@ impl FreeCanvas {
                         Vec2::new(w.max(1.0), h.max(1.0)),
                     );
                     let screen_rect = world_rect_to_screen(world_rect);
-                    self.paint_shape(painter, &preview, screen_rect, false);
+                    self.paint_shape(painter, &preview, screen_rect, false, ShapeState::Normal);
                 }
             }
         }

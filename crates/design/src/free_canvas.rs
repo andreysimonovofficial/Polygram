@@ -26,6 +26,12 @@ pub struct FreeCanvas {
     pub show_code_sidebar: bool,
     pub code_text: String,
     pub last_applied_code: String,
+    /// Режим прототипа (синхронизируется с doc.prototype_mode).
+    pub prototype_mode: bool,
+    /// Индекс фигуры под курсором (только в режиме прототипа).
+    pub hovered: Option<usize>,
+    /// Индекс зажатой фигуры (только в режиме прототипа).
+    pub pressed: Option<usize>,
 }
 
 impl Default for FreeCanvas {
@@ -49,6 +55,9 @@ impl Default for FreeCanvas {
             show_code_sidebar: false,
             code_text: String::new(),
             last_applied_code: String::new(),
+            prototype_mode: false,
+            hovered: None,
+            pressed: None,
         }
     }
 }
@@ -74,6 +83,9 @@ impl FreeCanvas {
             }
             self.settings_loaded = true;
         }
+
+        // Синхронизировать режим прототипа с документом.
+        self.prototype_mode = self.doc.prototype_mode;
 
         // Нижняя панель инструментов
         egui::TopBottomPanel::bottom("tools")
@@ -101,6 +113,14 @@ impl FreeCanvas {
                             self.code_text = self.doc.to_json().unwrap_or_default();
                             self.last_applied_code = self.code_text.clone();
                         }
+                    }
+                    ui.separator();
+                    let proto_label = if self.prototype_mode { "Прототип: ВКЛ" } else { "Прототип: ВЫКЛ" };
+                    if ui.button(proto_label).clicked() {
+                        self.doc.prototype_mode = !self.doc.prototype_mode;
+                        self.prototype_mode = self.doc.prototype_mode;
+                        self.hovered = None;
+                        self.pressed = None;
                     }
                 });
             });
