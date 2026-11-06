@@ -202,7 +202,6 @@ impl FreeCanvas {
                     self.selected = vec![self.doc.shapes.len() - 1];
                     self.drag_start = None;
                     self.drag_shape_pos = None;
-                    self.selection_box_screen = None;
                     self.touch();
                 } else if self.tool == DrawTool::Select {
                     let world_pos = screen_to_world(pos);
@@ -464,6 +463,8 @@ impl FreeCanvas {
                         self.doc.shapes.push(shape);
                         self.selected = vec![self.doc.shapes.len() - 1];
                         self.touch();
+                    }
+                }
             }
         }
 
@@ -493,11 +494,6 @@ impl FreeCanvas {
                     );
                 }
             }
-        }
-
-        // Отрисовать selection box на самом верхнем слое (без заливки, только контур 1px)
-        if let Some(screen_rect) = self.selection_box_screen {
-            painter.rect_stroke(screen_rect, 0.0, Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)));
         }
 
         // Предварительный вид фигуры во время рисования
