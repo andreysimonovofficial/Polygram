@@ -145,7 +145,6 @@ impl FreeCanvas {
                     }
                 });
             });
-
         // Левая боковая панель: редактор кода JSON для Агента (двусторонний, на лету)
         if self.show_code_sidebar {
             egui::SidePanel::left("code_editor")
@@ -154,11 +153,22 @@ impl FreeCanvas {
                 .show(ctx, |ui| {
                     ui.heading("Код для агента (JSON)");
                     ui.separator();
-                    // Поле кода растягивается на всю ширину сайдбара, есть вертикальный скроллбар.
+
+                    // Если дизайн изменился через UI, синхронизируем код в поле (дизайн → код)
+                    let current_json = self.doc.to_json().unwrap_or_default();
+                    if self.code_text != current_json {
+                        self.code_text = current_json.clone();
+                        self.last_applied_code = current_json;
+                    }
+
+                    // Поле кода растягивается на всю ширину сайдбара с вертикальным скроллбаром.
+                    let available_width = ui.available_width();
                     egui::TextEdit::multiline(&mut self.code_text)
                         .desired_rows(18)
+                        .desired_width(available_width)
                         .show(ui);
-                    // Применяем изменения из кода в дизайн «на лету» (без кнопок),
+
+                    // Применяем изменения из кода в дизайн «на лету» (код → дизайн),
                     // но только когда текст реально изменился, чтобы не сбрасывать курсор.
                     if self.code_text != self.last_applied_code {
                         if let Ok(new_doc) = FreeCanvasDoc::load_from_json(&self.code_text) {
@@ -169,6 +179,7 @@ impl FreeCanvas {
                             self.last_applied_code = self.code_text.clone();
                         }
                     }
+
                     ui.separator();
                     ui.horizontal(|ui| {
                         if ui.button("Обновить из дизайна").clicked() {
