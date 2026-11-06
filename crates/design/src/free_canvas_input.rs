@@ -18,6 +18,14 @@ impl FreeCanvas {
         let painter = ui.painter();
 
         let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
+        let primary_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary));
+
+        // Сброс drag_start если левая кнопка мыши отпущена и нет активного перетаскивания.
+        // Защита от "залипания" состояния, из-за которого preview фигуры рисуется без зажатия мыши.
+        if !primary_down && !response.dragged() {
+            self.drag_start = None;
+            self.drag_shape_pos = None;
+        }
 
         // Приближение/отдаление колёсиком мыши к курсору.
         let scroll = ui.ctx().input(|i| i.raw_scroll_delta);
