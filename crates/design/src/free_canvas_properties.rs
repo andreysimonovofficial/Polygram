@@ -14,7 +14,7 @@ impl FreeCanvas {
         let old_bg = self.doc.bg;
         Self::color_picker(ui, &mut self.doc.bg);
         if old_bg != self.doc.bg {
-            self.save_history();
+            self.save_undo_state();
             self.touch();
         }
         ui.separator();
@@ -29,7 +29,7 @@ impl FreeCanvas {
             self.touch();
         }
         if ui.button("Очистить").clicked() {
-            self.save_history();
+            self.save_undo_state();
             self.doc.shapes.clear();
             self.selected.clear();
             self.touch();
@@ -44,7 +44,7 @@ impl FreeCanvas {
                 let prev_doc = self.doc.clone();
                 let (changed, delete) = Self::edit_shape(ui, &mut self.doc.shapes[idx]);
                 if changed {
-                    self.save_history_for(prev_doc);
+                    self.push_undo_state(prev_doc);
                     self.touch();
                 } else if delete {
                     self.doc.shapes.remove(idx);

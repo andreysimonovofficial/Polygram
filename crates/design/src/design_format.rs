@@ -307,7 +307,7 @@ pub enum ShapeState {
 }
 
 /// Переопределение стиля для состояния наведения или нажатия.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct StateStyle {
     pub fill: Option<Rgba>,
     pub stroke: Option<Rgba>,
@@ -315,14 +315,14 @@ pub struct StateStyle {
 }
 
 /// Стили для состояний наведения и нажатия (нормальное состояние — основные поля фигуры).
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct ShapeStates {
     pub hover: Option<StateStyle>,
     pub pressed: Option<StateStyle>,
 }
 
 /// Свободная фигура с абсолютной позицией (в пикселях) — отрисовывается агентом в точности.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FreeShape {
     pub id: String,
     pub tool: DrawTool,
@@ -350,7 +350,7 @@ pub struct FreeShape {
     pub group_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
     Center,
@@ -385,7 +385,7 @@ impl Default for FreeShape {
 }
 
 /// Документ свободного холста (Figma-подобный).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FreeCanvasDoc {
     pub version: u32,
     pub name: String,

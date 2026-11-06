@@ -37,11 +37,11 @@ pub struct FreeCanvas {
     /// Экранный прямоугольник selection box (рисуется в конце canvas_panel, верхний слой).
     pub selection_box_screen: Option<egui::Rect>,
 
-    /// История изменений для Undo/Redo.
-    pub history: Vec<FreeCanvasDoc>,
-    /// Текущая позиция в истории.
-    pub history_index: usize,
-    /// Максимальный размер истории.
+    /// Стек состояний для Undo (состояние ДО каждого действия).
+    pub undo_stack: Vec<FreeCanvasDoc>,
+    /// Стек состояний для Redo (состояние ПОСЛЕ отменённых действий).
+    pub redo_stack: Vec<FreeCanvasDoc>,
+    /// Максимальный размер стеков.
     pub max_history: usize,
     /// Буфер обмена (JSON-строка скопированных фигур).
     pub clipboard: Option<String>,
@@ -75,8 +75,8 @@ impl Default for FreeCanvas {
             pressed: None,
             context_menu: None,
             selection_box_screen: None,
-            history: Vec::new(),
-            history_index: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             max_history: 50,
             clipboard: None,
             drag_history_saved: false,
@@ -89,55 +89,67 @@ impl FreeCanvas {
         Self::default()
     }
 
-    /// Сохранить текущее состояние документа в историю перед изменением.
-    pub fn save_history(&mut self) {
-        self.save_history_for(self.doc.clone());
+    /// Сохранить заданное состояние документа в стек Undo (состояние ДО изменения).
+    /// Вызывать перед применением изменения, когда нужно сохранить конкретное состояние.
+    pub fn push_undo_state(&mut self, doc: FreeCanvasDoc) {
+        if self.undo_stack.len() >= self.max_history {
+            self.undo_stack.remove(0);
+        }
+        self.undo_stack.push(doc);
+        self.redo_stack.clear();
     }
 
-    /// Сохранить заданное состояние документа в историю (состояние ДО изменения).
-    pub fn save_history_for(&mut self, doc: FreeCanvasDoc) {
-        if !self.history.is_empty() && self.history_index < self.history.len() - 1 {
-            self.history.truncate(self.history_index + 1);
+    /// Сохранить текущее состояние документа в стек Undo (состояние ДО изменения).
+    /// Вызывать перед применением изменения к документу.
+    pub fn save_undo_state(&mut self) {
+        if self.undo_stack.len() >= self.max_history {
+            self.undo_stack.remove(0);
         }
-        if self.history.len() >= self.max_history {
-            self.history.remove(0);
-        } else {
-            self.history_index += 1;
-        }
-        self.history.push(doc);
+        self.undo_stack.push(self.doc.clone());
+        self.redo_stack.clear();
     }
 
     /// Можно ли отменить последнее изменение.
     pub fn can_undo(&self) -> bool {
-        self.history_index > 0
+        !self.undo_stack.is_empty()
     }
 
     /// Можно ли повторить отменённое изменение.
     pub fn can_redo(&self) -> bool {
-        self.history_index < self.history.len() - 1
+        !self.redo_stack.is_empty()
     }
 
     /// Отменить последнее изменение.
     pub fn undo(&mut self) {
-        if !self.can_undo() {
+        if self.undo_stack.is_empty() {
             return;
         }
-        self.history_index -= 1;
-        self.doc = self.history[self.history_index].clone();
+        // Сохраняем текущее состояние в стек Redo
+        self.redo_stack.push(self.doc.clone());
+        // Восстанавливаем состояние из Undo
+        self.doc = self.undo_stack.pop().unwrap();
         self.recompute_next_id();
         self.selected.clear();
+        self.context_menu = None;
+        self.hovered = None;
+        self.pressed = None;
         self.touch();
     }
 
     /// Повторить отменённое изменение.
     pub fn redo(&mut self) {
-        if !self.can_redo() {
+        if self.redo_stack.is_empty() {
             return;
         }
-        self.history_index += 1;
-        self.doc = self.history[self.history_index].clone();
+        // Сохраняем текущее состояние в стек Undo
+        self.undo_stack.push(self.doc.clone());
+        // Восстанавливаем состояние из Redo
+        self.doc = self.redo_stack.pop().unwrap();
         self.recompute_next_id();
         self.selected.clear();
+        self.context_menu = None;
+        self.hovered = None;
+        self.pressed = None;
         self.touch();
     }
 
@@ -156,7 +168,7 @@ impl FreeCanvas {
 
     /// Вставить фигуры из буфера обмена.
     pub fn paste_from_clipboard(&mut self) {
-        self.save_history();
+        self.save_undo_state();
         let Some(json) = &self.clipboard else { return };
         let Ok(shapes): Result<Vec<FreeShape>, _> = serde_json::from_str(json) else { return };
         let shapes_len = shapes.len();
