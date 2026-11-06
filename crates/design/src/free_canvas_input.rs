@@ -3,7 +3,7 @@
 
 use crate::design_format::{DrawTool, FreeShape, ShapeState};
 use crate::free_canvas::FreeCanvas;
-use egui::{Key, PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
 
 impl FreeCanvas {
@@ -17,15 +17,6 @@ impl FreeCanvas {
         let painter = ui.painter();
 
         let middle_down = ui.ctx().input(|i| i.pointer.button_down(PointerButton::Middle));
-
-        // Горячие клавиши Undo/Redo
-        let (ctrl, z_pressed, y_pressed) = ui.ctx().input(|i| (i.modifiers.ctrl, i.key_pressed(Key::Z), i.key_pressed(Key::Y)));
-        if ctrl && z_pressed {
-            self.undo();
-        }
-        if ctrl && y_pressed {
-            self.redo();
-        }
 
         // Приближение/отдаление колёсиком мыши к курсору.
         let scroll = ui.ctx().input(|i| i.raw_scroll_delta);

@@ -177,6 +177,15 @@ impl FreeCanvas {
             self.touch();
         }
 
+        // Горячие клавиши Undo/Redo
+        let (ctrl, z_pressed, y_pressed) = ctx.input(|i| (i.modifiers.ctrl, i.key_pressed(Key::Z), i.key_pressed(Key::Y)));
+        if ctrl && z_pressed {
+            self.undo();
+        }
+        if ctrl && y_pressed {
+            self.redo();
+        }
+
         // Загрузка настроек при первом кадре
         if !self.settings_loaded {
             if let Some(storage) = frame.storage() {
