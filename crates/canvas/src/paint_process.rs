@@ -447,10 +447,11 @@ pub fn paint_process(
         if edit_target == Some(object.id.as_str()) && shape.id == "ui-1" {
             continue;
         }
+        let id_text = format!("#{}", object.id);
         let text = if shape.id == "ui-1" {
             Some(object.name.as_str())
         } else if shape.id == "ui-2" {
-            Some(object.id.as_str())
+            Some(id_text.as_str())
         } else {
             None
         };
