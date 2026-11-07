@@ -82,12 +82,12 @@ pub fn context_menu(
                             let world_pos = app
                                 .canvas
                                 .camera
-                                .screen_to_world(*pos, app.canvas.cell_px());
+                                .screen_to_world(*pos, app.canvas.cell_size);
                             let cmd = Command::AddObject {
                                 id: None,
                                 name: "Новый процесс".to_owned(),
                                 kind: NodeKind::Process,
-                                at: Some([world_pos.x as i32, world_pos.y as i32]),
+                                at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                                 parent: Some(object_id.clone()),
                             };
                             app.apply_cmd(cmd);
@@ -97,12 +97,12 @@ pub fn context_menu(
                             let world_pos = app
                                 .canvas
                                 .camera
-                                .screen_to_world(*pos, app.canvas.cell_px());
+                                .screen_to_world(*pos, app.canvas.cell_size);
                             let cmd = Command::AddObject {
                                 id: None,
                                 name: "Новый отдел".to_owned(),
                                 kind: NodeKind::Department,
-                                at: Some([world_pos.x as i32, world_pos.y as i32]),
+                                at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                                 parent: Some(object_id.clone()),
                             };
                             app.apply_cmd(cmd);
