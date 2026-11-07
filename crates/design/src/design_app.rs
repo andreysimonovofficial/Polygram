@@ -157,6 +157,8 @@ impl DesignApp {
 
     /// Список путей-кандидатов к системному файлу шрифта Windows для комбинации семейства и насыщенности.
     /// Возвращает пути в порядке убывания предпочтительности.
+    /// Для Inter подгружаются переменные шрифты из C:/Users/andre/Downloads/Inter/,
+    /// которые поддерживают все насыщенности через ось wght.
     fn font_file_candidates(family: FontFamily, weight: FontWeight) -> Vec<String> {
         let base = match family {
             FontFamily::Arial => "arial",
@@ -164,6 +166,14 @@ impl DesignApp {
             FontFamily::SegoeUI => "segoeui",
         };
         let mut candidates: Vec<String> = Vec::new();
+
+        // Для Inter пробуем переменный шрифт из Downloads (поддерживает все насыщенности).
+        if family == FontFamily::Inter {
+            candidates.push(
+                "C:/Users/andre/Downloads/Inter/Inter-VariableFont_opsz,wght.ttf".to_owned(),
+            );
+        }
+
         match weight {
             FontWeight::Thin => {
                 candidates.push(format!("C:/Windows/Fonts/{}thin.ttf", base));
