@@ -1,12 +1,12 @@
 [package]
-name = "polygram-shell"
+name = "polygram"
 description = "Окно egui Polygram: меню, палитра команд, строка статуса, холст."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "polygram-shell"
+name = "polygram"
 path = "src/main.rs"
 
 [dependencies]

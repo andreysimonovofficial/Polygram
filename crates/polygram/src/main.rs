@@ -75,9 +75,9 @@ fn register_fonts(ctx: &egui::Context) {
                     loaded = true;
                 }
             }
-            // 3. Относительно crates/shell/fonts/ (для cargo run из корня репозитория).
+            // 3. Относительно crates/polygram/fonts/ (для cargo run из корня репозитория).
             if !loaded {
-                let path = format!("crates/shell/fonts/{}.ttf", key);
+                let path = format!("crates/polygram/fonts/{}.ttf", key);
                 if let Ok(data) = std::fs::read(&path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                     fonts
@@ -232,7 +232,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Polygram Shell",
+        "Polygram",
         options,
         Box::new(|cc| {
             register_fonts(&cc.egui_ctx);

@@ -23,11 +23,22 @@
 4. Сделать атомарный коммит изменений (см. правила выше).
 5. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
 
-## Запуск и пересборка polygram-shell
+## Как я понимаю имена приложений
 
-Если редактировали `polygram-shell`, то после ответа обязательно закрывай и пересобирай его, а не `polygram-design`:
-1. Закрыть `polygram-shell.exe` (например, `Get-Process polygram-shell | Stop-Process -Force`).
-2. Собрать и запустить: `cargo run -p polygram-shell` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
+- **`Polygram`** — главное приложение (окно egui), пакет `crates/polygram`, бинарник `polygram.exe`, команда `cargo run -p polygram`.
+- **`Polygram Design Tool`** — инструмент разработчика, пакет `crates/design`, бинарник `polygram-design.exe`, команда `cargo run -p polygram-design`.
+
+Когда вы говорите «Polygram» — редактируем главное приложение (`crates/polygram`). Когда «Polygram Design Tool» / «инструмент разработчика» — редактируем `crates/design`.
+
+## Ответ без аудита
+
+При каждом обращении отвечайте по существу сразу, не проводя повторный полный аудит репозитория. Читайте только файлы, касающиеся задачи.
+
+## Запуск и пересборку polygram
+
+Если редактировали `polygram`, то после ответа обязательно закрывай и пересобирай его, а не `polygram-design`:
+1. Закрыть `polygram.exe` (например, `Get-Process polygram | Stop-Process -Force`).
+2. Собрать и запустить: `cargo run -p polygram` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
 3. Убедиться, что процесс запущен (не failed) и окно видимо на экране. Если процесс упал — исправить ошибку, собрать и запустить снова.
 4. Сделать атомарный коммит изменений (см. правила выше).
 5. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
