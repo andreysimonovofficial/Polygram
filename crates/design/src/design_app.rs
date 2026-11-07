@@ -182,7 +182,7 @@ impl DesignApp {
                 FontWeight::Black => "Black",
             };
             candidates.push(format!(
-                "C:/Users/andre/Downloads/Inter/Inter_18pt-{}.ttf",
+                "C:/Users/andre/Downloads/Inter/static/Inter_18pt-{}.ttf",
                 weight_name
             ));
         }
