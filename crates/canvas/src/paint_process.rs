@@ -16,8 +16,30 @@ use serde::Deserialize;
 use std::sync::OnceLock;
 
 /// Базовый размер макета design.json (в пикселях макета).
-const DESIGN_W: f32 = 372.0;
-const DESIGN_H: f32 = 380.0;
+pub const DESIGN_W: f32 = 372.0;
+pub const DESIGN_H: f32 = 380.0;
+
+/// Текстовое поле названия процесса (shape "ui-1") в пикселях макета.
+pub const TITLE_TEXT_X: f32 = 46.0;
+pub const TITLE_TEXT_Y: f32 = 33.0;
+pub const TITLE_TEXT_W: f32 = 142.0;
+pub const TITLE_TEXT_H: f32 = 20.0;
+
+/// Экранный rect текстового поля названия процесса (shape "ui-1").
+pub fn title_text_rect(
+    screen_min: egui::Pos2,
+    cell_px: f32,
+    rect_w: i32,
+    rect_h: i32,
+) -> egui::Rect {
+    let scale_x = (rect_w as f32 * cell_px) / DESIGN_W;
+    let scale_y = (rect_h as f32 * cell_px) / DESIGN_H;
+    egui::Rect::from_min_size(
+        screen_min
+            + egui::Vec2::new(TITLE_TEXT_X * scale_x, TITLE_TEXT_Y * scale_y),
+        egui::Vec2::new(TITLE_TEXT_W * scale_x, TITLE_TEXT_H * scale_y),
+    )
+}
 
 /// Точка в формате макета.
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -409,6 +431,7 @@ pub fn paint_process(
     _cell_px: f32,
     zoom: f32,
     _is_hovered: bool,
+    edit_target: Option<&str>,
 ) {
     let template = get_template();
 
@@ -418,21 +441,26 @@ pub fn paint_process(
     let offset = rect_px.min;
 
     // Отрисовать все фигуры шаблона.
-        for shape in &template.doc.shapes {
-            let text = if shape.id == "ui-1" {
-                Some(object.name.as_str())
-            } else {
-                None
-            };
-            let screen_rect = Rect::from_min_size(
-                Pos2::new(
-                    offset.x + shape.x * scale_x,
-                    offset.y + shape.y * scale_y,
-                ),
-                Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
-            );
-            paint_layout_shape(painter, shape, screen_rect, zoom, text);
+    for shape in &template.doc.shapes {
+        // Во время инлайн-режима не рисуем статический текст названия —
+        // TextEdit нарисуется поверх точно на этом же месте.
+        if edit_target == Some(object.id.as_str()) && shape.id == "ui-1" {
+            continue;
         }
+        let text = if shape.id == "ui-1" {
+            Some(object.name.as_str())
+        } else {
+            None
+        };
+        let screen_rect = Rect::from_min_size(
+            Pos2::new(
+                offset.x + shape.x * scale_x,
+                offset.y + shape.y * scale_y,
+            ),
+            Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
+        );
+        paint_layout_shape(painter, shape, screen_rect, zoom, text);
+    }
 
     // TODO: hit-тест зоны доступны в template.hit_zones — будут использованы
     // после того, как будет определено, за что каждая кнопка отвечает.

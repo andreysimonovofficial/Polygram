@@ -16,6 +16,7 @@ pub use paint_department::paint_department_frame;
 pub use paint_edge::paint_edge;
 pub use paint_object::{paint_container, paint_object};
 pub use paint_process::paint_process;
+pub use paint_process::title_text_rect;
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Vec2};
@@ -56,6 +57,7 @@ impl Canvas {
         geometry: &Geometry,
         dynamic: &DynamicState,
         hovered_object: Option<&str>,
+        edit_target: Option<&str>,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -124,6 +126,7 @@ impl Canvas {
                     cell_px,
                     self.camera.zoom,
                     is_hovered,
+                    edit_target,
                 );
             } else {
                 paint_object(

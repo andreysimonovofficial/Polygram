@@ -1,7 +1,8 @@
 use crate::app::PolygramApp;
-use polygram_canvas::object_at;
+use polygram_canvas::{object_at, title_text_rect};
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::Command;
+use egui::{Key, Pos2};
 
 pub fn context_menu(
     app: &mut PolygramApp,
@@ -330,7 +331,7 @@ pub fn handle_canvas_interaction(
     };
 
     app.canvas
-        .paint(ui, &published.geometry, &published.dynamic, hovered_object);
+        .paint(ui, &published.geometry, &published.dynamic, hovered_object, app.edit_target.as_deref());
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
@@ -366,7 +367,7 @@ pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
 }
 
 /// Инлайн-редактирование названия объекта прямо на холсте (Figma-стиль).
-/// Рисует `TextEdit` поверх шапки редактируемого объекта.
+/// Поле ввода рисуется точно поверх текста названия (shape "ui-1").
 pub fn inline_rename_editor(
     app: &mut PolygramApp,
     ctx: &egui::Context,
@@ -382,31 +383,36 @@ pub fn inline_rename_editor(
 
     let cell_px = app.canvas.cell_px();
     let screen_min = app.canvas.camera.world_to_screen(
-        egui::Pos2::new(object.rect.x as f32, object.rect.y as f32),
+        Pos2::new(object.rect.x as f32, object.rect.y as f32),
         app.canvas.cell_size,
     );
-    let header_w = object.rect.w as f32 * cell_px;
+    let edit_rect = title_text_rect(screen_min, cell_px, object.rect.w, object.rect.h);
 
     let mut commit = false;
     let mut cancel = false;
 
     egui::Area::new(egui::Id::new("inline_rename"))
         .order(egui::Order::Foreground)
-        .fixed_pos(screen_min)
+        .fixed_pos(edit_rect.min)
         .show(ctx, |ui| {
-            ui.set_min_width(header_w.max(60.0));
-            let response = ui.text_edit_singleline(&mut app.edit_input);
-            response.request_focus();
+            ui.set_min_width(edit_rect.width().max(40.0));
+            ui.set_min_height(edit_rect.height().max(16.0));
+            egui::Frame::none().show(ui, |ui| {
+                let response = ui.text_edit_singleline(&mut app.edit_input);
+                response.request_focus();
 
-            if response.lost_focus() {
-                commit = true;
-            }
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                commit = true;
-            }
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                cancel = true;
-            }
+                if response.has_focus() {
+                    if ctx.input(|i| i.key_pressed(Key::Enter)) {
+                        commit = true;
+                    }
+                    if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                        cancel = true;
+                    }
+                }
+                if response.lost_focus() {
+                    commit = true;
+                }
+            });
         });
 
     if commit {
