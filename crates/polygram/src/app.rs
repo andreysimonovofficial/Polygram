@@ -12,6 +12,9 @@ pub struct PolygramApp {
     pub command_log: Vec<CommandLogEntry>,
     pub rename_target: Option<String>,
     pub rename_input: String,
+    /// Инлайн-редактирование названия объекта прямо на холсте (Figma-стиль).
+    pub edit_target: Option<String>,
+    pub edit_input: String,
     pub drag_object: Option<String>,
     pub drag_start_screen: Option<egui::Pos2>,
     pub drag_start_cell: Option<(i32, i32)>,
@@ -40,6 +43,8 @@ impl PolygramApp {
             command_log: Vec::new(),
             rename_target: None,
             rename_input: String::new(),
+            edit_target: None,
+            edit_input: String::new(),
             drag_object: None,
             drag_start_screen: None,
             drag_start_cell: None,

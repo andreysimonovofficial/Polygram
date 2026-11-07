@@ -184,7 +184,7 @@ pub fn handle_canvas_interaction(
         egui::Sense::click_and_drag(),
     );
 
-    // Двойной клик по объекту — открыть редактирование названия.
+    // Двойной клик по объекту — инлайн-редактирование названия прямо на холсте.
     if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
             if let Some(object_id) = app.canvas.object_at(&published.geometry, pos) {
@@ -198,8 +198,8 @@ pub fn handle_canvas_interaction(
                 app.drag_object = None;
                 app.drag_start_screen = None;
                 app.drag_start_cell = None;
-                app.rename_target = Some(object_id.to_owned());
-                app.rename_input = obj_name;
+                app.edit_target = Some(object_id.to_owned());
+                app.edit_input = obj_name;
             }
         }
     }
@@ -362,5 +362,64 @@ pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         });
         app.rename_target = None;
         app.rename_input.clear();
+    }
+}
+
+/// Инлайн-редактирование названия объекта прямо на холсте (Figma-стиль).
+/// Рисует `TextEdit` поверх шапки редактируемого объекта.
+pub fn inline_rename_editor(
+    app: &mut PolygramApp,
+    ctx: &egui::Context,
+    published: &polygram_core::Published,
+) {
+    let Some(target) = &app.edit_target else {
+        return;
+    };
+    let Some(object) = published.geometry.objects.iter().find(|o| o.id == target.as_str()) else {
+        app.edit_target = None;
+        return;
+    };
+
+    let cell_px = app.canvas.cell_px();
+    let screen_min = app.canvas.camera.world_to_screen(
+        egui::Pos2::new(object.rect.x as f32, object.rect.y as f32),
+        app.canvas.cell_size,
+    );
+    let header_w = object.rect.w as f32 * cell_px;
+
+    let mut commit = false;
+    let mut cancel = false;
+
+    egui::Area::new(egui::Id::new("inline_rename"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen_min)
+        .show(ctx, |ui| {
+            ui.set_min_width(header_w.max(60.0));
+            let response = ui.text_edit_singleline(&mut app.edit_input);
+            response.request_focus();
+
+            if response.lost_focus() {
+                commit = true;
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                commit = true;
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                cancel = true;
+            }
+        });
+
+    if commit {
+        if !app.edit_input.is_empty() {
+            app.apply_cmd(polygram_core::Command::RenameObject {
+                object: target.clone(),
+                name: app.edit_input.clone(),
+            });
+        }
+        app.edit_target = None;
+        app.edit_input.clear();
+    } else if cancel {
+        app.edit_target = None;
+        app.edit_input.clear();
     }
 }
