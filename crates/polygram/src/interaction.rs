@@ -180,22 +180,25 @@ pub fn handle_canvas_interaction(
     // Камера: колесико — зум (приближение вверх, к курсору),
     // правая/средняя кнопка — панорамирование.
     if canvas_response.hovered() {
-        // Зум через колёсико мыши (как в Design Tool): приближение вверх, к курсору.
-        let scroll = ctx.input(|i| i.raw_scroll_delta);
-        if scroll.y.abs() > 0.01 {
-            if let Some(cursor) = ctx.pointer_hover_pos() {
-                if canvas_response.rect.contains(cursor) {
-                    let cell_size = app.canvas.cell_size;
-                    let zoom = app.canvas.camera.zoom.clamp(0.1, 10.0);
-                    let offset = app.canvas.camera.offset;
-                    // Мировая точка (в клетках) под курсором до зума.
-                    let world_x = (cursor.x / zoom - offset.x) / cell_size;
-                    let world_y = (cursor.y / zoom - offset.y) / cell_size;
-                    let factor = (-scroll.y * 0.1).exp();
-                    let new_zoom = (zoom * factor).clamp(0.1, 10.0);
-                    if new_zoom != zoom {
-                        app.canvas.camera.offset.x = cursor.x / new_zoom - world_x * cell_size;
-                        app.canvas.camera.offset.y = cursor.y / new_zoom - world_y * cell_size;
+        // Зум через события колесика мыши (центрируется на курсору).
+        let events: Vec<egui::Event> = ctx.input(|i| i.events.clone());
+        for event in events.iter() {
+            if let egui::Event::MouseWheel { delta, .. } = event {
+                if delta.y != 0.0 {
+                    // Приближение при прокрутке вверх (delta.y < 0).
+                    let factor = (-delta.y * 0.01).exp();
+                    let old_zoom = app.canvas.camera.zoom;
+                    let new_zoom = (old_zoom * factor).clamp(0.1, 10.0);
+                    if new_zoom != old_zoom {
+                        if let Some(cursor) = canvas_response.interact_pointer_pos() {
+                            let cell_size = app.canvas.cell_size;
+                            // Мировая точка (в клетках) под курсором до зума.
+                            let world_x = (cursor.x / old_zoom - app.canvas.camera.offset.x) / cell_size;
+                            let world_y = (cursor.y / old_zoom - app.canvas.camera.offset.y) / cell_size;
+                            // Новое смещение, чтобы та же мировая точка осталась под курсором.
+                            app.canvas.camera.offset.x = cursor.x / new_zoom - world_x * cell_size;
+                            app.canvas.camera.offset.y = cursor.y / new_zoom - world_y * cell_size;
+                        }
                         app.canvas.camera.zoom = new_zoom;
                         ctx.request_repaint();
                     }
