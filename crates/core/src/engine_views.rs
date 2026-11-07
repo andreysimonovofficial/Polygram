@@ -104,7 +104,7 @@ impl crate::engine::Engine {
                         crate::geometry::EntryGeom {
                             ix: e.0,
                             name: self.hier.object_metric(e).ext_id.clone(),
-                            value: self.vals.supplied[i],
+                            value: self.vals.value[i],
                             supplied: self.vals.supplied[i],
                         }
                     })

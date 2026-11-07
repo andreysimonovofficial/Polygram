@@ -579,7 +579,7 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         app.apply_cmd(Command::AddMetricEntry {
             object: object_id,
             dir,
-            id: None,
+            id: Some(name.clone()),
             metric_def: name.clone(),
             name,
             value,
