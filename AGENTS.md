@@ -18,7 +18,7 @@
 
 При внесении правок в код обязательно:
 1. Закрыть `polygram-design.exe` (например, `Get-Process polygram-design | Stop-Process -Force`).
-2. Собрать и запустить: `cargo run -p polygram-design` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
+2. Собрать и запустить: `Start-Process powershell -ArgumentList "-Command cargo run -p polygram-design"` — приложение запускается в отдельном окне и остаётся открытым, команда возвращает управление для следующих шагов.
 3. Убедиться, что процесс запущен (не failed) и окно видимо на экране. Если процесс упал — исправить ошибку, собрать и запустить снова.
 4. Сделать атомарный коммит изменений (см. правила выше).
 5. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
@@ -38,7 +38,7 @@
 
 Если редактировали `polygram`, то после ответа обязательно закрывай и пересобирай его, а не `polygram-design`:
 1. Закрыть `polygram.exe` (например, `Get-Process polygram | Stop-Process -Force`).
-2. Собрать и запустить: `cargo run -p polygram` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
+2. Собрать и запустить: `Start-Process powershell -ArgumentList "-Command cargo run -p polygram"` — приложение запускается в отдельном окне и остаётся открытым, команда возвращает управление для следующих шагов.
 3. Убедиться, что процесс запущен (не failed) и окно видимо на экране. Если процесс упал — исправить ошибку, собрать и запустить снова.
 4. Сделать атомарный коммит изменений (см. правила выше).
 5. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
