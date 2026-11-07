@@ -10,6 +10,9 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Polygram Design Tool",
         options,
-        Box::new(|_cc| Ok(Box::new(DesignApp::new()))),
+        Box::new(|cc| {
+            DesignApp::register_fonts(&cc.egui_ctx);
+            Ok(Box::new(DesignApp::new()))
+        }),
     )
 }

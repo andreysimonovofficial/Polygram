@@ -7,7 +7,7 @@ use crate::free_canvas::FreeCanvas;
 use crate::screen_agent::ScreenAgent;
 use crate::ui_agent::{AnalysisResult, LlmProvider, UiAgent};
 use eframe::Frame;
-use egui::Context;
+use egui::{Context, FontData, FontDefinitions, FontFamily};
 use rfd::FileDialog;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -33,8 +33,59 @@ impl DesignApp {
             status: "Готов".to_owned(),
             ui_agent: UiAgent::new(LlmProvider::default()),
             screenshot_path: None,
-            analysis_receiver: None,
+        analysis_receiver: None,
         }
+    }
+
+    /// Зарегистрировать системные шрифты Windows в egui, чтобы FontFamily::Name
+    /// (Arial / Inter / Segoe UI) не вызывал панику при отрисовке текста.
+    pub fn register_fonts(ctx: &Context) {
+        let mut fonts = FontDefinitions::default();
+
+        let mut add_font = |key: &str, path: &str, name: FontFamily| {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(key.to_owned(), FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(name)
+                    .or_default()
+                    .push(key.to_owned());
+            }
+        };
+
+        // Сначала пробуем загрузить Arial (чаще всего доступен в Windows).
+        add_font("arial", "C:/Windows/Fonts/arial.ttf", FontFamily::Name("Arial".into()));
+        add_font(
+            "segoeui",
+            "C:/Windows/Fonts/segoeui.ttf",
+            FontFamily::Name("Segoe UI".into()),
+        );
+        add_font("inter", "C:/Windows/Fonts/inter.ttf", FontFamily::Name("Inter".into()));
+
+        // Fallback: если какой-то именованный шрифт не зарегистрирован,
+        // используем данные уже загруженного шрифта, чтобы избежать паники egui.
+        let fallback_key = fonts
+            .families
+            .get(&FontFamily::Name("Arial".into()))
+            .and_then(|keys| keys.first())
+            .cloned();
+        if let Some(fb) = fallback_key {
+            for name in [
+                FontFamily::Name("Arial".into()),
+                FontFamily::Name("Inter".into()),
+                FontFamily::Name("Segoe UI".into()),
+            ] {
+                if fonts.families.get(&name).map_or(true, |keys| keys.is_empty()) {
+                    fonts
+                        .families
+                        .entry(name)
+                        .or_default()
+                        .push(fb.clone());
+                }
+            }
+        }
+
+        ctx.set_fonts(fonts);
     }
 
     /// Отобразить весь интерфейс инструмента дизайна.
