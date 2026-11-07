@@ -101,11 +101,14 @@ impl crate::engine::Engine {
                     .iter()
                     .map(|&e| {
                         let i = e.idx();
+                        let om = self.hier.object_metric(e);
+                        let md = self.hier.metric_def(om.metric_def);
                         crate::geometry::EntryGeom {
                             ix: e.0,
-                            name: self.hier.object_metric(e).ext_id.clone(),
+                            name: om.ext_id.clone(),
                             value: self.vals.value[i],
                             supplied: self.vals.supplied[i],
+                            unit: md.unit.clone(),
                         }
                     })
                     .collect();
@@ -114,11 +117,14 @@ impl crate::engine::Engine {
                     .iter()
                     .map(|&e| {
                         let i = e.idx();
+                        let om = self.hier.object_metric(e);
+                        let md = self.hier.metric_def(om.metric_def);
                         crate::geometry::EntryGeom {
                             ix: e.0,
-                            name: self.hier.object_metric(e).ext_id.clone(),
+                            name: om.ext_id.clone(),
                             value: self.vals.value[i],
                             supplied: self.vals.value[i],
+                            unit: md.unit.clone(),
                         }
                     })
                     .collect();

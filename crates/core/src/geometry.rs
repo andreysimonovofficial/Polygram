@@ -8,6 +8,7 @@ pub struct EntryGeom {
     pub name: String,
     pub value: f64,
     pub supplied: f64,
+    pub unit: String,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]

@@ -79,7 +79,12 @@ fn paint_metric_row(
     );
 
     // Значение (справа)
-    let value_text = format!("{:.0}", entry.value);
+    let unit = if entry.unit.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", entry.unit)
+    };
+    let value_text = format!("{:.0}{}", entry.value, unit);
     painter.text(
         Pos2::new(rect.max.x - 8.0 * zoom, cy),
         egui::Align2::RIGHT_CENTER,
