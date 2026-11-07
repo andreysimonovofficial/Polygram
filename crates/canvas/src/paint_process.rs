@@ -217,19 +217,13 @@ pub fn paint_process(
 ) -> Vec<(String, Direction, Rect)> {
     let mut hotspots: Vec<(String, Direction, Rect)> = Vec::new();
 
-    // --- Геометрия из констант (ячейки → пиксели) ---
+    // --- Геометрия: фиксированные пропорции тела объекта ---
     let req_count = object.requests.len();
     let out_count = object.outputs.len();
-    let total_h_cells = OBJECT_HEADER_HEIGHT_CELLS
-        + container_height_cells(req_count)
-        + container_height_cells(out_count);
-    let total_h_px = cell_px * total_h_cells;
-
-    // Если контент выше доступного места — масштабируем вертикально, чтобы всё поместилось.
-    let avail_h = rect_px.height();
-    let scale_h = if total_h_px > avail_h { avail_h / total_h_px.max(1.0) } else { 1.0 };
-
-    let header_h_px = cell_px * OBJECT_HEADER_HEIGHT_CELLS * scale_h;
+    let total_h = rect_px.height();
+    let header_h_px = total_h * 0.10;
+    let req_h_px = total_h * 0.45;
+    let out_h_px = total_h * 0.45;
 
     // --- Внешняя рамка объекта ---
     let border_color = if is_hovered { theme.text } else { theme.card_border };
@@ -269,7 +263,6 @@ pub fn paint_process(
     );
 
     // =============== КОНТЕЙНЕР: ЗАПРОС ===============
-    let req_h_px = cell_px * container_height_cells(req_count) * scale_h;
     let req_rect = Rect::from_min_size(
         rect_px.min + Vec2::new(0.0, header_h_px),
         Vec2::new(rect_px.width(), req_h_px),
@@ -283,7 +276,7 @@ pub fn paint_process(
     );
 
     // Шапка контейнера
-    let req_header_h = cell_px * CONTAINER_HEADER_HEIGHT_CELLS * scale_h;
+    let req_header_h = req_h_px * 0.20;
     let req_header_rect = Rect::from_min_size(req_rect.min, Vec2::new(req_rect.width(), req_header_h));
     painter.rect_filled(req_header_rect, 0.0, theme.card_bg);
     paint_container_header(
@@ -319,7 +312,6 @@ pub fn paint_process(
     }
 
     // =============== КОНТЕЙНЕР: ВЫХОД ===============
-    let out_h_px = cell_px * container_height_cells(out_count) * scale_h;
     let out_rect = Rect::from_min_size(
         rect_px.min + Vec2::new(0.0, header_h_px + req_h_px),
         Vec2::new(rect_px.width(), out_h_px),
@@ -331,7 +323,7 @@ pub fn paint_process(
         Stroke::new(theme.object_border_width * zoom, out_border),
     );
 
-    let out_header_h = cell_px * CONTAINER_HEADER_HEIGHT_CELLS * scale_h;
+    let out_header_h = out_h_px * 0.20;
     let out_header_rect = Rect::from_min_size(out_rect.min, Vec2::new(out_rect.width(), out_header_h));
     painter.rect_filled(out_header_rect, 0.0, theme.card_bg);
     paint_container_header(
