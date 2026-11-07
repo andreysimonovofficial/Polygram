@@ -1,6 +1,6 @@
 //! Отрисовка фигур, проверка попадания и удаление выделенного.
 
-use crate::design_format::{DrawTool, FontFamily, FreeShape, ShapeState, StrokePosition, TextAlign, TextAlignV};
+use crate::design_format::{DrawTool, FreeShape, ShapeState, StrokePosition, TextAlign, TextAlignV, font_key};
 use crate::free_canvas::FreeCanvas;
 use egui::{Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use egui::Color32;
@@ -115,13 +115,11 @@ impl FreeCanvas {
                     .unwrap_or(Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a)),
                 ShapeState::Normal => Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a),
             };
-            let font_family = match shape.font_family {
-                FontFamily::Arial => egui::FontFamily::Name("Arial".into()),
-                FontFamily::Inter => egui::FontFamily::Name("Inter".into()),
-                FontFamily::SegoeUI => egui::FontFamily::Name("Segoe UI".into()),
-            };
-            let font = egui::FontId::new(shape.font_size.max(6.0) * zoom, font_family);
-            let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
+            let font_id = egui::FontId::new(
+                shape.font_size.max(6.0) * zoom,
+                egui::FontFamily::Name(font_key(shape.font_family, shape.font_weight).into()),
+            );
+            let galley = painter.layout_no_wrap(shape.text.clone(), font_id, text_color);
             let text_w = galley.size().x;
             let text_h = galley.size().y;
             let x = match shape.text_align {

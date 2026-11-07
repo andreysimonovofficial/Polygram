@@ -468,6 +468,27 @@ impl Default for FontFamily {
     }
 }
 
+/// Ключ шрифта egui для заданной пары семейство + насыщенность.
+pub fn font_key(family: FontFamily, weight: FontWeight) -> String {
+    let base = match family {
+        FontFamily::Arial => "arial",
+        FontFamily::Inter => "inter",
+        FontFamily::SegoeUI => "segoeui",
+    };
+    let suffix = match weight {
+        FontWeight::Thin => "-thin",
+        FontWeight::ExtraLight => "-extralight",
+        FontWeight::Light => "-light",
+        FontWeight::Regular => "-regular",
+        FontWeight::Medium => "-medium",
+        FontWeight::SemiBold => "-semibold",
+        FontWeight::Bold => "-bold",
+        FontWeight::ExtraBold => "-extrabold",
+        FontWeight::Black => "-black",
+    };
+    format!("{}{}", base, suffix)
+}
+
 impl Default for FreeShape {
     fn default() -> Self {
         Self {

@@ -7,7 +7,7 @@ use crate::free_canvas::FreeCanvas;
 use crate::screen_agent::ScreenAgent;
 use crate::ui_agent::{AnalysisResult, LlmProvider, UiAgent};
 use eframe::Frame;
-use egui::{Context, FontData, FontDefinitions, FontFamily};
+use egui::{Context, FontData, FontDefinitions};
 use rfd::FileDialog;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -39,53 +39,128 @@ impl DesignApp {
 
     /// Зарегистрировать системные шрифты Windows в egui, чтобы FontFamily::Name
     /// (Arial / Inter / Segoe UI) не вызывал панику при отрисовке текста.
+    /// Загружаются разные файлы шрифтов для каждой комбинации семейство + насыщенность,
+    /// чтобы выбор насыщенности влиял на внешний вид текста.
     pub fn register_fonts(ctx: &Context) {
         let mut fonts = FontDefinitions::default();
 
-        let mut add_font = |key: &str, path: &str, name: FontFamily| {
-            if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(key.to_owned(), FontData::from_owned(data));
-                fonts
-                    .families
-                    .entry(name)
-                    .or_default()
-                    .push(key.to_owned());
-            }
-        };
+        let families = [
+            FontFamily::Arial,
+            FontFamily::Inter,
+            FontFamily::SegoeUI,
+        ];
+        let weights = [
+            FontWeight::Thin,
+            FontWeight::ExtraLight,
+            FontWeight::Light,
+            FontWeight::Regular,
+            FontWeight::Medium,
+            FontWeight::SemiBold,
+            FontWeight::Bold,
+            FontWeight::ExtraBold,
+            FontWeight::Black,
+        ];
 
-        // Сначала пробуем загрузить Arial (чаще всего доступен в Windows).
-        add_font("arial", "C:/Windows/Fonts/arial.ttf", FontFamily::Name("Arial".into()));
-        add_font(
-            "segoeui",
-            "C:/Windows/Fonts/segoeui.ttf",
-            FontFamily::Name("Segoe UI".into()),
-        );
-        add_font("inter", "C:/Windows/Fonts/inter.ttf", FontFamily::Name("Inter".into()));
-
-        // Fallback: если какой-то именованный шрифт не зарегистрирован,
-        // используем данные уже загруженного шрифта, чтобы избежать паники egui.
-        let fallback_key = fonts
-            .families
-            .get(&FontFamily::Name("Arial".into()))
-            .and_then(|keys| keys.first())
-            .cloned();
-        if let Some(fb) = fallback_key {
-            for name in [
-                FontFamily::Name("Arial".into()),
-                FontFamily::Name("Inter".into()),
-                FontFamily::Name("Segoe UI".into()),
-            ] {
-                if fonts.families.get(&name).map_or(true, |keys| keys.is_empty()) {
-                    fonts
-                        .families
-                        .entry(name)
-                        .or_default()
-                        .push(fb.clone());
+        for family in families {
+            for weight in weights {
+                let key = font_key(family, weight);
+                let mut loaded = false;
+                for path in Self::font_file_candidates(family, weight) {
+                    if let Ok(data) = std::fs::read(&path) {
+                        fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                        fonts
+                            .families
+                                .entry(egui::FontFamily::Name(key.clone().into()))
+                            .or_default()
+                            .push(key.clone());
+                        loaded = true;
+                        break;
+                    }
+                }
+                if !loaded {
+                    // Fallback: попробуем регулярное начертание того же семейства.
+                    let regular_key = font_key(family, FontWeight::Regular);
+                    if regular_key != key {
+                        if fonts.font_data.contains_key(&regular_key) {
+                            fonts
+                                .families
+                            .entry(egui::FontFamily::Name(key.clone().into()))
+                                .or_default()
+                                .push(regular_key.clone());
+                        }
+                    }
                 }
             }
         }
 
+        // Гарантируем, что хотя бы один шрифт зарегистрирован, иначе egui паникует.
+        if fonts.font_data.is_empty() {
+            if let Ok(data) = std::fs::read("C:/Windows/Fonts/arial.ttf") {
+                fonts.font_data.insert("arial".to_owned(), FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name("arial".into()))
+                    .or_default()
+                    .push("arial".to_owned());
+            }
+        }
+
         ctx.set_fonts(fonts);
+    }
+
+    /// Список путей-кандидатов к файлу шрифта Windows для комбинации семейства и насыщенности.
+    /// Возвращает пути в порядке убывания предпочтительности.
+    fn font_file_candidates(family: FontFamily, weight: FontWeight) -> Vec<String> {
+        let base = match family {
+            FontFamily::Arial => "arial",
+            FontFamily::Inter => "inter",
+            FontFamily::SegoeUI => "segoeui",
+        };
+        let mut candidates: Vec<String> = Vec::new();
+        match weight {
+            FontWeight::Thin => {
+                candidates.push(format!("C:/Windows/Fonts/{}thin.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}light.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::ExtraLight => {
+                candidates.push(format!("C:/Windows/Fonts/{}extralight.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}light.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::Light => {
+                candidates.push(format!("C:/Windows/Fonts/{}light.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::Regular => {
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::Medium => {
+                candidates.push(format!("C:/Windows/Fonts/{}medium.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::SemiBold => {
+                candidates.push(format!("C:/Windows/Fonts/{}semibold.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}b.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::Bold => {
+                candidates.push(format!("C:/Windows/Fonts/{}b.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}bold.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::ExtraBold => {
+                candidates.push(format!("C:/Windows/Fonts/{}extrabold.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}b.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+            FontWeight::Black => {
+                candidates.push(format!("C:/Windows/Fonts/{}black.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}b.ttf", base));
+                candidates.push(format!("C:/Windows/Fonts/{}.ttf", base));
+            }
+        }
+        candidates
     }
 
     /// Отобразить весь интерфейс инструмента дизайна.
