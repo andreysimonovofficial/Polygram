@@ -18,7 +18,7 @@ pub use paint_object::{paint_container, paint_object};
 pub use paint_process::paint_process;
 pub use theme::Theme;
 
-use egui::{Color32, Pos2, Rect, Stroke, Vec2};
+use egui::{Color32, Pos2, Rect, Vec2};
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::{DynamicState, Geometry, StatusCode};
@@ -49,42 +49,6 @@ impl Canvas {
         self.cell_size * self.camera.zoom
     }
 
-    fn paint_grid(&self, painter: &egui::Painter, clip_rect: Rect) {
-        let cell_size = self.cell_size;
-        let offset = self.camera.offset;
-        let zoom = self.camera.zoom;
-
-        // Мировые координаты (в клетках) границ области отображения.
-        // screen = (world * cell_size + offset) * zoom  =>  world = (screen / zoom - offset) / cell_size.
-        let min_w = (clip_rect.min.x / zoom - offset.x) / cell_size;
-        let max_w = (clip_rect.max.x / zoom - offset.x) / cell_size;
-        let min_h = (clip_rect.min.y / zoom - offset.y) / cell_size;
-        let max_h = (clip_rect.max.y / zoom - offset.y) / cell_size;
-
-        let mut shapes = Vec::new();
-        for x in (min_w.floor() as i32)..=(max_w.ceil() as i32) {
-            let sx = (x as f32 * cell_size + offset.x) * zoom;
-            shapes.push(egui::Shape::line_segment(
-                [
-                    Pos2::new(sx, clip_rect.min.y),
-                    Pos2::new(sx, clip_rect.max.y),
-                ],
-                Stroke::new(1.0_f32, self.theme.grid),
-            ));
-        }
-        for y in (min_h.floor() as i32)..=(max_h.ceil() as i32) {
-            let sy = (y as f32 * cell_size + offset.y) * zoom;
-            shapes.push(egui::Shape::line_segment(
-                [
-                    Pos2::new(clip_rect.min.x, sy),
-                    Pos2::new(clip_rect.max.x, sy),
-                ],
-                Stroke::new(1.0_f32, self.theme.grid),
-            ));
-        }
-        painter.extend(shapes);
-    }
-
     /// Главная функция рендера.
     pub fn paint(
         &mut self,
@@ -96,8 +60,6 @@ impl Canvas {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
         let cell_px = self.cell_px();
-
-        self.paint_grid(painter, clip_rect);
 
         // Сначала линии (под карточками и отделами)
         for edge in &geometry.edges {

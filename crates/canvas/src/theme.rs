@@ -7,7 +7,6 @@ use egui::Color32;
 pub struct Theme {
     // Цвета
     pub bg: Color32,
-    pub grid: Color32,
     pub card_bg: Color32,
     pub card_border: Color32,
     pub card_header: Color32,
@@ -48,7 +47,6 @@ impl Default for Theme {
     fn default() -> Self {
         Self {
             bg: Color32::from_rgb(18, 18, 22),
-            grid: Color32::from_rgb(35, 35, 42),
             card_bg: Color32::from_rgb(28, 28, 34),
             card_border: Color32::from_rgb(60, 60, 72),
             card_header: Color32::from_rgb(45, 45, 54),

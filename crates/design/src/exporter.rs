@@ -20,7 +20,6 @@ pub fn design_to_theme(doc: &DesignDocument, style: &ObjectStyle) -> Theme {
     let glow = style.glow.as_ref();
     Theme {
         bg: Color32::from_rgb(t.bg.r, t.bg.g, t.bg.b),
-        grid: Color32::from_rgb(t.grid.r, t.grid.g, t.grid.b),
         card_bg: Color32::from_rgb(t.card_bg.r, t.card_bg.g, t.card_bg.b),
         card_border: Color32::from_rgb(t.card_border.r, t.card_border.g, t.card_border.b),
         card_header: Color32::from_rgb(t.card_header.r, t.card_header.g, t.card_header.b),
