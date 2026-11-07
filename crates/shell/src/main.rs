@@ -15,7 +15,13 @@ use eframe::egui;
 fn load_icon() -> egui::IconData {
     let img = image::load_from_memory(include_bytes!("../assets/logo.png"))
         .expect("Failed to load logo.png");
-    let rgba = img.to_rgba8();
+    let mut rgba = img.to_rgba8();
+    for pixel in rgba.pixels_mut() {
+        let [r, g, b, _a] = pixel.0;
+        if r > 240 && g > 240 && b > 240 {
+            pixel.0 = [r, g, b, 0];
+        }
+    }
     let (width, height) = rgba.dimensions();
     egui::IconData {
         rgba: rgba.into_raw(),
