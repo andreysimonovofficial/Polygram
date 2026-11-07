@@ -3,6 +3,7 @@
 //! автосохранение последнего проекта и двусторонний редактор кода для Агента.
 
 use crate::design_format::*;
+use crate::free_canvas_input::ResizeMode;
 use eframe::egui;
 use egui::{Key, Pos2, Vec2};
 use std::collections::HashSet;
@@ -51,6 +52,10 @@ pub struct FreeCanvas {
     pub clipboard: Option<String>,
     /// Флаг: история уже сохранена для текущего перетаскивания.
     pub drag_history_saved: bool,
+    /// Режим изменения размера (какой угол/сторона захвачен).
+    pub resize_mode: Option<ResizeMode>,
+    /// Исходное состояние фигуры перед началом ресайза: (индекс, x, y, w, h).
+    pub resize_origin: Option<(usize, f32, f32, f32, f32)>,
 }
 
 impl Default for FreeCanvas {
@@ -85,6 +90,8 @@ impl Default for FreeCanvas {
             max_history: 50,
             clipboard: None,
             drag_history_saved: false,
+            resize_mode: None,
+            resize_origin: None,
         }
     }
 }

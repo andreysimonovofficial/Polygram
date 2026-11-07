@@ -7,6 +7,14 @@ use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
 use std::collections::HashSet;
 
+/// Режим изменения размера фигуры за угол или сторону.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeMode {
+    NW, N, NE,
+    W,     E,
+    SW, S, SE,
+}
+
 impl FreeCanvas {
     /// Центральная область: холст с обработкой ввода.
     pub(crate) fn canvas_panel(&mut self, ui: &mut egui::Ui) {
@@ -128,7 +136,15 @@ impl FreeCanvas {
             }
         }
 
+        if response.hovered() && self.resize_mode.is_none() {
+            match self.tool {
+                DrawTool::Select => ui.ctx().set_cursor_icon(egui::CursorIcon::Default),
+                _ => ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair),
+            }
+        }
+
         // Единый фрейм выделения вокруг всех выделенных фигур
+        let mut screen_rect: Option<Rect> = None;
         if !self.selected.is_empty() {
             let mut min_x = f32::INFINITY;
             let mut min_y = f32::INFINITY;
@@ -147,19 +163,52 @@ impl FreeCanvas {
                     Pos2::new(min_x, min_y),
                     Vec2::new(max_x - min_x, max_y - min_y),
                 );
-                let screen_rect = world_rect_to_screen(world_rect);
+                screen_rect = Some(world_rect_to_screen(world_rect));
+                let sr = screen_rect.unwrap();
                 painter.rect_stroke(
-                    screen_rect.expand(4.0),
+                    sr.expand(4.0),
                     0.0,
                     Stroke::new(1.5_f32 * zoom, Color32::from_rgb(100, 180, 255)),
                 );
-            }
-        }
 
-        if response.hovered() {
-            match self.tool {
-                DrawTool::Select => ui.ctx().set_cursor_icon(egui::CursorIcon::Default),
-                _ => ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair),
+                // Ручки изменения размера (углы и стороны выделения).
+                if !self.prototype_mode {
+                    let handle_size = 7.0;
+                    let hover_pos = ui.ctx().pointer_hover_pos();
+                    let mut hovered_handle: Option<ResizeMode> = None;
+
+                    let handles: [(ResizeMode, Pos2); 8] = [
+                        (ResizeMode::NW, Pos2::new(sr.min.x, sr.min.y)),
+                        (ResizeMode::N, Pos2::new(sr.center().x, sr.min.y)),
+                        (ResizeMode::NE, Pos2::new(sr.max.x, sr.min.y)),
+                        (ResizeMode::W, Pos2::new(sr.min.x, sr.center().y)),
+                        (ResizeMode::E, Pos2::new(sr.max.x, sr.center().y)),
+                        (ResizeMode::SW, Pos2::new(sr.min.x, sr.max.y)),
+                        (ResizeMode::S, Pos2::new(sr.center().x, sr.max.y)),
+                        (ResizeMode::SE, Pos2::new(sr.max.x, sr.max.y)),
+                    ];
+
+                    for (mode, center) in handles {
+                        let handle_rect = Rect::from_center_size(center, Vec2::splat(handle_size));
+                        let is_hovered = hover_pos.map_or(false, |p| handle_rect.contains(p));
+                        if is_hovered {
+                            hovered_handle = Some(mode);
+                        }
+                        painter.rect_filled(handle_rect, 2.0, Color32::from_rgb(100, 180, 255));
+                        painter.rect_stroke(handle_rect, 2.0, Stroke::new(1.0_f32, Color32::from_rgb(255, 255, 255)));
+                    }
+
+                    // Курсор для ручек ресайза.
+                    if let Some(mode) = hovered_handle {
+                    let cursor = match mode {
+                        ResizeMode::NW | ResizeMode::SE => egui::CursorIcon::ResizeNorthWest,
+                        ResizeMode::NE | ResizeMode::SW => egui::CursorIcon::ResizeNorthEast,
+                        ResizeMode::N | ResizeMode::S => egui::CursorIcon::ResizeRow,
+                        ResizeMode::W | ResizeMode::E => egui::CursorIcon::ResizeColumn,
+                    };
+                        ui.ctx().set_cursor_icon(cursor);
+                    }
+                }
             }
         }
 
@@ -215,30 +264,74 @@ impl FreeCanvas {
                     self.drag_shape_pos = None;
                     self.touch();
                 } else if self.tool == DrawTool::Select {
-                    let world_pos = screen_to_world(pos);
-                    let hit = self.hit_shape(world_pos);
-                    let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
-
-                    match hit {
-                        Some(idx) => {
-                            if ctrl {
-                                if self.selected.contains(&idx) {
-                                    self.selected.retain(|&s| s != idx);
-                                } else {
-                                    self.selected.push(idx);
-                                }
-                            } else {
-                                self.selected = vec![idx];
-                            }
+                    // Пропустить клик, если попали в ручку ресайза.
+                    let over_resize = if !self.selected.is_empty() && !self.prototype_mode {
+                        let mut min_x = f32::INFINITY;
+                        let mut min_y = f32::INFINITY;
+                        let mut max_x = f32::NEG_INFINITY;
+                        let mut max_y = f32::NEG_INFINITY;
+                        for &idx in &self.selected {
                             if let Some(shape) = self.doc.shapes.get(idx) {
-                                self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                                min_x = min_x.min(shape.x);
+                                min_y = min_y.min(shape.y);
+                                max_x = max_x.max(shape.x + shape.w);
+                                max_y = max_y.max(shape.y + shape.h);
                             }
                         }
-                        None => {
-                            if !ctrl {
-                                self.selected.clear();
+                        if min_x.is_finite() {
+                            let world_rect = Rect::from_min_size(
+                                Pos2::new(min_x, min_y),
+                                Vec2::new(max_x - min_x, max_y - min_y),
+                            );
+                            let sr = world_rect_to_screen(world_rect);
+                            let handle_size = 9.0;
+                            let handles: [(ResizeMode, Pos2); 8] = [
+                                (ResizeMode::NW, Pos2::new(sr.min.x, sr.min.y)),
+                                (ResizeMode::N, Pos2::new(sr.center().x, sr.min.y)),
+                                (ResizeMode::NE, Pos2::new(sr.max.x, sr.min.y)),
+                                (ResizeMode::W, Pos2::new(sr.min.x, sr.center().y)),
+                                (ResizeMode::E, Pos2::new(sr.max.x, sr.center().y)),
+                                (ResizeMode::SW, Pos2::new(sr.min.x, sr.max.y)),
+                                (ResizeMode::S, Pos2::new(sr.center().x, sr.max.y)),
+                                (ResizeMode::SE, Pos2::new(sr.max.x, sr.max.y)),
+                            ];
+                            handles.iter().any(|(_, center)| {
+                                Rect::from_center_size(*center, Vec2::splat(handle_size)).contains(pos)
+                            })
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if !over_resize {
+                        let world_pos = screen_to_world(pos);
+                        let hit = self.hit_shape(world_pos);
+                        let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+
+                        match hit {
+                            Some(idx) => {
+                                if ctrl {
+                                    if self.selected.contains(&idx) {
+                                        self.selected.retain(|&s| s != idx);
+                                    } else {
+                                        self.selected.push(idx);
+                                    }
+                                } else {
+                                    self.selected = vec![idx];
+                                }
+                                if let Some(shape) = self.doc.shapes.get(idx) {
+                                    self.drag_shape_pos =
+                                        Some((idx, Pos2::new(shape.x, shape.y)));
+                                }
                             }
-                            self.drag_shape_pos = None;
+                            None => {
+                                if !ctrl {
+                                    self.selected.clear();
+                                }
+                                self.drag_shape_pos = None;
+                            }
                         }
                     }
                     self.drag_start = response.interact_pointer_pos();
@@ -249,7 +342,68 @@ impl FreeCanvas {
         // Начало перетаскивания / рисования (только левая кнопка)
         if response.drag_started() && !middle_down {
             self.drag_start = response.interact_pointer_pos();
-            if self.tool == DrawTool::Select {
+
+            // Проверка попадания в ручку ресайза перед обычным перетаскиванием.
+            if self.tool == DrawTool::Select
+                && !self.selected.is_empty()
+                && !self.prototype_mode
+                && self.resize_mode.is_none()
+            {
+                if let Some(pos) = self.drag_start {
+                    let mut min_x = f32::INFINITY;
+                    let mut min_y = f32::INFINITY;
+                    let mut max_x = f32::NEG_INFINITY;
+                    let mut max_y = f32::NEG_INFINITY;
+                    for &idx in &self.selected {
+                        if let Some(shape) = self.doc.shapes.get(idx) {
+                            min_x = min_x.min(shape.x);
+                            min_y = min_y.min(shape.y);
+                            max_x = max_x.max(shape.x + shape.w);
+                            max_y = max_y.max(shape.y + shape.h);
+                        }
+                    }
+                    if min_x.is_finite() {
+                        let world_rect = Rect::from_min_size(
+                            Pos2::new(min_x, min_y),
+                            Vec2::new(max_x - min_x, max_y - min_y),
+                        );
+                        let sr = world_rect_to_screen(world_rect);
+                        let handle_size = 9.0;
+                        let hover_pos = pos;
+
+                        let handles: [(ResizeMode, Pos2); 8] = [
+                            (ResizeMode::NW, Pos2::new(sr.min.x, sr.min.y)),
+                            (ResizeMode::N, Pos2::new(sr.center().x, sr.min.y)),
+                            (ResizeMode::NE, Pos2::new(sr.max.x, sr.min.y)),
+                            (ResizeMode::W, Pos2::new(sr.min.x, sr.center().y)),
+                            (ResizeMode::E, Pos2::new(sr.max.x, sr.center().y)),
+                            (ResizeMode::SW, Pos2::new(sr.min.x, sr.max.y)),
+                            (ResizeMode::S, Pos2::new(sr.center().x, sr.max.y)),
+                            (ResizeMode::SE, Pos2::new(sr.max.x, sr.max.y)),
+                        ];
+
+                        for (mode, center) in handles {
+                            let handle_rect =
+                                Rect::from_center_size(center, Vec2::splat(handle_size));
+                            if handle_rect.contains(hover_pos) {
+                                self.resize_mode = Some(mode);
+                                self.drag_shape_pos = None;
+                                if let Some(&idx) = self.selected.first() {
+                                    if let Some(shape) = self.doc.shapes.get(idx) {
+                                        self.resize_origin =
+                                            Some((idx, shape.x, shape.y, shape.w, shape.h));
+                                        self.save_undo_state();
+                                        self.drag_history_saved = true;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if self.resize_mode.is_none() && self.tool == DrawTool::Select {
                 if let Some(pos) = self.drag_start {
                     let world_pos = screen_to_world(pos);
                     let hit = self.hit_shape(world_pos);
@@ -267,7 +421,8 @@ impl FreeCanvas {
                                 self.selected = vec![idx];
                             }
                             if let Some(shape) = self.doc.shapes.get(idx) {
-                                self.drag_shape_pos = Some((idx, Pos2::new(shape.x, shape.y)));
+                                self.drag_shape_pos =
+                                    Some((idx, Pos2::new(shape.x, shape.y)));
                             }
                             self.drag_history_saved = false;
                         }
@@ -279,13 +434,13 @@ impl FreeCanvas {
                         }
                     }
                 }
-            } else {
+            } else if self.resize_mode.is_none() {
                 self.drag_shape_pos = None;
             }
         }
 
         // Перетаскивание выделенных фигур
-        if response.dragged() && !middle_down && self.tool == DrawTool::Select {
+        if response.dragged() && !middle_down && self.tool == DrawTool::Select && self.resize_mode.is_none() {
             if !self.drag_history_saved {
                 self.save_undo_state();
                 self.drag_history_saved = true;
@@ -379,9 +534,79 @@ impl FreeCanvas {
             }
         }
 
+        // Изменение размера выделенных фигур за угол или сторону.
+        if response.dragged() && !middle_down && self.resize_mode.is_some() {
+            if let (Some(mode), Some((_idx, orig_x, orig_y, orig_w, orig_h))) =
+                (self.resize_mode, self.resize_origin)
+            {
+                if let Some(pos) = response.interact_pointer_pos() {
+                    let world_cursor = screen_to_world(pos);
+                    let drag_world_start = screen_to_world(self.drag_start.unwrap_or(pos));
+                    let dx = world_cursor.x - drag_world_start.x;
+                    let dy = world_cursor.y - drag_world_start.y;
+
+                    for &idx in &self.selected {
+                        if let Some(shape) = self.doc.shapes.get_mut(idx) {
+                            let mut nx = shape.x;
+                            let mut ny = shape.y;
+                            let mut nw = shape.w;
+                            let mut nh = shape.h;
+
+                            match mode {
+                                ResizeMode::SE => {
+                                    nw = (orig_w + dx).max(1.0);
+                                    nh = (orig_h + dy).max(1.0);
+                                }
+                                ResizeMode::SW => {
+                                    nw = (orig_w - dx).max(1.0);
+                                    nx = orig_x + (orig_w - nw);
+                                    nh = (orig_h + dy).max(1.0);
+                                }
+                                ResizeMode::NE => {
+                                    nw = (orig_w + dx).max(1.0);
+                                    nh = (orig_h - dy).max(1.0);
+                                    ny = orig_y + (orig_h - nh);
+                                }
+                                ResizeMode::NW => {
+                                    nw = (orig_w - dx).max(1.0);
+                                    nx = orig_x + (orig_w - nw);
+                                    nh = (orig_h - dy).max(1.0);
+                                    ny = orig_y + (orig_h - nh);
+                                }
+                                ResizeMode::E => {
+                                    nw = (orig_w + dx).max(1.0);
+                                }
+                                ResizeMode::W => {
+                                    nw = (orig_w - dx).max(1.0);
+                                    nx = orig_x + (orig_w - nw);
+                                }
+                                ResizeMode::S => {
+                                    nh = (orig_h + dy).max(1.0);
+                                }
+                                ResizeMode::N => {
+                                    nh = (orig_h - dy).max(1.0);
+                                    ny = orig_y + (orig_h - nh);
+                                }
+                            }
+
+                            shape.x = nx;
+                            shape.y = ny;
+                            shape.w = nw;
+                            shape.h = nh;
+                        }
+                    }
+                    self.touch();
+                }
+            }
+        }
+
         // Завершение перетаскивания — создать новую фигуру или выделить по box
         if response.drag_stopped() && !middle_down {
-            if self.tool == DrawTool::Select && self.drag_shape_pos.is_none() {
+            let was_resizing = self.resize_mode.is_some();
+            self.resize_mode = None;
+            self.resize_origin = None;
+
+            if !was_resizing && self.tool == DrawTool::Select && self.drag_shape_pos.is_none() {
                 // Selection box: выделить все фигуры внутри резинового прямоугольника
                 if let (Some(start), Some(end)) = (self.drag_start, response.interact_pointer_pos()) {
                     let world_start = screen_to_world(start);
