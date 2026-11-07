@@ -182,7 +182,7 @@ pub fn handle_canvas_interaction(
     if canvas_response.hovered() {
         // Зум через колёсико мыши (как в Design Tool): приближение вверх, к курсору.
         let scroll = ctx.input(|i| i.raw_scroll_delta);
-        if scroll.y.abs() > 0.001 {
+        if scroll.y.abs() > 0.01 {
             if let Some(cursor) = ctx.pointer_hover_pos() {
                 if canvas_response.rect.contains(cursor) {
                     let cell_size = app.canvas.cell_size;
@@ -191,7 +191,7 @@ pub fn handle_canvas_interaction(
                     // Мировая точка (в клетках) под курсором до зума.
                     let world_x = (cursor.x / zoom - offset.x) / cell_size;
                     let world_y = (cursor.y / zoom - offset.y) / cell_size;
-                    let factor = (scroll.y * 0.01).exp();
+                    let factor = (-scroll.y * 0.1).exp();
                     let new_zoom = (zoom * factor).clamp(0.1, 10.0);
                     if new_zoom != zoom {
                         app.canvas.camera.offset.x = cursor.x / new_zoom - world_x * cell_size;
