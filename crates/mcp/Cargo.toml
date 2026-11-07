@@ -1,0 +1,14 @@
+[package]
+name = "polygram-mcp"
+description = "MCP сервер Polygram (JSON-RPC 2.0 над stdio). Локальное подключение для Claude Desktop, Open WebUI и др."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "polygram-mcp"
+path = "src/main.rs"
+
+[dependencies]
+polygram-api = { path = "../api" }
+tokio = { version = "1", features = ["full"] }
