@@ -207,8 +207,14 @@ pub fn paint_process(
     let out_count = object.outputs.len();
     let total_h = rect_px.height();
     let header_h_px = total_h * 0.10;
-    let req_h_px = total_h * 0.45;
-    let out_h_px = total_h * 0.45;
+    let pad = 8.0 * zoom;
+    let container_rect = Rect::from_min_size(
+        Pos2::new(rect_px.min.x + pad, rect_px.min.y + header_h_px),
+        Vec2::new(rect_px.width() - 2.0 * pad, total_h - header_h_px - pad),
+    );
+    let container_h = container_rect.height();
+    let req_h_px = container_h * 0.5;
+    let out_h_px = container_h * 0.5;
 
     // --- Внешняя рамка объекта ---
     let border_color = if is_hovered { theme.text } else { theme.card_border };
@@ -249,8 +255,8 @@ pub fn paint_process(
 
     // =============== КОНТЕЙНЕР: ЗАПРОС ===============
     let req_rect = Rect::from_min_size(
-        rect_px.min + Vec2::new(0.0, header_h_px),
-        Vec2::new(rect_px.width(), req_h_px),
+        container_rect.min,
+        Vec2::new(container_rect.width(), req_h_px),
     );
     // Граница контейнера
     let req_border = if is_hovered { theme.text } else { theme.card_border };
@@ -298,8 +304,8 @@ pub fn paint_process(
 
     // =============== КОНТЕЙНЕР: ВЫХОД ===============
     let out_rect = Rect::from_min_size(
-        rect_px.min + Vec2::new(0.0, header_h_px + req_h_px),
-        Vec2::new(rect_px.width(), out_h_px),
+        Pos2::new(container_rect.min.x, container_rect.min.y + req_h_px),
+        Vec2::new(container_rect.width(), out_h_px),
     );
     let out_border = if is_hovered { theme.text } else { theme.card_border };
     painter.rect_stroke(
