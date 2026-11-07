@@ -1,6 +1,6 @@
 //! Панель свойств выделенной фигуры (справа).
 
-use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, TextAlign, TextAlignV, ChildReactMode};
+use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, StrokePosition, TextAlign, TextAlignV, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{Color32, DragValue};
 
@@ -153,7 +153,28 @@ impl FreeCanvas {
                     .range(0.0..=20.0),
             )
             .changed();
-
+        ui.horizontal(|ui| {
+            ui.label("Позиция обводки:");
+            let mut position = shape.stroke_position;
+            egui::ComboBox::from_label("")
+                .selected_text(match position {
+                    StrokePosition::Center => "По центру",
+                    StrokePosition::Inside => "Внутри",
+                    StrokePosition::Outside => "Снаружи",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut position, StrokePosition::Center, "По центру").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut position, StrokePosition::Inside, "Внутри").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut position, StrokePosition::Outside, "Снаружи").changed() {
+                        changed = true;
+                    }
+                });
+            shape.stroke_position = position;
+        });
         ui.separator();
         ui.label("Скругление углов:");
         let mut all = shape.corner_radius;

@@ -1,6 +1,6 @@
 //! Отрисовка фигур, проверка попадания и удаление выделенного.
 
-use crate::design_format::{DrawTool, FreeShape, ShapeState, TextAlign, TextAlignV};
+use crate::design_format::{DrawTool, FreeShape, ShapeState, StrokePosition, TextAlign, TextAlignV};
 use crate::free_canvas::FreeCanvas;
 use egui::{Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use egui::Color32;
@@ -55,7 +55,8 @@ impl FreeCanvas {
         let (fill, stroke_color, stroke_width) = Self::resolve_style(shape, state);
         // Толщина обводки масштабируется с зумом, чтобы при приближении она была толще,
         // как на снимке экрана.
-        let stroke = Stroke::new(stroke_width.max(0.0) * zoom, stroke_color);
+        let stroke_width = stroke_width.max(0.0) * zoom;
+        let stroke = Stroke::new(stroke_width, stroke_color);
 
         let rounding = if shape.corner_tl == shape.corner_tr
             && shape.corner_tr == shape.corner_bl
@@ -76,15 +77,17 @@ impl FreeCanvas {
             DrawTool::Rect | DrawTool::Text => {
                 painter.rect_filled(rect, rounding, fill);
                 if stroke_width > 0.0 {
-                    painter.rect_stroke(rect, rounding, stroke);
+                    let stroke_rect = Self::stroke_rect(rect, stroke_width, shape.stroke_position);
+                    painter.rect_stroke(stroke_rect, rounding, stroke);
                 }
             }
             DrawTool::Ellipse => {
                 let center = rect.center();
-                let radii = Vec2::new(rect.width() / 2.0, rect.height() / 2.0);
-                painter.add(Shape::ellipse_filled(center, radii, fill));
+                let fill_radii = Vec2::new(rect.width() / 2.0, rect.height() / 2.0);
+                painter.add(Shape::ellipse_filled(center, fill_radii, fill));
                 if stroke_width > 0.0 {
-                    painter.add(Shape::ellipse_stroke(center, radii, stroke));
+                    let stroke_radii = Self::stroke_radii(fill_radii, stroke_width, shape.stroke_position);
+                    painter.add(Shape::ellipse_stroke(center, stroke_radii, stroke));
                 }
             }
             DrawTool::Line => {
@@ -156,6 +159,27 @@ impl FreeCanvas {
                 let width = s.and_then(|st| st.stroke_width).unwrap_or(base_width);
                 (fill, stroke, width)
             }
+        }
+    }
+
+    /// Скорректировать прямоугольник под позицию обводки, чтобы обводка лежала
+    /// полностью внутри/снаружи или по центру границы фигуры.
+    fn stroke_rect(rect: Rect, stroke_width: f32, position: StrokePosition) -> Rect {
+        let half = stroke_width / 2.0;
+        match position {
+            StrokePosition::Center => rect,
+            StrokePosition::Inside => rect.shrink(half.min(rect.width().min(rect.height()) / 2.0)),
+            StrokePosition::Outside => rect.expand(half),
+        }
+    }
+
+    /// Скорректировать радиусы эллипса под позицию обводки.
+    fn stroke_radii(radii: Vec2, stroke_width: f32, position: StrokePosition) -> Vec2 {
+        let half = stroke_width / 2.0;
+        match position {
+            StrokePosition::Center => radii,
+            StrokePosition::Inside => radii - Vec2::splat(half.min(radii.x.min(radii.y))),
+            StrokePosition::Outside => radii + Vec2::splat(half),
         }
     }
 }

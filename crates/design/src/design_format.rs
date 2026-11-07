@@ -288,6 +288,23 @@ pub struct Glow {
     pub size: f32,
 }
 
+/// Позиция обводки фигуры относительно её границы.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StrokePosition {
+    /// Обводка по центру границы (половина ширины внутри, половина снаружи).
+    Center,
+    /// Обводка полностью внутри границы фигуры.
+    Inside,
+    /// Обводка полностью снаружи границы фигуры.
+    Outside,
+}
+
+impl Default for StrokePosition {
+    fn default() -> Self {
+        StrokePosition::Center
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -354,6 +371,9 @@ pub struct FreeShape {
     pub fill: Option<Rgba>,
     pub stroke: Rgba,
     pub stroke_width: f32,
+    /// Позиция обводки относительно границы фигуры: внутри/снаружи/по центру.
+    #[serde(default)]
+    pub stroke_position: StrokePosition,
     pub corner_radius: f32,
     pub corner_tl: f32,
     pub corner_tr: f32,
@@ -420,6 +440,7 @@ impl Default for FreeShape {
             fill: Some(Rgba { r: 0, g: 0, b: 0, a: 255 }),
             stroke: Rgba { r: 255, g: 255, b: 255, a: 255 },
             stroke_width: 1.0,
+            stroke_position: StrokePosition::Center,
             corner_radius: 0.0,
             corner_tl: 0.0,
             corner_tr: 0.0,
