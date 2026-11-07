@@ -67,8 +67,12 @@ impl DesignApp {
             for weight in weights {
                 let key = font_key(family, weight);
                 let mut loaded = false;
-                // Сначала пробуем встроенный/папочный шрифт рядом с приложением.
-                let local_path = format!("fonts/{}.ttf", key);
+                // Сначала пробуем шрифт рядом с исполняемым файлом (папка fonts/).
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                    .unwrap_or_default();
+                let local_path = exe_dir.join(format!("fonts/{}.ttf", key));
                 if let Ok(data) = std::fs::read(&local_path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                     fonts
@@ -77,6 +81,19 @@ impl DesignApp {
                         .or_default()
                         .push(key.clone());
                     loaded = true;
+                }
+                // Затем относительно текущей рабочей директории (для разработки через cargo run).
+                if !loaded {
+                    let local_path = format!("fonts/{}.ttf", key);
+                    if let Ok(data) = std::fs::read(&local_path) {
+                        fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                        fonts
+                            .families
+                            .entry(egui::FontFamily::Name(key.clone().into()))
+                            .or_default()
+                            .push(key.clone());
+                        loaded = true;
+                    }
                 }
                 // Fallback на системный шрифт Windows.
                 if !loaded {
@@ -107,15 +124,26 @@ impl DesignApp {
             }
         }
 
-        // Гарантируем, что хотя бы один шрифт зарегистрирован, иначе egui паникует.
-        if fonts.font_data.is_empty() {
-            if let Ok(data) = std::fs::read("C:/Windows/Fonts/arial.ttf") {
-                fonts.font_data.insert("arial".to_owned(), FontData::from_owned(data));
-                fonts
-                    .families
-                    .entry(egui::FontFamily::Name("arial".into()))
-                    .or_default()
-                    .push("arial".to_owned());
+        // Гарантируем, что для каждого именованного шрифта есть хотя бы одно
+        // начертание, иначе egui паникует при отрисовке текста.
+        let named_families = [
+            egui::FontFamily::Name("Arial".into()),
+            egui::FontFamily::Name("Inter".into()),
+            egui::FontFamily::Name("Segoe UI".into()),
+        ];
+        for name in named_families {
+            if fonts.families.get(&name).map_or(true, |keys| keys.is_empty()) {
+                // Берём любой уже зарегистрированный ключ (приоритет — arial-regular).
+                let fallback_key = font_key(FontFamily::Arial, FontWeight::Regular);
+                if fonts.font_data.contains_key(&fallback_key) {
+                    fonts.families.entry(name).or_default().push(fallback_key);
+                } else if let Some(first_key) = fonts.font_data.keys().next() {
+                    fonts
+                        .families
+                        .entry(name)
+                        .or_default()
+                        .push(first_key.clone());
+                }
             }
         }
 
