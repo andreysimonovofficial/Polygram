@@ -190,13 +190,13 @@ pub fn handle_canvas_interaction(
                     let zoom = app.canvas.camera.zoom.clamp(0.1, 10.0);
                     let offset = app.canvas.camera.offset;
                     // Мировая точка (в клетках) под курсором до зума.
-                    let world_x = (cursor.x - offset.x) / zoom / cell_size;
-                    let world_y = (cursor.y - offset.y) / zoom / cell_size;
+                    let world_x = (cursor.x / zoom - offset.x) / cell_size;
+                    let world_y = (cursor.y / zoom - offset.y) / cell_size;
                     let factor = (scroll.y * 0.01).exp();
                     let new_zoom = (zoom * factor).clamp(0.1, 10.0);
                     if new_zoom != zoom {
-                        app.canvas.camera.offset.x = cursor.x - world_x * cell_size * new_zoom;
-                        app.canvas.camera.offset.y = cursor.y - world_y * cell_size * new_zoom;
+                        app.canvas.camera.offset.x = cursor.x / new_zoom - world_x * cell_size;
+                        app.canvas.camera.offset.y = cursor.y / new_zoom - world_y * cell_size;
                         app.canvas.camera.zoom = new_zoom;
                         ctx.request_repaint();
                     }
