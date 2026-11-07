@@ -225,16 +225,16 @@ pub fn paint_process(
     } else {
         theme.object_border_width * zoom
     };
-    painter.rect_filled(rect_px, theme.object_corner_radius * zoom, theme.card_bg);
+    painter.rect_filled(rect_px, 0.0, theme.card_bg);
     painter.rect_stroke(
         rect_px,
-        theme.object_corner_radius * zoom,
+        0.0,
         Stroke::new(border_width, border_color),
     );
 
     // --- Заголовок объекта (имя + #ID) ---
     let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h_px));
-    painter.rect_filled(header_rect, 0.0, theme.card_header);
+    painter.rect_filled(header_rect, 0.0, theme.card_bg);
 
     let title = format!("{} '{}'", object.kind.label_ru(), object.name);
     let name_color = if is_hovered { theme.text } else { theme.text_muted };
@@ -264,7 +264,7 @@ pub fn paint_process(
     let req_border = if is_hovered { theme.text } else { theme.card_border };
     painter.rect_stroke(
         req_rect,
-        theme.object_corner_radius * zoom * 0.5,
+        0.0,
         Stroke::new(theme.object_border_width * zoom, req_border),
     );
 
@@ -291,7 +291,7 @@ pub fn paint_process(
             Vec2::new(req_rect.width(), row_h_req),
         );
         if is_hovered {
-            painter.rect_filled(row_rect, 0.0, theme.card_header);
+            painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
         paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
     }
@@ -312,7 +312,7 @@ pub fn paint_process(
     let out_border = if is_hovered { theme.text } else { theme.card_border };
     painter.rect_stroke(
         out_rect,
-        theme.object_corner_radius * zoom * 0.5,
+        0.0,
         Stroke::new(theme.object_border_width * zoom, out_border),
     );
 
@@ -337,7 +337,7 @@ pub fn paint_process(
             Vec2::new(out_rect.width(), row_h_out),
         );
         if is_hovered {
-            painter.rect_filled(row_rect, 0.0, theme.card_header);
+            painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
         paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
     }
