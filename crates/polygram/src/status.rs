@@ -2,7 +2,7 @@ use crate::app::PolygramApp;
 
 pub fn status_bar(app: &PolygramApp, ui: &mut egui::Ui) {
     ui.separator();
-    let published = app.runtime.handle().latest();
+    let published = app.runtime.latest();
     let g = &published.geometry;
     ui.label(format!(
         "Ревизия {} | Объектов: {} | Связей: {} | {}",

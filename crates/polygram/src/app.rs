@@ -1,9 +1,13 @@
 use eframe::egui;
+use polygram_api::ApiService;
 use polygram_canvas::Canvas;
-use polygram_core::{runtime::EngineRuntime, Command, Direction, MetricKind};
+use polygram_core::{runtime::{EngineHandle, EngineRuntime}, Command, Direction, MetricKind};
 
 pub struct PolygramApp {
-    pub runtime: EngineRuntime,
+    pub runtime: EngineHandle,
+    /// Владение потоком движка (только для `new()`; в `new_with_api` состояние делится через API).
+    #[allow(dead_code)]
+    pub _engine: Option<EngineRuntime>,
     pub canvas: Canvas,
     pub show_command_palette: bool,
     pub command_input: String,
@@ -42,9 +46,11 @@ impl PolygramApp {
     pub fn new() -> Self {
         let engine = polygram_core::Engine::new();
         let runtime = EngineRuntime::spawn(engine);
+        let handle = runtime.handle();
         let canvas = Canvas::new();
         Self {
-            runtime,
+            runtime: handle,
+            _engine: Some(runtime),
             canvas,
             show_command_palette: false,
             command_input: String::new(),
@@ -69,9 +75,41 @@ impl PolygramApp {
         }
     }
 
+    /// Создать приложение, разделяя состояние с уже существующим ApiService
+    /// (и его MCP-потоком).GUI и MCP делят один EngineHandle.
+    pub fn new_with_api(api: ApiService) -> Self {
+        let runtime = api.handle();
+        let canvas = Canvas::new();
+        Self {
+            runtime,
+            _engine: None,
+            canvas,
+            show_command_palette: false,
+            command_input: String::new(),
+            last_status: "Готов (MCP подключён)".to_owned(),
+            right_click: None,
+            command_log: Vec::new(),
+            rename_target: None,
+            rename_input: String::new(),
+            edit_target: None,
+            edit_input: String::new(),
+            add_metric_target: None,
+            add_metric_name: String::new(),
+            add_metric_kind: MetricKind::Number,
+            add_metric_value: String::new(),
+            add_metric_unit: String::new(),
+            container_menu_target: None,
+            container_menu_edits: Vec::new(),
+            drag_object: None,
+            drag_start_screen: None,
+            drag_start_cell: None,
+            warmup_frames: 120,
+        }
+    }
+
     pub fn apply_cmd(&mut self, cmd: Command) {
         let cmd_str = serde_json::to_string(&cmd).unwrap_or_default();
-        match self.runtime.handle().apply(cmd) {
+        match self.runtime.apply(cmd) {
             Ok(applied) => {
                 self.last_status = format!("Ревизия {}", applied.rev);
                 self.command_log.push(CommandLogEntry {

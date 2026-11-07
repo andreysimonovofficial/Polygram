@@ -16,3 +16,6 @@ image = "0.25"
 serde_json = "1"
 polygram-core = { path = "../core" }
 polygram-canvas = { path = "../canvas" }
+polygram-api = { path = "../api" }
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"

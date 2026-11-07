@@ -292,7 +292,7 @@ pub fn handle_canvas_interaction(
                         .find(|o| o.id == *object_id)
                         .map(|o| (o.rect.x, o.rect.y));
                     if current_cell != Some((target[0], target[1])) {
-                        let _ = app.runtime.handle().apply(Command::MoveObject {
+                        let _ = app.runtime.apply(Command::MoveObject {
                             object: object_id.clone(),
                             at: target,
                         });

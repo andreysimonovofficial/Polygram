@@ -11,6 +11,9 @@ mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
+use polygram_api::{http::router, mcp::McpServer, ApiService};
+use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 fn load_icon() -> egui::IconData {
@@ -200,7 +203,7 @@ fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
 impl eframe::App for PolygramApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut close_menu = false;
-        let published = self.runtime.handle().latest();
+        let published = self.runtime.latest();
 
         menu::top_menu(self, ctx);
 
@@ -232,6 +235,39 @@ impl eframe::App for PolygramApp {
 }
 
 fn main() -> eframe::Result {
+    let api = Arc::new(ApiService::default());
+
+    // MCP-сервер (stdio) в отдельном потоке — для Claude Desktop, Open WebUI и др.
+    let mcp_api = Arc::clone(&api);
+    thread::spawn(move || {
+        McpServer::new((*mcp_api).clone()).run();
+    });
+
+    // HTTP-API на 8080 — для удобной проверки и интеграции (делит состояние с GUI и MCP).
+    let http_api = Arc::clone(&api);
+    thread::spawn(move || {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            rt.block_on(async {
+                let app = router(http_api);
+                let listener = match tokio::net::TcpListener::bind("0.0.0.0:8080").await {
+                    Ok(l) => l,
+                    Err(e) => {
+                        let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("bind error: {e}"));
+                        return;
+                    }
+                };
+                let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_started.txt", "HTTP server started on 8080");
+                if let Err(e) = axum::serve(listener, app).await {
+                    let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("serve error: {e}"));
+                }
+            });
+        }));
+        if let Err(e) = result {
+            let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("panic: {e:?}"));
+        }
+    });
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -242,9 +278,9 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Polygram",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
-            Ok(Box::new(PolygramApp::new()))
+            Ok(Box::new(PolygramApp::new_with_api((*api).clone())))
         }),
     )
 }
