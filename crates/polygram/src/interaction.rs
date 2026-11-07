@@ -1,6 +1,6 @@
 use crate::app::PolygramApp;
 use polygram_canvas::{object_at, title_text_rect};
-use polygram_core::types::{Direction, NodeKind};
+use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, NodeKind};
 use polygram_core::Command;
 use egui::{Key, Pos2};
 
@@ -264,7 +264,7 @@ pub fn handle_canvas_interaction(
                         .geometry
                         .objects
                         .iter()
-                        .find(|o| o.id == object_id);
+                        .find(|o| o.id == *object_id);
                     if let Some(o) = object {
                         app.drag_object = Some(object_id.to_owned());
                         app.drag_start_screen = Some(pos);
@@ -332,6 +332,53 @@ pub fn handle_canvas_interaction(
 
     app.canvas
         .paint(ui, &published.geometry, &published.dynamic, hovered_object, app.edit_target.as_deref());
+
+    // Добавить показатель по клику на строку "+ Добавить показатель".
+    if let Some(pos) = canvas_response.interact_pointer_pos() {
+        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        for (object_id, dir, rect) in &app.canvas.add_metric_hotspots {
+            if rect.contains(pos) && canvas_response.clicked() && !is_double {
+                let n = match dir {
+                    Direction::Request => published
+                        .geometry
+                        .objects
+                        .iter()
+                        .find(|o| o.id == *object_id)
+                        .map(|o| o.requests.len())
+                        .unwrap_or(0),
+                    Direction::Output => published
+                        .geometry
+                        .objects
+                        .iter()
+                        .find(|o| o.id == *object_id)
+                        .map(|o| o.outputs.len())
+                        .unwrap_or(0),
+                };
+                if n >= MAX_UI_METRICS_PER_SIDE {
+                    continue;
+                }
+                let name = match dir {
+                    Direction::Request => format!("request{}", n + 1),
+                    Direction::Output => format!("out{}", n + 1),
+                };
+                app.apply_cmd(Command::AddMetricEntry {
+                    object: object_id.clone(),
+                    dir: *dir,
+                    id: None,
+                    metric_def: "по умолчанию".into(),
+                    name,
+                    value: 0.0,
+                    required: 0.0,
+                    max: None,
+                    fact: 0.0,
+                });
+                app.drag_object = None;
+                app.drag_start_screen = None;
+                app.drag_start_cell = None;
+                break;
+            }
+        }
+    }
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {

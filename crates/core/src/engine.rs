@@ -40,7 +40,15 @@ impl Default for Engine {
 
 impl Engine {
     pub fn new() -> Self {
-        Self::with_capacity(0, 0)
+        let mut engine = Self::with_capacity(0, 0);
+        let _ = engine.hier.add_metric_def(
+            Some("по умолчанию".to_owned()),
+            "по умолчанию".to_owned(),
+            MetricKind::Number,
+            "ед.".to_owned(),
+            None,
+        );
+        engine
     }
 
     pub fn with_capacity(objects: usize, edges: usize) -> Self {

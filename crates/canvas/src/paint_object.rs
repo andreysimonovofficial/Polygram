@@ -1,6 +1,6 @@
 use crate::theme::Theme;
 use egui::{Painter, Rect, Stroke, Vec2};
-use polygram_core::types::Direction;
+use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE};
 use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 
 pub fn paint_object(
@@ -116,14 +116,12 @@ pub fn paint_container(
     zoom: f32,
     dir: Direction,
     is_obj_hovered: bool,
-) {
+) -> Option<Rect> {
     let entries = match dir {
         Direction::Request => &object.requests,
         Direction::Output => &object.outputs,
     };
 
-    let n_entries = entries.len().max(1);
-    let entry_h = rect.height() / n_entries as f32;
     let header_h = cell_px * theme.container_header_height_cells;
 
     // Статус контейнера (худший среди записей)
@@ -235,25 +233,23 @@ pub fn paint_container(
         btn_text_actual,
     );
 
-    // Записи
+    // Записи и строка добавления.
+    let show_add = entries.len() < MAX_UI_METRICS_PER_SIDE;
+    let n_rows = entries.len() + usize::from(show_add);
+    let n_rows = n_rows.max(1);
+    let entry_h = (rect.height() - header_h) / n_rows as f32;
+
+    let mut add_rect: Option<Rect> = None;
+
     if entries.is_empty() {
-        let add_text = "+ Добавить показатель";
-        let add_color = if is_obj_hovered {
-            theme.text
-        } else {
-            theme.text_muted
-        };
-        let add_rect = Rect::from_min_size(
-            rect.min + Vec2::new(16.0 * zoom, header_h),
-            Vec2::new(rect.width() - 32.0 * zoom, rect.height() - header_h),
-        );
-        painter.text(
-            add_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            add_text,
-            egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
-            add_color,
-        );
+        if show_add {
+            let r = Rect::from_min_size(
+                rect.min + Vec2::new(0.0, header_h),
+                Vec2::new(rect.width(), entry_h),
+            );
+            paint_add_row(painter, r, zoom, is_obj_hovered, theme);
+            add_rect = Some(r);
+        }
     } else {
         for (k, entry) in entries.iter().enumerate() {
             let entry_y = rect.min.y + header_h + (k as f32 + 0.5) * entry_h;
@@ -298,5 +294,38 @@ pub fn paint_container(
                 name_color,
             );
         }
+        if show_add {
+            let r = Rect::from_min_size(
+                rect.min + Vec2::new(0.0, header_h + entries.len() as f32 * entry_h),
+                Vec2::new(rect.width(), entry_h),
+            );
+            paint_add_row(painter, r, zoom, is_obj_hovered, theme);
+            add_rect = Some(r);
+        }
     }
+
+    add_rect
+}
+
+/// Строка "+ Добавить показатель" внутри контейнера.
+fn paint_add_row(
+    painter: &Painter,
+    rect: Rect,
+    zoom: f32,
+    is_hovered: bool,
+    theme: &Theme,
+) {
+    let add_text = "+ Добавить показатель";
+    let add_color = if is_hovered {
+        theme.text
+    } else {
+        theme.text_muted
+    };
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        add_text,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        add_color,
+    );
 }

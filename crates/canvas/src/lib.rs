@@ -29,6 +29,8 @@ pub struct Canvas {
     pub theme: Theme,
     pub camera: Camera,
     pub cell_size: f32,
+    /// Горячие зоны добавления показателя (id объекта, направление, экранный rect).
+    pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
 }
 
 impl Default for Canvas {
@@ -43,6 +45,7 @@ impl Canvas {
             theme: Theme::default(),
             camera: Camera::new(),
             cell_size: 16.0,
+            add_metric_hotspots: Vec::new(),
         }
     }
 
@@ -62,6 +65,7 @@ impl Canvas {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
         let cell_px = self.cell_px();
+        self.add_metric_hotspots.clear();
 
         // Сначала линии (под карточками и отделами)
         for edge in &geometry.edges {
@@ -117,7 +121,7 @@ impl Canvas {
                 continue;
             }
             if object.kind == NodeKind::Process {
-                paint_process(
+                let hotspots = paint_process(
                     painter,
                     object,
                     dynamic,
@@ -128,6 +132,7 @@ impl Canvas {
                     is_hovered,
                     edit_target,
                 );
+                self.add_metric_hotspots.extend(hotspots);
             } else {
                 paint_object(
                     painter,

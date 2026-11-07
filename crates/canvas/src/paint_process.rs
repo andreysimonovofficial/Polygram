@@ -11,6 +11,8 @@
 
 use crate::theme::Theme;
 use egui::{Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2};
+use crate::paint_container;
+use polygram_core::types::Direction;
 use polygram_core::{DynamicState, ObjectGeom};
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -422,17 +424,18 @@ fn paint_layout_shape(
 }
 
 /// Высокопроизводительный рендер объекта "Процесс" по макету design.json.
+/// Возвращает «горячие зоны» добавления показателя (контейнер, направление, экранный rect).
 pub fn paint_process(
     painter: &Painter,
     object: &ObjectGeom,
-    _dynamic: &DynamicState,
-    _theme: &Theme,
+    dynamic: &DynamicState,
+    theme: &Theme,
     rect_px: Rect,
-    _cell_px: f32,
+    cell_px: f32,
     zoom: f32,
-    _is_hovered: bool,
+    is_hovered: bool,
     edit_target: Option<&str>,
-) {
+) -> Vec<(String, Direction, Rect)> {
     let template = get_template();
 
     // Масштаб макета → экран (линейный, по обеим осям независимо).
@@ -440,8 +443,15 @@ pub fn paint_process(
     let scale_y = rect_px.height() / DESIGN_H;
     let offset = rect_px.min;
 
+    // Фигуры шаблона контейнера показателей рисуем динамически через paint_container,
+    // поэтому статические заголовки/кнопки из design.json пропускаем.
+    let skipped = ["ui-6", "ui-9", "ui-12", "ui-15"];
+
     // Отрисовать все фигуры шаблона.
     for shape in &template.doc.shapes {
+        if skipped.contains(&shape.id.as_str()) {
+            continue;
+        }
         // Во время инлайн-режима не рисуем статический текст названия —
         // TextEdit нарисуется поверх точно на этом же месте.
         if edit_target == Some(object.id.as_str()) && shape.id == "ui-1" {
@@ -465,7 +475,44 @@ pub fn paint_process(
         paint_layout_shape(painter, shape, screen_rect, zoom, text);
     }
 
-    // TODO: hit-тест зоны доступны в template.hit_zones — будут использованы
-    // после того, как будет определено, за что каждая кнопка отвечает.
-    let _ = &template.hit_zones;
+    // Динамические контейнера показателей (Запрос / Выход).
+    let header_h = cell_px * theme.object_header_height_cells;
+    let container_h = (rect_px.height() - header_h) / 2.0;
+    let req_rect = Rect::from_min_size(
+        rect_px.min + Vec2::new(0.0, header_h),
+        Vec2::new(rect_px.width(), container_h),
+    );
+    let out_rect = Rect::from_min_size(
+        rect_px.min + Vec2::new(0.0, header_h + container_h),
+        Vec2::new(rect_px.width(), container_h),
+    );
+
+    let mut hotspots: Vec<(String, Direction, Rect)> = Vec::new();
+    if let Some(r) = paint_container(
+        painter,
+        object,
+        dynamic,
+        theme,
+        req_rect,
+        cell_px,
+        zoom,
+        Direction::Request,
+        is_hovered,
+    ) {
+        hotspots.push((object.id.clone(), Direction::Request, r));
+    }
+    if let Some(r) = paint_container(
+        painter,
+        object,
+        dynamic,
+        theme,
+        out_rect,
+        cell_px,
+        zoom,
+        Direction::Output,
+        is_hovered,
+    ) {
+        hotspots.push((object.id.clone(), Direction::Output, r));
+    }
+    hotspots
 }
