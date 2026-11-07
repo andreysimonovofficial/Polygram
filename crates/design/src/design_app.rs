@@ -63,29 +63,23 @@ impl DesignApp {
             FontWeight::Black,
         ];
 
+        // Сначала обеспечиваем наличие хотя бы одного шрифта (абсолютный fallback).
+        let fallback_key = Self::load_any_system_font(&mut fonts);
+
+        // Для каждой комбинации семейство + насыщенность создаём запись в
+        // fonts.families. Если конкретный файл не найден, используем fallback_key.
         for family in families {
             for weight in weights {
                 let key = font_key(family, weight);
                 let mut loaded = false;
-                // Сначала пробуем шрифт рядом с исполняемым файлом (папка fonts/).
-                let exe_dir = std::env::current_exe()
+
+                // 1. Папка fonts/ рядом с исполняемым файлом.
+                if let Some(dir) = std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                    .unwrap_or_default();
-                let local_path = exe_dir.join(format!("fonts/{}.ttf", key));
-                if let Ok(data) = std::fs::read(&local_path) {
-                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Name(key.clone().into()))
-                        .or_default()
-                        .push(key.clone());
-                    loaded = true;
-                }
-                // Затем относительно текущей рабочей директории (для разработки через cargo run).
-                if !loaded {
-                    let local_path = format!("fonts/{}.ttf", key);
-                    if let Ok(data) = std::fs::read(&local_path) {
+                {
+                    let path = dir.join(format!("fonts/{}.ttf", key));
+                    if let Ok(data) = std::fs::read(&path) {
                         fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                         fonts
                             .families
@@ -95,7 +89,20 @@ impl DesignApp {
                         loaded = true;
                     }
                 }
-                // Fallback на системный шрифт Windows.
+                // 2. Относительно текущей рабочей директории (для cargo run).
+                if !loaded {
+                    let path = format!("fonts/{}.ttf", key);
+                    if let Ok(data) = std::fs::read(&path) {
+                        fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                        fonts
+                            .families
+                            .entry(egui::FontFamily::Name(key.clone().into()))
+                            .or_default()
+                            .push(key.clone());
+                        loaded = true;
+                    }
+                }
+                // 3. Системный шрифт Windows для этой комбинации.
                 if !loaded {
                     for path in Self::font_file_candidates(family, weight) {
                         if let Ok(data) = std::fs::read(&path) {
@@ -110,44 +117,42 @@ impl DesignApp {
                         }
                     }
                 }
-                // Если и системного нет — используем регулярное начертание того же семейства.
+                // 4. Fallback на любой доступный шрифт, чтобы egui не паниковал.
                 if !loaded {
-                    let regular_key = font_key(family, FontWeight::Regular);
-                    if regular_key != key && fonts.font_data.contains_key(&regular_key) {
+                    if let Some(fb) = &fallback_key {
                         fonts
                             .families
                             .entry(egui::FontFamily::Name(key.clone().into()))
                             .or_default()
-                            .push(regular_key.clone());
+                            .push(fb.clone());
                     }
                 }
             }
         }
 
-        // Гарантируем, что для каждого именованного шрифта есть хотя бы одно
-        // начертание, иначе egui паникует при отрисовке текста.
-        let named_families = [
-            egui::FontFamily::Name("Arial".into()),
-            egui::FontFamily::Name("Inter".into()),
-            egui::FontFamily::Name("Segoe UI".into()),
-        ];
-        for name in named_families {
-            if fonts.families.get(&name).map_or(true, |keys| keys.is_empty()) {
-                // Берём любой уже зарегистрированный ключ (приоритет — arial-regular).
-                let fallback_key = font_key(FontFamily::Arial, FontWeight::Regular);
-                if fonts.font_data.contains_key(&fallback_key) {
-                    fonts.families.entry(name).or_default().push(fallback_key);
-                } else if let Some(first_key) = fonts.font_data.keys().next() {
-                    fonts
-                        .families
-                        .entry(name)
+        ctx.set_fonts(fonts);
+    }
+
+    /// Загружает любой доступный системный шрифт Windows как гарантированный fallback.
+    /// Возвращает Some(key) если удалось загрузить, иначе None.
+    fn load_any_system_font(fonts: &mut FontDefinitions) -> Option<String> {
+        for path in [
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+            "C:/Windows/Fonts/times.ttf",
+        ] {
+            if let Ok(data) = std::fs::read(path) {
+                let key = "system".to_owned();
+                fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name(key.clone().into()))
                         .or_default()
-                        .push(first_key.clone());
-                }
+                        .push(key.clone());
+                    return Some(key);
             }
         }
-
-        ctx.set_fonts(fonts);
+        None
     }
 
     /// Список путей-кандидатов к системному файлу шрифта Windows для комбинации семейства и насыщенности.
