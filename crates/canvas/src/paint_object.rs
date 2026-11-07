@@ -122,6 +122,18 @@ pub fn paint_container(
         Direction::Output => &object.outputs,
     };
 
+    // Внешняя граница контейнера (коробка).
+    let border_color = if is_obj_hovered {
+        theme.text
+    } else {
+        theme.card_border
+    };
+    painter.rect_stroke(
+        rect,
+        theme.object_corner_radius * zoom,
+        Stroke::new(theme.object_border_width * zoom, border_color),
+    );
+
     let header_h = cell_px * theme.container_header_height_cells;
 
     // Статус контейнера (худший среди записей)
