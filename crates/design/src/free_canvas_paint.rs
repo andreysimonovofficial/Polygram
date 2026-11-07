@@ -118,9 +118,9 @@ impl FreeCanvas {
             let text_w = galley.size().x;
             let text_h = galley.size().y;
             let x = match shape.text_align {
-                TextAlign::Left => rect.min.x + 8.0,
+                TextAlign::Left => rect.min.x + 8.0 * zoom,
                 TextAlign::Center => rect.center().x - text_w / 2.0,
-                TextAlign::Right => rect.max.x - text_w - 8.0,
+                TextAlign::Right => rect.max.x - text_w - 8.0 * zoom,
             };
             let y = match shape.text_align_v {
                 TextAlignV::Top => rect.min.y,
