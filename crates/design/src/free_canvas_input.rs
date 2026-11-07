@@ -538,9 +538,9 @@ impl FreeCanvas {
 
         // Изменение размера выделенных фигур за угол или сторону.
         if response.dragged() && !middle_down && self.resize_mode.is_some() {
-            if let (Some(mode), Some((_idx, orig_x, orig_y, orig_w, orig_h))) =
-                (self.resize_mode, self.resize_origin)
-            {
+        if let (Some(mode), Some(_resize_origin)) =
+            (self.resize_mode, self.resize_origin)
+        {
                 if let Some(pos) = response.interact_pointer_pos() {
                     let world_cursor = screen_to_world(pos);
                     let drag_world_start = screen_to_world(self.drag_start.unwrap_or(pos));
@@ -582,44 +582,45 @@ impl FreeCanvas {
                         let mut nw = sw;
                         let mut nh = sh;
 
+                        // Каждая фигура использует СВОИ исходные координаты (не первой из выделения).
                         match mode {
                             ResizeMode::SE => {
-                                nw = (orig_w + dx).max(1.0);
-                                nh = (orig_h + dy).max(1.0);
+                                nw = (sw + dx).max(1.0);
+                                nh = (sh + dy).max(1.0);
                             }
                             ResizeMode::SW => {
-                                nw = (orig_w - dx).max(1.0);
-                                nx = orig_x + (orig_w - nw);
-                                nh = (orig_h + dy).max(1.0);
+                                nw = (sw - dx).max(1.0);
+                                nx = sx + (sw - nw);
+                                nh = (sh + dy).max(1.0);
                             }
                             ResizeMode::NE => {
-                                nw = (orig_w + dx).max(1.0);
-                                nh = (orig_h - dy).max(1.0);
-                                ny = orig_y + (orig_h - nh);
+                                nw = (sw + dx).max(1.0);
+                                nh = (sh - dy).max(1.0);
+                                ny = sy + (sh - nh);
                             }
                             ResizeMode::NW => {
-                                nw = (orig_w - dx).max(1.0);
-                                nx = orig_x + (orig_w - nw);
-                                nh = (orig_h - dy).max(1.0);
-                                ny = orig_y + (orig_h - nh);
+                                nw = (sw - dx).max(1.0);
+                                nx = sx + (sw - nw);
+                                nh = (sh - dy).max(1.0);
+                                ny = sy + (sh - nh);
                             }
                             ResizeMode::E => {
-                                nw = (orig_w + dx).max(1.0);
+                                nw = (sw + dx).max(1.0);
                             }
                             ResizeMode::W => {
-                                nw = (orig_w - dx).max(1.0);
-                                nx = orig_x + (orig_w - nw);
+                                nw = (sw - dx).max(1.0);
+                                nx = sx + (sw - nw);
                             }
                             ResizeMode::S => {
-                                nh = (orig_h + dy).max(1.0);
+                                nh = (sh + dy).max(1.0);
                             }
                             ResizeMode::N => {
-                                nh = (orig_h - dy).max(1.0);
-                                ny = orig_y + (orig_h - nh);
+                                nh = (sh - dy).max(1.0);
+                                ny = sy + (sh - nh);
                             }
                         }
 
-                        // Магнитное выравнивание при ресайзе.
+                        // Магнитное выравнивание при ресайзе (точное, без aproximативности).
                         if self.magnetic {
                             let w = nw.max(1.0);
                             let h = nh.max(1.0);
@@ -670,11 +671,17 @@ impl FreeCanvas {
                                 for (or, _, _) in &others {
                                     for oy in [or.min.y, or.max.y, or.center().y] {
                                         if (ny - oy).abs() < thresh {
+                                            // Точное сцепление: верхний край примагничивается, высота пересчитывается так,
+                                            // чтобы нижний край оставался на месте (фигура не «плывёт»).
                                             ny = oy;
+                                            nh = (sy + sh) - ny;
+                                            nh = nh.max(1.0);
                                             magnetic_lines.push((oy, false));
                                         }
                                         if ((ny + h) - oy).abs() < thresh {
                                             ny = oy - h;
+                                            nh = (sy + sh) - ny;
+                                            nh = nh.max(1.0);
                                             magnetic_lines.push((oy, false));
                                         }
                                     }
@@ -689,11 +696,14 @@ impl FreeCanvas {
                                 for (or, _, _) in &others {
                                     for oy in [or.min.y, or.max.y, or.center().y] {
                                         if (bottom_edge - oy).abs() < thresh {
-                                            ny = oy - h;
+                                            // Точное сцепление нижнего края: верхний край остаётся на месте.
+                                            nh = oy - ny;
+                                            nh = nh.max(1.0);
                                             magnetic_lines.push((oy, false));
                                         }
                                         if ((bottom_edge + h) - oy).abs() < thresh {
-                                            ny = oy - h;
+                                            nh = oy - ny;
+                                            nh = nh.max(1.0);
                                             magnetic_lines.push((oy, false));
                                         }
                                     }
