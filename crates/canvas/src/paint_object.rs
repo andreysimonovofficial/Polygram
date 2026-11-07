@@ -62,7 +62,7 @@ pub fn paint_object(
         name_color,
     );
 
-    let id_text = format!("#{}", object.ix);
+    let id_text = format!("#{}", object.id);
     painter.text(
         rect_px.max - Vec2::new(8.0 * zoom, header_h / 2.0),
         egui::Align2::RIGHT_CENTER,

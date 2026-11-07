@@ -11,13 +11,22 @@ use crate::{
 };
 
 impl Hierarchy {
-    fn fresh_id_internal(&mut self, prefix: &str) -> String {
+    fn fresh_id_internal(&mut self, _prefix: &str) -> String {
+        let mut n: u64 = self.id_counter + 1;
+        if let Ok(t) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+            n = (t.as_millis() as u64 % 999) + 1;
+        }
         loop {
-            self.id_counter += 1;
-            let id = format!("{prefix}{}", self.id_counter);
+            let id = if n <= 999 {
+                format!("{:03}", n)
+            } else {
+                n.to_string()
+            };
             if !self.by_ext_object.contains_key(&id) && !self.by_ext_metric_def.contains_key(&id) {
+                self.id_counter = n;
                 return id;
             }
+            n += 1;
         }
     }
 
