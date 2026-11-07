@@ -121,7 +121,7 @@ impl Canvas {
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
             let rect_px = Rect::from_min_size(
                 self.camera
-                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
+                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
             if !rect_px.intersects(clip_rect) {
@@ -146,7 +146,7 @@ impl Canvas {
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
             let rect_px = Rect::from_min_size(
                 self.camera
-                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_px),
+                    .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
             if !rect_px.intersects(clip_rect) {

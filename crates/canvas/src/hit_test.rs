@@ -19,7 +19,7 @@ pub fn object_at<'a>(
         let rect_px = egui::Rect::from_min_size(
             world_to_screen(
                 Pos2::new(r.x as f32, r.y as f32),
-                cell_px,
+                cell_size,
                 camera_offset,
                 camera_zoom,
             ),
@@ -37,7 +37,7 @@ pub fn object_at<'a>(
         let rect_px = egui::Rect::from_min_size(
             world_to_screen(
                 Pos2::new(r.x as f32, r.y as f32),
-                cell_px,
+                cell_size,
                 camera_offset,
                 camera_zoom,
             ),
@@ -67,7 +67,7 @@ pub fn header_at<'a>(
         let rect_px = egui::Rect::from_min_size(
             world_to_screen(
                 Pos2::new(r.x as f32, r.y as f32),
-                cell_px,
+                cell_size,
                 camera_offset,
                 camera_zoom,
             ),
@@ -88,7 +88,7 @@ pub fn header_at<'a>(
         let rect_px = egui::Rect::from_min_size(
             world_to_screen(
                 Pos2::new(r.x as f32, r.y as f32),
-                cell_px,
+                cell_size,
                 camera_offset,
                 camera_zoom,
             ),
