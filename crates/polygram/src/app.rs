@@ -15,6 +15,9 @@ pub struct PolygramApp {
     pub drag_object: Option<String>,
     pub drag_start_screen: Option<egui::Pos2>,
     pub drag_start_cell: Option<(i32, i32)>,
+    /// Количество кадров для прогрева кэша галлей/глифов при старте,
+    /// чтобы первое панорамирование было гладким без «холодного» старта.
+    pub warmup_frames: u32,
 }
 
 pub struct CommandLogEntry {
@@ -40,6 +43,7 @@ impl PolygramApp {
             drag_object: None,
             drag_start_screen: None,
             drag_start_cell: None,
+            warmup_frames: 120,
         }
     }
 

@@ -62,6 +62,7 @@ impl FreeCanvas {
             if let (Some(start), Some(pos)) = (self.pan_start, response.interact_pointer_pos()) {
                 self.camera = self.pan_camera_start + (pos - start);
             }
+            ui.ctx().request_repaint();
         }
         if response.drag_stopped() && middle_down {
             self.pan_start = None;

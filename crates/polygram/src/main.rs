@@ -11,6 +11,7 @@ mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
+use std::time::Duration;
 
 fn load_icon() -> egui::IconData {
     let img = image::load_from_memory(include_bytes!("../assets/favicon.png"))
@@ -219,7 +220,12 @@ impl eframe::App for PolygramApp {
 
         panels::command_log_panel(self, ctx);
 
-        ctx.request_repaint();
+        // Прогрев кэша галлей/глифов при старте: форсируем быстрые кадры подряд,
+        // чтобы первое панорамирование было гладким без «холодного» старта.
+        if self.warmup_frames > 0 {
+            self.warmup_frames -= 1;
+            ctx.request_repaint_after(Duration::ZERO);
+        }
     }
 }
 
