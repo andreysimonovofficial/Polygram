@@ -21,3 +21,11 @@
 2. Собрать и запустить: `cargo run -p polygram-design` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
 3. Сделать атомарный коммит изменений (см. правила выше).
 4. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
+
+## Запуск и пересборка polygram-shell
+
+Если редактировали `polygram-shell`, то после ответа обязательно закрывай и пересобирай его, а не `polygram-design`:
+1. Закрыть `polygram-shell.exe` (например, `Get-Process polygram-shell | Stop-Process -Force`).
+2. Собрать и запустить: `cargo run -p polygram-shell` — приложение должно оставаться открытым, чтобы пользователь сразу видел изменения.
+3. Сделать атомарный коммит изменений (см. правила выше).
+4. В самом конце выполнить: `Invoke-RestMethod -Uri "http://192.168.0.10:5000/signal" -Method Post -ContentType "application/json" -Body '{"title": "Agent", "message": "Ready."}'`
