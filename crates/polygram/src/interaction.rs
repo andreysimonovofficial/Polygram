@@ -184,10 +184,10 @@ pub fn handle_canvas_interaction(
         egui::Sense::click_and_drag(),
     );
 
-    // Двойной клик по шапке объекта — открыть редактирование названия.
-    if canvas_response.double_clicked() {
+    // Двойной клик по объекту — открыть редактирование названия.
+    if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
-            if let Some(object_id) = app.canvas.header_at(&published.geometry, pos) {
+            if let Some(object_id) = app.canvas.object_at(&published.geometry, pos) {
                 let obj_name = published
                     .geometry
                     .objects
