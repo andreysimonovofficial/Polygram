@@ -36,8 +36,8 @@ fn register_fonts(ctx: &egui::Context) {
         "bold", "extrabold", "black",
     ];
 
-    let fallback_key = load_any_system_font(&mut fonts);
-    let unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
+    let _fallback_key = load_any_system_font(&mut fonts);
+    let _unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
 
     for family in families {
         for weight in weights {
@@ -72,11 +72,17 @@ fn register_fonts(ctx: &egui::Context) {
                 }
             }
             if !loaded {
-                fonts
-                    .families
-                    .entry(egui::FontFamily::Name(key.clone().into()))
-                    .or_default()
-                    .push(fallback_key.clone());
+                // 3. Относительно crates/shell/fonts/ (для cargo run из корня репозитория).
+                let path = format!("crates/shell/fonts/{}.ttf", key);
+                if let Ok(data) = std::fs::read(&path) {
+                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(key.clone());
+                    loaded = true;
+                }
             }
         }
     }
