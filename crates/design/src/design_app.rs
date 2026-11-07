@@ -66,6 +66,11 @@ impl DesignApp {
         // Сначала обеспечиваем наличие хотя бы одного шрифта (абсолютный fallback).
         let fallback_key = Self::load_any_system_font(&mut fonts);
 
+        // Регистрируем шрифт с широкой поддержкой Юникода как Unicode fallback,
+        // чтобы символы, отсутствующие в основном шрифте (≡, ⚙ и др.), не
+        // отображались квадратами.
+        let unicode_fallback_key = Self::load_unicode_fallback_font(&mut fonts);
+
         // Для каждой комбинации семейство + насыщенность создаём запись в
         // fonts.families. Если конкретный файл не найден, используем fallback_key.
         for family in families {
@@ -127,6 +132,14 @@ impl DesignApp {
                             .push(fb.clone());
                     }
                 }
+                // 5. Unicode fallback — для символов, которых нет в основном шрифте.
+                if let Some(uf) = &unicode_fallback_key {
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(uf.clone());
+                }
             }
         }
 
@@ -149,11 +162,33 @@ impl DesignApp {
                     .entry(egui::FontFamily::Name(key.clone().into()))
                         .or_default()
                         .push(key.clone());
-                    return Some(key);
+                return Some(key);
             }
         }
         None
     }
+
+    /// Загружает шрифт с широкой поддержкой символов Юникода (Segoe UI Symbol),
+    /// чтобы символы ≡, ⚙ и др. отображались вместо квадратов.
+    fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
+        for path in [
+            "C:/Windows/Fonts/seguisym.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+        ] {
+            if let Ok(data) = std::fs::read(path) {
+                let key = "unicode-fallback".to_owned();
+                fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(key.clone());
+                return Some(key);
+            }
+        }
+        None
+    }
+
 
     /// Список путей-кандидатов к системному файлу шрифта Windows для комбинации семейства и насыщенности.
     /// Возвращает пути в порядке убывания предпочтительности.
