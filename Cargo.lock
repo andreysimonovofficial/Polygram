@@ -3218,6 +3218,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "image",
  "polygram-canvas",
  "polygram-core",
  "serde_json",

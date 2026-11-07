@@ -12,6 +12,18 @@ mod status;
 use app::PolygramApp;
 use eframe::egui;
 
+fn load_icon() -> egui::IconData {
+    let img = image::load_from_memory(include_bytes!("../assets/logo.png"))
+        .expect("Failed to load logo.png");
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    egui::IconData {
+        rgba: rgba.into_raw(),
+        width,
+        height,
+    }
+}
+
 impl eframe::App for PolygramApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut close_menu = false;
@@ -43,7 +55,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("Polygram — живая карта системы"),
+            .with_title("Polygram — живая карта системы")
+            .with_icon(load_icon()),
         ..Default::default()
     };
     eframe::run_native(
