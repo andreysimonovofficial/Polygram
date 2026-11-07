@@ -245,6 +245,8 @@ impl eframe::App for PolygramApp {
 
         panels::command_log_panel(self, ctx);
 
+        panels::mcp_panel(self, ctx);
+
         // Прогрев кэша галлей/глифов при старте: форсируем быстрые кадры подряд,
         // чтобы первое панорамирование было гладким без «холодного» старта.
         if self.warmup_frames > 0 {

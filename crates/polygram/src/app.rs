@@ -37,8 +37,10 @@ pub struct PolygramApp {
     /// Количество кадров для прогрева кэша галлей/глифов при старте,
     /// чтобы первое панорамирование было гладким без «холодного» старта.
     pub warmup_frames: u32,
-    /// Окно управления MCP-сервером.
+    /// Окно управления MCP-сервером (плавающее).
     pub show_mcp_window: bool,
+    /// Боковая панель MCP (вкладка в приложении).
+    pub show_mcp_panel: bool,
     /// Канал событий от MCP-сервера (для лога команд).
     pub mcp_rx: mpsc::Receiver<McpEvent>,
     /// Управление встроенными серверами (MCP + HTTP).
@@ -84,6 +86,7 @@ impl PolygramApp {
             drag_start_cell: None,
             warmup_frames: 120,
             show_mcp_window: false,
+            show_mcp_panel: false,
             mcp_rx,
             server_control,
         }
@@ -119,6 +122,7 @@ impl PolygramApp {
             drag_start_cell: None,
             warmup_frames: 120,
             show_mcp_window: false,
+            show_mcp_panel: false,
             mcp_rx,
             server_control,
         }

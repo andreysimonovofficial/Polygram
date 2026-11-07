@@ -42,12 +42,22 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
 
             // Кнопка MCP — открывает окно управления встроенным сервером.
             let mcp_label = if app.show_mcp_window {
-                "MCP (открыто)"
+                "MCP (окно)"
             } else {
-                "MCP"
+                "MCP (окно)"
             };
             if ui.button(mcp_label).clicked() {
                 app.show_mcp_window = !app.show_mcp_window;
+            }
+
+            // Вкладка MCP — боковая панель в приложении.
+            let mcp_panel_label = if app.show_mcp_panel {
+                "MCP (панель)"
+            } else {
+                "MCP (панель)"
+            };
+            if ui.button(mcp_panel_label).clicked() {
+                app.show_mcp_panel = !app.show_mcp_panel;
             }
 
             ui.separator();
