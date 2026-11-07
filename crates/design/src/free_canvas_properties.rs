@@ -1,6 +1,6 @@
 //! Панель свойств выделенной фигуры (справа).
 
-use crate::design_format::{DrawTool, FreeShape, Rgba, StateStyle, StrokePosition, TextAlign, TextAlignV, ChildReactMode};
+use crate::design_format::{DrawTool, FreeShape, FontFamily, FontWeight, Rgba, StateStyle, StrokePosition, TextAlign, TextAlignV, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{Color32, DragValue};
 
@@ -244,10 +244,78 @@ impl FreeCanvas {
                     DragValue::new(&mut shape.font_size)
                         .prefix("Размер шрифта: ")
                         .speed(0.5)
-                        .range(4.0..=200.0),
-                )
-                .changed();
-            ui.label("Выравнивание по горизонтали:");
+                .range(4.0..=200.0),
+            )
+            .changed();
+        ui.horizontal(|ui| {
+            ui.label("Шрифт:");
+            let mut family = shape.font_family;
+            egui::ComboBox::from_label("")
+                .selected_text(match family {
+                    FontFamily::Arial => "Arial",
+                    FontFamily::Inter => "Inter",
+                    FontFamily::SegoeUI => "Segoe UI",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut family, FontFamily::Arial, "Arial").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut family, FontFamily::Inter, "Inter").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut family, FontFamily::SegoeUI, "Segoe UI").changed() {
+                        changed = true;
+                    }
+                });
+            shape.font_family = family;
+        });
+        ui.horizontal(|ui| {
+            ui.label("Насыщенность:");
+            let mut weight = shape.font_weight;
+            egui::ComboBox::from_label("")
+                .selected_text(match weight {
+                    FontWeight::Thin => "Thin",
+                    FontWeight::ExtraLight => "Extra Light",
+                    FontWeight::Light => "Light",
+                    FontWeight::Regular => "Regular",
+                    FontWeight::Medium => "Medium",
+                    FontWeight::SemiBold => "Semi Bold",
+                    FontWeight::Bold => "Bold",
+                    FontWeight::ExtraBold => "Extra Bold",
+                    FontWeight::Black => "Black",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut weight, FontWeight::Thin, "Thin").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::ExtraLight, "Extra Light").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::Light, "Light").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::Regular, "Regular").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::Medium, "Medium").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::SemiBold, "Semi Bold").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::Bold, "Bold").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::ExtraBold, "Extra Bold").changed() {
+                        changed = true;
+                    }
+                    if ui.selectable_value(&mut weight, FontWeight::Black, "Black").changed() {
+                        changed = true;
+                    }
+                });
+            shape.font_weight = weight;
+        });
+        ui.label("Выравнивание по горизонтали:");
             let mut align = shape.text_align.clone();
             egui::ComboBox::new("text_align_h", "")
                 .selected_text(match align {

@@ -384,6 +384,12 @@ pub struct FreeShape {
     pub text_color: Rgba,
     pub text_align: TextAlign,
     pub text_align_v: TextAlignV,
+    /// Толщина шрифта текста.
+    #[serde(default)]
+    pub font_weight: FontWeight,
+    /// Семейство шрифта текста.
+    #[serde(default)]
+    pub font_family: FontFamily,
     /// Переопределения стилей для состояний наведения и нажатия (режим прототипа).
     #[serde(default)]
     pub states: ShapeStates,
@@ -428,6 +434,40 @@ impl Default for TextAlignV {
     }
 }
 
+/// Толщина (насыщенность) шрифта текста.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FontWeight {
+    Thin,
+    ExtraLight,
+    Light,
+    Regular,
+    Medium,
+    SemiBold,
+    Bold,
+    ExtraBold,
+    Black,
+}
+
+impl Default for FontWeight {
+    fn default() -> Self {
+        FontWeight::Regular
+    }
+}
+
+/// Семейство шрифта текста.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FontFamily {
+    Arial,
+    Inter,
+    SegoeUI,
+}
+
+impl Default for FontFamily {
+    fn default() -> Self {
+        FontFamily::Inter
+    }
+}
+
 impl Default for FreeShape {
     fn default() -> Self {
         Self {
@@ -451,6 +491,8 @@ impl Default for FreeShape {
             text_color: Rgba::from_rgb(230, 230, 235),
             text_align: TextAlign::Left,
             text_align_v: TextAlignV::Middle,
+            font_weight: FontWeight::Regular,
+            font_family: FontFamily::Inter,
             states: ShapeStates::default(),
             group_id: None,
             parent_id: None,

@@ -1,10 +1,9 @@
 //! Отрисовка фигур, проверка попадания и удаление выделенного.
 
-use crate::design_format::{DrawTool, FreeShape, ShapeState, StrokePosition, TextAlign, TextAlignV};
+use crate::design_format::{DrawTool, FontFamily, FreeShape, ShapeState, StrokePosition, TextAlign, TextAlignV};
 use crate::free_canvas::FreeCanvas;
 use egui::{Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use egui::Color32;
-use egui::FontId;
 
 /// Расстояние от точки до отрезка.
 pub fn dist_point_segment(p: Pos2, a: Pos2, b: Pos2) -> f32 {
@@ -116,7 +115,12 @@ impl FreeCanvas {
                     .unwrap_or(Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a)),
                 ShapeState::Normal => Color32::from_rgba_unmultiplied(shape.text_color.r, shape.text_color.g, shape.text_color.b, shape.text_color.a),
             };
-            let font = FontId::proportional(shape.font_size.max(6.0) * zoom);
+            let font_family = match shape.font_family {
+                FontFamily::Arial => egui::FontFamily::Name("Arial".into()),
+                FontFamily::Inter => egui::FontFamily::Name("Inter".into()),
+                FontFamily::SegoeUI => egui::FontFamily::Name("Segoe UI".into()),
+            };
+            let font = egui::FontId::new(shape.font_size.max(6.0) * zoom, font_family);
             let galley = painter.layout_no_wrap(shape.text.clone(), font, text_color);
             let text_w = galley.size().x;
             let text_h = galley.size().y;
