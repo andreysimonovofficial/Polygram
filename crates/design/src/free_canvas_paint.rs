@@ -162,24 +162,26 @@ impl FreeCanvas {
         }
     }
 
-    /// Скорректировать прямоугольник под позицию обводки, чтобы обводка лежала
-    /// полностью внутри/снаружи или по центру границы фигуры.
+    /// Скорректировать прямоугольник под позицию обводки.
+    /// egui рисует `rect_stroke` полностью снаружи края переданного rect,
+    /// поэтому чтоб обводка лежала внутри/по центру/снаружи границы фигуры,
+    /// сдвигаем край rect перед рисованием обводки.
     fn stroke_rect(rect: Rect, stroke_width: f32, position: StrokePosition) -> Rect {
-        let half = stroke_width / 2.0;
+        let max_shrink = (rect.width().min(rect.height()) / 2.0).max(0.0);
         match position {
-            StrokePosition::Center => rect,
-            StrokePosition::Inside => rect.shrink(half.min(rect.width().min(rect.height()) / 2.0)),
-            StrokePosition::Outside => rect.expand(half),
+            StrokePosition::Outside => rect,
+            StrokePosition::Center => rect.shrink((stroke_width / 2.0).min(max_shrink)),
+            StrokePosition::Inside => rect.shrink(stroke_width.min(max_shrink)),
         }
     }
 
     /// Скорректировать радиусы эллипса под позицию обводки.
     fn stroke_radii(radii: Vec2, stroke_width: f32, position: StrokePosition) -> Vec2 {
-        let half = stroke_width / 2.0;
+        let max_shrink = radii.x.min(radii.y).max(0.0);
         match position {
-            StrokePosition::Center => radii,
-            StrokePosition::Inside => radii - Vec2::splat(half.min(radii.x.min(radii.y))),
-            StrokePosition::Outside => radii + Vec2::splat(half),
+            StrokePosition::Outside => radii,
+            StrokePosition::Center => radii - Vec2::splat((stroke_width / 2.0).min(max_shrink)),
+            StrokePosition::Inside => radii - Vec2::splat(stroke_width.min(max_shrink)),
         }
     }
 }
