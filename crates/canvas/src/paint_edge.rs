@@ -98,6 +98,6 @@ pub fn paint_edge(
         }
     };
 
-    let stroke = Stroke::new(theme.edge_width, line_color);
+    let stroke = Stroke::new(theme.edge_width * camera_zoom, line_color);
     painter.add(Shape::line(vec![from_pos, to_pos], stroke));
 }

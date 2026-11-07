@@ -29,6 +29,7 @@ pub struct Theme {
     pub object_header_height_cells: f32,
     pub container_header_height_cells: f32,
     pub port_radius: f32,
+    pub text_size: f32,
 
     // Геометрия линий
     pub edge_width: f32,
@@ -67,6 +68,7 @@ impl Default for Theme {
             object_header_height_cells: 1.0,
             container_header_height_cells: 0.5,
             port_radius: 3.0,
+            text_size: 14.0,
             edge_width: 1.5,
             shadow_offset: [4.0, 4.0],
             shadow_blur: 8.0,

@@ -2,7 +2,6 @@ use crate::app::PolygramApp;
 use polygram_canvas::object_at;
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::Command;
-use egui::Pos2;
 
 pub fn context_menu(
     app: &mut PolygramApp,

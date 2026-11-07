@@ -127,7 +127,14 @@ impl Canvas {
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
-            paint_department_frame(painter, object, rect_px, cell_px, &self.theme);
+            paint_department_frame(
+                painter,
+                object,
+                rect_px,
+                cell_px,
+                self.camera.zoom,
+                &self.theme,
+            );
         }
 
         // Потом карточки объектов (включая дочерние внутри отделов)
@@ -153,6 +160,7 @@ impl Canvas {
                     &self.theme,
                     rect_px,
                     cell_px,
+                    self.camera.zoom,
                     is_hovered,
                 );
             } else {
@@ -163,6 +171,7 @@ impl Canvas {
                     &self.theme,
                     rect_px,
                     cell_px,
+                    self.camera.zoom,
                     is_hovered,
                 );
             }

@@ -285,15 +285,14 @@ fn resolve_stroke_color(shape: &LayoutShape) -> Color32 {
     shape.stroke.to_color32()
 }
 
-/// Разрешить толщину обводки (без масштабирования на зум — константная в экранных пикселях).
-fn resolve_stroke_width(shape: &LayoutShape) -> f32 {
-    shape.stroke_width.max(0.0)
+/// Разрешить толщину обводки (масштабируется на зум, как в Design Tool).
+fn resolve_stroke_width(shape: &LayoutShape, zoom: f32) -> f32 {
+    shape.stroke_width.max(0.0) * zoom
 }
 
-/// Получить FontId для фигуры (шрифт Inter, фиксированный размер в экранных пикселях,
-/// не меняющийся при зуме).
-fn layout_font_id(shape: &LayoutShape) -> FontId {
-    let size = shape.font_size.max(6.0).max(8.0);
+/// Получить FontId для фигуры (размер шрифта масштабируется на зум, как в Design Tool).
+fn layout_font_id(shape: &LayoutShape, zoom: f32) -> FontId {
+    let size = shape.font_size.max(6.0).max(8.0) * zoom;
     let weight = match shape.font_weight {
         LayoutFontWeight::Thin => egui::FontFamily::Name("inter-thin".into()),
         LayoutFontWeight::ExtraLight => egui::FontFamily::Name("inter-extralight".into()),
@@ -341,6 +340,7 @@ fn paint_layout_shape(
     painter: &Painter,
     shape: &LayoutShape,
     screen_rect: Rect,
+    zoom: f32,
 ) {
     // Пропускать фигуры с некорректным размером, чтобы избежать паники в egui.
     if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
@@ -348,16 +348,16 @@ fn paint_layout_shape(
     }
     let fill = resolve_fill(shape);
     let stroke_color = resolve_stroke_color(shape);
-    let stroke_width = resolve_stroke_width(shape);
+    let stroke_width = resolve_stroke_width(shape, zoom);
     let stroke = Stroke::new(stroke_width, stroke_color);
 
     match shape.tool {
         LayoutDrawTool::Select => {}
         LayoutDrawTool::Rect | LayoutDrawTool::Text => {
-            painter.rect_filled(screen_rect, layout_rounding(shape), fill);
+            painter.rect_filled(screen_rect, layout_rounding(shape) * zoom, fill);
             if stroke_width > 0.0 {
                 let stroke_rect = stroke_rect_for_position(screen_rect, stroke_width, shape.stroke_position);
-                painter.rect_stroke(stroke_rect, layout_rounding(shape), stroke);
+                painter.rect_stroke(stroke_rect, layout_rounding(shape) * zoom, stroke);
             }
         }
         LayoutDrawTool::Ellipse => {
@@ -379,7 +379,7 @@ fn paint_layout_shape(
     // Текст
     if !shape.text.is_empty() {
         let text_color = shape.text_color.to_color32();
-        let font_id = layout_font_id(shape);
+        let font_id = layout_font_id(shape, zoom);
         let galley = painter.layout_no_wrap(shape.text.clone(), font_id, text_color);
         let text_w = galley.size().x;
         let text_h = galley.size().y;
@@ -405,6 +405,7 @@ pub fn paint_process(
     _theme: &Theme,
     rect_px: Rect,
     _cell_px: f32,
+    zoom: f32,
     _is_hovered: bool,
 ) {
     let template = get_template();
@@ -423,7 +424,7 @@ pub fn paint_process(
             ),
             Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
         );
-        paint_layout_shape(painter, shape, screen_rect);
+        paint_layout_shape(painter, shape, screen_rect, zoom);
     }
 
     // TODO: hit-тест зоны доступны в template.hit_zones — будут использованы

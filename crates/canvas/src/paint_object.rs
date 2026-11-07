@@ -10,6 +10,7 @@ pub fn paint_object(
     theme: &Theme,
     rect_px: Rect,
     cell_px: f32,
+    zoom: f32,
     is_hovered: bool,
 ) {
     // Свечение за объектом (если включено в стиле)
@@ -31,14 +32,14 @@ pub fn paint_object(
         theme.card_border
     };
     let border_width = if is_hovered {
-        theme.object_border_hover_width
+        theme.object_border_hover_width * zoom
     } else {
-        theme.object_border_width
+        theme.object_border_width * zoom
     };
-    painter.rect_filled(rect_px, theme.object_corner_radius, theme.card_bg);
+    painter.rect_filled(rect_px, theme.object_corner_radius * zoom, theme.card_bg);
     painter.rect_stroke(
         rect_px,
-        theme.object_corner_radius,
+        theme.object_corner_radius * zoom,
         Stroke::new(border_width, border_color),
     );
 
@@ -54,19 +55,19 @@ pub fn paint_object(
         theme.text_muted
     };
     painter.text(
-        rect_px.min + Vec2::new(8.0, header_h / 2.0),
+        rect_px.min + Vec2::new(8.0 * zoom, header_h / 2.0),
         egui::Align2::LEFT_CENTER,
         &title,
-        egui::FontId::default(),
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         name_color,
     );
 
     let id_text = format!("#{}", object.ix);
     painter.text(
-        rect_px.max - Vec2::new(8.0, header_h / 2.0),
+        rect_px.max - Vec2::new(8.0 * zoom, header_h / 2.0),
         egui::Align2::RIGHT_CENTER,
         &id_text,
-        egui::FontId::default(),
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         name_color,
     );
 
@@ -83,6 +84,7 @@ pub fn paint_object(
             Vec2::new(rect_px.width(), container_h),
         ),
         cell_px,
+        zoom,
         Direction::Request,
         is_hovered,
     );
@@ -97,6 +99,7 @@ pub fn paint_object(
             Vec2::new(rect_px.width(), container_h),
         ),
         cell_px,
+        zoom,
         Direction::Output,
         is_hovered,
     );
@@ -110,6 +113,7 @@ pub fn paint_container(
     theme: &Theme,
     rect: Rect,
     cell_px: f32,
+    zoom: f32,
     dir: Direction,
     is_obj_hovered: bool,
 ) {
@@ -179,21 +183,22 @@ pub fn paint_container(
     painter.rect_filled(header_rect, 0.0, theme.card_bg);
 
     // Точка статуса (радиус порта из стиля)
-    let dot_radius = theme.port_radius.max(2.0);
-    painter.circle_filled(rect.min + Vec2::new(8.0, header_h / 2.0), dot_radius, dot_color);
+    let dot_radius = theme.port_radius.max(2.0) * zoom;
+    painter.circle_filled(rect.min + Vec2::new(8.0 * zoom, header_h / 2.0), dot_radius, dot_color);
 
-    // Кнопка списка (справа) — фиксированный размер, как на целевом скрине.
+    // Кнопка списка (справа) — масштабируется с зумом.
+    let btn_size = 24.0 * zoom;
     let btn_rect = Rect::from_min_size(
-        rect.max - Vec2::new(24.0, header_h),
-        Vec2::new(24.0, header_h),
+        rect.max - Vec2::new(btn_size, header_h),
+        Vec2::new(btn_size, header_h),
     );
 
     // Доступная ширина для текста заголовка (от 16px отступа до кнопки с зазором).
-    let header_avail_w = (btn_rect.min.x - rect.min.x - 32.0).max(0.0);
-    let header_text_width = count_text.len() as f32 * 7.0;
-    let header_text_display: String = if header_text_width > header_avail_w && header_avail_w > 14.0
+    let header_avail_w = (btn_rect.min.x - rect.min.x - 32.0 * zoom).max(0.0);
+    let header_text_width = count_text.len() as f32 * 7.0 * zoom;
+    let header_text_display: String = if header_text_width > header_avail_w && header_avail_w > 14.0 * zoom
     {
-        let n_chars = (header_avail_w / 7.0) as usize;
+        let n_chars = (header_avail_w / (7.0 * zoom)) as usize;
         if n_chars > 4 {
             count_text.chars().take(n_chars - 4).collect::<String>() + "..."
         } else {
@@ -203,21 +208,20 @@ pub fn paint_container(
         count_text.clone()
     };
 
-    // Текст метки
     let header_text_actual = if is_obj_hovered {
         theme.text
     } else {
         header_text_color
     };
     painter.text(
-        rect.min + Vec2::new(16.0, header_h / 2.0),
+        rect.min + Vec2::new(16.0 * zoom, header_h / 2.0),
         egui::Align2::LEFT_CENTER,
         &header_text_display,
-        egui::FontId::default(),
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         header_text_actual,
     );
 
-    painter.rect_stroke(btn_rect, 1.0, Stroke::new(1.0_f32, theme.card_border));
+    painter.rect_stroke(btn_rect, 1.0 * zoom, Stroke::new(1.0_f32 * zoom, theme.card_border));
     let btn_text_actual = if is_obj_hovered {
         theme.text
     } else {
@@ -227,7 +231,7 @@ pub fn paint_container(
         btn_rect.center(),
         egui::Align2::CENTER_CENTER,
         "≡",
-        egui::FontId::default(),
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         btn_text_actual,
     );
 
@@ -240,14 +244,14 @@ pub fn paint_container(
             theme.text_muted
         };
         let add_rect = Rect::from_min_size(
-            rect.min + Vec2::new(16.0, header_h),
-            Vec2::new(rect.width() - 32.0, rect.height() - header_h),
+            rect.min + Vec2::new(16.0 * zoom, header_h),
+            Vec2::new(rect.width() - 32.0 * zoom, rect.height() - header_h),
         );
         painter.text(
             add_rect.center(),
             egui::Align2::CENTER_CENTER,
             add_text,
-            egui::FontId::default(),
+            egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
             add_color,
         );
     } else {
@@ -269,7 +273,7 @@ pub fn paint_container(
             }
 
             // Точка статуса записи
-            painter.circle_filled(rect.min + Vec2::new(8.0, entry_y), dot_radius, entry_dot_color);
+            painter.circle_filled(rect.min + Vec2::new(8.0 * zoom, entry_y), dot_radius, entry_dot_color);
 
             // Имя записи
             let name_color = if is_obj_hovered {
@@ -278,19 +282,19 @@ pub fn paint_container(
                 theme.text_muted
             };
             painter.text(
-                rect.min + Vec2::new(16.0, entry_y),
+                rect.min + Vec2::new(16.0 * zoom, entry_y),
                 egui::Align2::LEFT_CENTER,
                 &entry.name,
-                egui::FontId::default(),
+                egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
                 name_color,
             );
 
             // Значение (справа)
             painter.text(
-                entry_rect.max - Vec2::new(8.0, 0.0),
+                entry_rect.max - Vec2::new(8.0 * zoom, 0.0),
                 egui::Align2::RIGHT_CENTER,
                 &value_text,
-                egui::FontId::default(),
+                egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
                 name_color,
             );
         }
