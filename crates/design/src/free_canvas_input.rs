@@ -391,6 +391,8 @@ impl FreeCanvas {
                                 self.resize_mode = Some(mode);
                                 self.drag_shape_pos = None;
                                 self.resize_origin.clear();
+                                self.resize_mag_locked_x = None;
+                                self.resize_mag_locked_y = None;
                                 for &idx in &self.selected {
                                     if let Some(shape) = self.doc.shapes.get(idx) {
                                         self.resize_origin.push((idx, shape.x, shape.y, shape.w, shape.h));
@@ -620,101 +622,108 @@ impl FreeCanvas {
                     }
 
                     // Магнитное выравнивание при ресайзе (точное, без aproximативности).
+                    // Гистерезис ("липкое" сцепление): после попадания в порог край удерживается
+                    // ровно на цели, пока курсор не уйдёт далеко — это убирает дребезг на границе
+                    // порога (форма не пляшет вверх-вниз на несколько пкс) и делает сцепление
+                    // воспроизводимым при повторном захвате ручки.
                     if self.magnetic {
                         let w = nw.max(1.0);
                         let h = nh.max(1.0);
                         let thresh = 6.0;
+                        let unlock_thresh = thresh * 2.0;
 
-                        // Левый край фигуры (при ресайзе W/NW/SW).
-                        if mode == ResizeMode::W
-                            || mode == ResizeMode::NW
-                            || mode == ResizeMode::SW
-                        {
-                            for (or, _, _) in &others {
-                                for ox in [or.min.x, or.max.x, or.center().x] {
-                                    if (nx - ox).abs() < thresh {
-                                        nx = ox;
-                                        magnetic_lines.push((ox, true));
-                                    }
-                                    if ((nx + w) - ox).abs() < thresh {
-                                        nx = ox - w;
-                                        magnetic_lines.push((ox, true));
-                                    }
-                                }
-                            }
-                        }
-                        // Правый край фигуры (при ресайзе E/NE/SE).
-                        if mode == ResizeMode::E
-                            || mode == ResizeMode::NE
-                            || mode == ResizeMode::SE
-                        {
-                            let right_edge = nx + w;
-                            for (or, _, _) in &others {
-                                for ox in [or.min.x, or.max.x, or.center().x] {
-                                    if (right_edge - ox).abs() < thresh {
-                                        nx = ox - w;
-                                        magnetic_lines.push((ox, true));
-                                    }
-                                    if ((right_edge + w) - ox).abs() < thresh {
-                                        nx = ox - w;
-                                        magnetic_lines.push((ox, true));
-                                    }
-                                }
-                            }
-                        }
-                        // Верхний край фигуры (при ресайзе N/NW/NE).
-                        if mode == ResizeMode::N
-                            || mode == ResizeMode::NW
-                            || mode == ResizeMode::NE
-                        {
+                        let move_top = matches!(mode, ResizeMode::N | ResizeMode::NW | ResizeMode::NE);
+                        let move_bottom = matches!(mode, ResizeMode::S | ResizeMode::SW | ResizeMode::SE);
+                        let move_left = matches!(mode, ResizeMode::W | ResizeMode::NW | ResizeMode::SW);
+                        let move_right = matches!(mode, ResizeMode::E | ResizeMode::NE | ResizeMode::SE);
+
+                        // Текущие (от курсора) значения подвижных краёв, до любого сцепления.
+                        let raw_top = ny;
+                        let raw_bottom = ny + h;
+                        let raw_left = nx;
+                        let raw_right = nx + w;
+
+                        // ----- Вертикальная ось (верхний / нижний край) -----
+                        let mut target_y: Option<f32> = None;
+                        if move_top || move_bottom {
+                            let edge_y = if move_top { raw_top } else { raw_bottom };
                             for (or, _, _) in &others {
                                 for oy in [or.min.y, or.max.y, or.center().y] {
-                                    if (ny - oy).abs() < thresh {
-                                        // Точное сцепление: верхний край примагничивается, высота пересчитывается так,
-                                        // чтобы нижний край оставался на месте (фигура не «плывёт»).
-                                        ny = oy;
-                                        nh = (sy + sh) - ny;
-                                        nh = nh.max(1.0);
-                                        magnetic_lines.push((oy, false));
-                                    }
-                                    if ((ny + h) - oy).abs() < thresh {
-                                        ny = oy - h;
-                                        nh = (sy + sh) - ny;
-                                        nh = nh.max(1.0);
-                                        magnetic_lines.push((oy, false));
+                                    if (edge_y - oy).abs() < thresh {
+                                        let d = (edge_y - oy).abs();
+                                        let better = target_y.map_or(true, |cur| d < (edge_y - cur).abs());
+                                        if better {
+                                            target_y = Some(oy);
+                                        }
                                     }
                                 }
                             }
                         }
-                        // Нижний край фигуры (при ресайзе S/SW/SE).
-                        if mode == ResizeMode::S
-                            || mode == ResizeMode::SW
-                            || mode == ResizeMode::SE
-                        {
-                            let bottom_edge = ny + h;
+                        let mut locked_y = self.resize_mag_locked_y;
+                        if let Some(ty) = target_y {
+                            locked_y = Some(ty);
+                        } else if let Some(ly) = locked_y {
+                            let edge_y = if move_top { raw_top } else { raw_bottom };
+                            if (edge_y - ly).abs() > unlock_thresh {
+                                locked_y = None;
+                            }
+                        }
+                        self.resize_mag_locked_y = locked_y;
+                        if let Some(ty) = locked_y {
+                            magnetic_lines.push((ty, false));
+                            if move_top {
+                                ny = ty;
+                                nh = (sy + sh) - ny;
+                                nh = nh.max(1.0);
+                            } else if move_bottom {
+                                nh = (ty - ny).max(1.0);
+                            }
+                        }
+
+                        // ----- Горизонтальная ось (левый / правый край) -----
+                        let mut target_x: Option<f32> = None;
+                        if move_left || move_right {
+                            let edge_x = if move_left { raw_left } else { raw_right };
                             for (or, _, _) in &others {
-                                for oy in [or.min.y, or.max.y, or.center().y] {
-                                    if (bottom_edge - oy).abs() < thresh {
-                                        // Точное сцепление нижнего края: верхний край остаётся на месте.
-                                        nh = oy - ny;
-                                        nh = nh.max(1.0);
-                                        magnetic_lines.push((oy, false));
-                                    }
-                                    if ((bottom_edge + h) - oy).abs() < thresh {
-                                        nh = oy - ny;
-                                        nh = nh.max(1.0);
-                                        magnetic_lines.push((oy, false));
+                                for ox in [or.min.x, or.max.x, or.center().x] {
+                                    if (edge_x - ox).abs() < thresh {
+                                        let d = (edge_x - ox).abs();
+                                        let better = target_x.map_or(true, |cur| d < (edge_x - cur).abs());
+                                        if better {
+                                            target_x = Some(ox);
+                                        }
                                     }
                                 }
                             }
                         }
-                        // Центры всех фигур тоже magnets.
+                        let mut locked_x = self.resize_mag_locked_x;
+                        if let Some(tx) = target_x {
+                            locked_x = Some(tx);
+                        } else if let Some(lx) = locked_x {
+                            let edge_x = if move_left { raw_left } else { raw_right };
+                            if (edge_x - lx).abs() > unlock_thresh {
+                                locked_x = None;
+                            }
+                        }
+                        self.resize_mag_locked_x = locked_x;
+                        if let Some(tx) = locked_x {
+                            magnetic_lines.push((tx, true));
+                            if move_left {
+                                nx = tx;
+                                nw = (sx + sw) - nx;
+                                nw = nw.max(1.0);
+                            } else if move_right {
+                                nw = (tx - nx).max(1.0);
+                            }
+                        }
+
+                        // Центры всех фигур тоже magnets — но не Überschриваем только что зафиксированный край.
                         for (_, ocx, ocy) in &others {
-                            if (nx + w / 2.0 - ocx).abs() < thresh {
+                            if locked_x.is_none() && (nx + w / 2.0 - ocx).abs() < thresh {
                                 nx = ocx - w / 2.0;
                                 magnetic_lines.push((*ocx, true));
                             }
-                            if (ny + h / 2.0 - ocy).abs() < thresh {
+                            if locked_y.is_none() && (ny + h / 2.0 - ocy).abs() < thresh {
                                 ny = ocy - h / 2.0;
                                 magnetic_lines.push((*ocy, false));
                             }
@@ -737,6 +746,8 @@ impl FreeCanvas {
             let was_resizing = self.resize_mode.is_some();
             self.resize_mode = None;
             self.resize_origin.clear();
+            self.resize_mag_locked_x = None;
+            self.resize_mag_locked_y = None;
 
             if !was_resizing && self.tool == DrawTool::Select && self.drag_shape_pos.is_none() {
                 // Selection box: выделить все фигуры внутри резинового прямоугольника

@@ -56,6 +56,10 @@ pub struct FreeCanvas {
     pub resize_mode: Option<ResizeMode>,
     /// Исходное состояние выделенных фигур перед началом ресайза: (индекс, x, y, w, h) для каждой.
     pub resize_origin: Vec<(usize, f32, f32, f32, f32)>,
+    /// Зафиксированная магнитная цель ресайза по осям (гистерезис), чтобы край не дёргался
+    /// на границе порога и сцепление было воспроизводимо при повторном захвате ручки.
+    pub resize_mag_locked_x: Option<f32>,
+    pub resize_mag_locked_y: Option<f32>,
 }
 
 impl Default for FreeCanvas {
@@ -92,6 +96,8 @@ impl Default for FreeCanvas {
             drag_history_saved: false,
             resize_mode: None,
             resize_origin: Vec::new(),
+            resize_mag_locked_x: None,
+            resize_mag_locked_y: None,
         }
     }
 }
