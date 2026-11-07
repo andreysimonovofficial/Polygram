@@ -569,7 +569,7 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         let value: f64 = app.add_metric_value.trim().parse().unwrap_or(0.0);
 
         app.apply_cmd(Command::AddMetricDef {
-            id: None,
+            id: Some(name.clone()),
             name: name.clone(),
             kind,
             unit,
