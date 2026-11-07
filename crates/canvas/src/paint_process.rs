@@ -13,23 +13,8 @@ use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 // │ КОНСТАНТЫ-КОНСТРУКТОР                                       │
 // └─────────────────────────────────────────────────────────────┘
 
-/// Высота заголовка объекта (в ячейках).
-pub const OBJECT_HEADER_HEIGHT_CELLS: f32 = 1.0;
-/// Высота заголовка контейнера (в ячейках).
-pub const CONTAINER_HEADER_HEIGHT_CELLS: f32 = 0.5;
-/// Высота одной строки показателя (в ячейках).
-pub const METRIC_ROW_HEIGHT_CELLS: f32 = 0.6;
-/// Внутренний отступ внутри контейнера (в ячейках).
-pub const PADDING_CELLS: f32 = 0.25;
 /// Максимум видимых показателей на сторону (лимит UI, не ядра).
 pub const MAX_VISIBLE_METRICS: usize = 4;
-
-/// Высота контейнера для заданного количества показателей (в ячейках).
-fn container_height_cells(metric_count: usize) -> f32 {
-    let visible = metric_count.min(MAX_VISIBLE_METRICS);
-    let add_row = if visible < MAX_VISIBLE_METRICS { 1.0 } else { 0.0 };
-    CONTAINER_HEADER_HEIGHT_CELLS + (visible as f32 + add_row) * METRIC_ROW_HEIGHT_CELLS + 2.0 * PADDING_CELLS
-}
 
 /// Ранг статуса (чем выше — тем хуже).
 fn status_rank(s: StatusCode) -> u8 {
@@ -210,7 +195,7 @@ pub fn paint_process(
     dynamic: &DynamicState,
     theme: &Theme,
     rect_px: Rect,
-    cell_px: f32,
+    _cell_px: f32,
     zoom: f32,
     is_hovered: bool,
     _edit_target: Option<&str>,
