@@ -1,18 +1,22 @@
 //! Окно Polygram: egui-оболочка с меню, палитрой команд, строкой статуса и холстом.
 //! Shell владеет `EngineRuntime` и `Canvas`. Команды из UI идут в ядро,
 //! снимки (`DynamicState` + `Geometry`) — на холст.
+//! Встроены MCP-сервер (stdio) и HTTP-API (8080), делят состояние с GUI через ApiService.
 
 mod app;
 mod interaction;
 mod menu;
 mod palette;
 mod panels;
+mod server_control;
 mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
-use polygram_api::{http::router, mcp::McpServer, ApiService};
-use std::sync::Arc;
+use polygram_api::ApiService;
+use server_control::ServerControl;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -47,7 +51,7 @@ fn register_fonts(ctx: &egui::Context) {
 
     for family in families {
         for weight in weights {
-            let key = format!("{}-{}", family, weight);
+            let key = format!("{family}-{weight}");
             let mut loaded = false;
 
             // 1. Папка fonts/ рядом с исполняемым файлом.
@@ -55,7 +59,7 @@ fn register_fonts(ctx: &egui::Context) {
                 .ok()
                 .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             {
-                let path = dir.join(format!("fonts/{}.ttf", key));
+                let path = dir.join(format!("fonts/{key}.ttf"));
                 if let Ok(data) = std::fs::read(&path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                     fonts
@@ -68,7 +72,7 @@ fn register_fonts(ctx: &egui::Context) {
             }
             // 2. Относительно текущей рабочей директории (для cargo run).
             if !loaded {
-                let path = format!("fonts/{}.ttf", key);
+                let path = format!("fonts/{key}.ttf");
                 if let Ok(data) = std::fs::read(&path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                     fonts
@@ -81,7 +85,7 @@ fn register_fonts(ctx: &egui::Context) {
             }
             // 3. Относительно crates/polygram/fonts/ (для cargo run из корня репозитория).
             if !loaded {
-                let path = format!("crates/polygram/fonts/{}.ttf", key);
+                let path = format!("crates/polygram/fonts/{key}.ttf");
                 if let Ok(data) = std::fs::read(&path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                     fonts
@@ -205,6 +209,17 @@ impl eframe::App for PolygramApp {
         let mut close_menu = false;
         let published = self.runtime.latest();
 
+        // Считываем события от MCP-сервера и добавляем в лог команд.
+        while let Ok(event) = self.mcp_rx.try_recv() {
+            self.command_log.push(crate::app::CommandLogEntry {
+                cmd: event.cmd,
+                result: event.result,
+            });
+            if self.command_log.len() > 200 {
+                self.command_log.remove(0);
+            }
+        }
+
         menu::top_menu(self, ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -218,6 +233,11 @@ impl eframe::App for PolygramApp {
         interaction::handle_rename_dialog(self, ctx);
 
         palette::command_palette(self, ctx);
+
+        // Окно управления MCP-сервером.
+        if self.show_mcp_window {
+            menu::mcp_window(self, ctx);
+        }
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             status::status_bar(self, ui);
@@ -236,36 +256,20 @@ impl eframe::App for PolygramApp {
 
 fn main() -> eframe::Result {
     let api = Arc::new(ApiService::default());
+    let (mcp_tx, mcp_rx) = mpsc::channel();
+
+    let server_control = Arc::new(Mutex::new(ServerControl::new(Arc::clone(&api), mcp_tx)));
 
     // MCP-сервер (stdio) в отдельном потоке — для Claude Desktop, Open WebUI и др.
-    let mcp_api = Arc::clone(&api);
+    let sc = Arc::clone(&server_control);
     thread::spawn(move || {
-        McpServer::new((*mcp_api).clone()).run();
+        sc.lock().unwrap().start_mcp();
     });
 
-    // HTTP-API на 8080 — для удобной проверки и интеграции (делит состояние с GUI и MCP).
-    let http_api = Arc::clone(&api);
+    // HTTP-API — для удобной проверки и интеграции (делит состояние с GUI и MCP).
+    let sc_http = Arc::clone(&server_control);
     thread::spawn(move || {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-            rt.block_on(async {
-                let app = router(http_api);
-                let listener = match tokio::net::TcpListener::bind("0.0.0.0:8080").await {
-                    Ok(l) => l,
-                    Err(e) => {
-                        let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("bind error: {e}"));
-                        return;
-                    }
-                };
-                let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_started.txt", "HTTP server started on 8080");
-                if let Err(e) = axum::serve(listener, app).await {
-                    let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("serve error: {e}"));
-                }
-            });
-        }));
-        if let Err(e) = result {
-            let _ = std::fs::write("C:\\Users\\andre\\AppData\\Local\\Temp\\kilo\\http_error.txt", format!("panic: {e:?}"));
-        }
+        sc_http.lock().unwrap().start_http(8080);
     });
 
     let options = eframe::NativeOptions {
@@ -275,12 +279,17 @@ fn main() -> eframe::Result {
             .with_icon(load_icon()),
         ..Default::default()
     };
+    let sc_app = Arc::clone(&server_control);
     eframe::run_native(
         "Polygram",
         options,
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
-            Ok(Box::new(PolygramApp::new_with_api((*api).clone())))
+            Ok(Box::new(PolygramApp::new_with_api(
+                (*api).clone(),
+                mcp_rx,
+                sc_app,
+            )))
         }),
     )
 }

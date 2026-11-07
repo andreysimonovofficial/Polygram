@@ -3,24 +3,42 @@
 use polygram_core::Command;
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
+use std::sync::mpsc;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 use super::ApiService;
 
+/// Событие о выполненной MCP-команде — пересылается в GUI для лога.
+#[derive(Clone, Debug)]
+pub struct McpEvent {
+    pub cmd: String,
+    pub result: String,
+}
+
 pub struct McpServer {
     api: ApiService,
+    mcp_tx: Option<mpsc::Sender<McpEvent>>,
 }
 
 impl McpServer {
     pub fn new(api: ApiService) -> Self {
-        Self { api }
+        Self { api, mcp_tx: None }
     }
 
-    pub fn run(self) {
+    pub fn with_events(mut self, tx: mpsc::Sender<McpEvent>) -> Self {
+        self.mcp_tx = Some(tx);
+        self
+    }
+
+    pub fn run(self, running: Arc<AtomicBool>) {
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut out = stdout.lock();
 
         for line in stdin.lock().lines() {
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
             let line = match line {
                 Ok(l) => l,
                 Err(_) => break,
@@ -123,9 +141,22 @@ impl McpServer {
                     Ok(c) => c,
                     Err(_) => return jsonrpc_error(None, -32602, "Invalid command JSON"),
                 };
+                let cmd_str = serde_json::to_string(&cmd).unwrap_or_else(|_| cmd_json.to_owned());
                 match self.api.apply(cmd) {
-                    Ok(applied) => json!({ "ok": true, "rev": applied.rev }),
-                    Err(e) => json!({ "ok": false, "error": format!("{e:?}") }),
+                    Ok(applied) => {
+                        let result = format!("OK ревизия {}", applied.rev);
+                        if let Some(tx) = &self.mcp_tx {
+                            let _ = tx.send(McpEvent { cmd: cmd_str, result });
+                        }
+                        json!({ "ok": true, "rev": applied.rev })
+                    }
+                    Err(e) => {
+                        let result = format!("Ошибка: {e:?}");
+                        if let Some(tx) = &self.mcp_tx {
+                            let _ = tx.send(McpEvent { cmd: cmd_str, result });
+                        }
+                        json!({ "ok": false, "error": format!("{e:?}") })
+                    }
                 }
             }
             "get_snapshot" => {
