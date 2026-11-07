@@ -144,15 +144,20 @@ impl Canvas {
                 continue;
             }
             if object.kind == NodeKind::Process {
-                paint_process(
-                    painter,
-                    object,
-                    dynamic,
-                    &self.theme,
-                    rect_px,
-                    cell_px,
-                    is_hovered,
-                );
+                let paint_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    paint_process(
+                        painter,
+                        object,
+                        dynamic,
+                        &self.theme,
+                        rect_px,
+                        cell_px,
+                        is_hovered,
+                    );
+                }));
+                if paint_result.is_err() {
+                    eprintln!("paint_process panicked for object {}", object.id);
+                }
             } else {
                 paint_object(
                     painter,
