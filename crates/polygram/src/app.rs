@@ -21,6 +21,10 @@ pub struct PolygramApp {
     pub add_metric_kind: MetricKind,
     pub add_metric_value: String,
     pub add_metric_unit: String,
+    /// Модальное диалоговое окно редактирования списка показателей контейнера.
+    pub container_menu_target: Option<(String, Direction)>,
+    /// Временные буферы для редактирования значений показателей в диалоге контейнера.
+    pub container_menu_edits: Vec<(String, String)>,
     pub drag_object: Option<String>,
     pub drag_start_screen: Option<egui::Pos2>,
     pub drag_start_cell: Option<(i32, i32)>,
@@ -56,6 +60,8 @@ impl PolygramApp {
             add_metric_kind: MetricKind::Number,
             add_metric_value: String::new(),
             add_metric_unit: String::new(),
+            container_menu_target: None,
+            container_menu_edits: Vec::new(),
             drag_object: None,
             drag_start_screen: None,
             drag_start_cell: None,

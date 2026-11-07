@@ -374,6 +374,167 @@ pub fn handle_canvas_interaction(
     }
 
     handle_add_metric_dialog(app, ctx);
+
+    // Открыть диалог редактирования списка показателей контейнера по клику на ≡.
+    if let Some(pos) = canvas_response.interact_pointer_pos() {
+        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        for (object_id, dir, rect) in &app.canvas.container_menu_hotspots {
+            if rect.contains(pos) && canvas_response.clicked() && !is_double {
+                app.container_menu_target = Some((object_id.clone(), *dir));
+                app.drag_object = None;
+                app.drag_start_screen = None;
+                app.drag_start_cell = None;
+                break;
+            }
+        }
+    }
+
+    handle_container_menu_dialog(app, ctx, published);
+}
+
+pub fn handle_container_menu_dialog(
+    app: &mut PolygramApp,
+    ctx: &egui::Context,
+    published: &polygram_core::Published,
+) {
+    let Some((object_id, dir)) = &app.container_menu_target else {
+        return;
+    };
+    let object_id = object_id.clone();
+    let dir = *dir;
+
+    let label = match dir {
+        Direction::Request => "ЗАПРОС",
+        Direction::Output => "ВЫХОД",
+    };
+
+    let obj = match published
+        .geometry
+        .objects
+        .iter()
+        .find(|o| o.id == *object_id)
+    {
+        Some(o) => o,
+        None => {
+            app.container_menu_target = None;
+            return;
+        }
+    };
+
+    let entries: Vec<&polygram_core::geometry::EntryGeom> = match dir {
+        Direction::Request => obj.requests.iter().collect(),
+        Direction::Output => obj.outputs.iter().collect(),
+    };
+
+    // Инициализировать буферы редактирования для всех показателей.
+    if app.container_menu_edits.is_empty() {
+        for entry in &entries {
+            app.container_menu_edits.push((entry.name.clone(), format!("{:.0}", entry.value)));
+        }
+    } else {
+        // Синхронизировать буферы с текущими показателями (добавить новые, удалить старые).
+        let entry_names: std::collections::HashSet<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        app.container_menu_edits.retain(|(n, _)| entry_names.contains(n.as_str()));
+        for entry in &entries {
+            if !app.container_menu_edits.iter().any(|(n, _)| *n == entry.name) {
+                app.container_menu_edits.push((entry.name.clone(), format!("{:.0}", entry.value)));
+            }
+        }
+    }
+
+    let mut delete_entry: Option<String> = None;
+    let mut apply_edits = false;
+    let mut close_dialog = false;
+
+    egui::Window::new(format!("Показатели — {label} ({object_id})"))
+        .default_size([500.0, 400.0])
+        .resizable(true)
+        .collapsible(false)
+        .show(ctx, |ui| {
+            ui.label(format!("{label} — {}", entries.len()));
+            ui.separator();
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for entry in entries.iter() {
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label(&entry.name);
+                        ui.label("значение:");
+
+                        // Найти или создать буфер для этого показателя.
+                        let buf_idx = app
+                            .container_menu_edits
+                            .iter()
+                            .position(|(n, _)| *n == entry.name);
+                        if buf_idx.is_none() {
+                            app.container_menu_edits.push((
+                                entry.name.clone(),
+                                format!("{:.0}", entry.value),
+                            ));
+                        }
+                        let buf_idx = app
+                            .container_menu_edits
+                            .iter()
+                            .position(|(n, _)| *n == entry.name)
+                            .unwrap();
+                        let buf = &mut app.container_menu_edits[buf_idx].1;
+
+                        ui.text_edit_singleline(buf);
+
+                        if !entry.unit.is_empty() {
+                            ui.label(&entry.unit);
+                        }
+
+                        if ui.button("🗑").clicked() {
+                            delete_entry = Some(entry.name.clone());
+                        }
+                    });
+                }
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Применить").clicked() {
+                    apply_edits = true;
+                }
+                if ui.button("Закрыть").clicked() {
+                    close_dialog = true;
+                }
+            });
+        });
+
+    // Применить изменения значений.
+    if apply_edits {
+        let edits: Vec<(String, f64)> = app
+            .container_menu_edits
+            .iter()
+            .filter_map(|(entry_name, value_str)| {
+                let value: f64 = value_str.trim().parse().unwrap_or(0.0);
+                Some((entry_name.clone(), value))
+            })
+            .collect();
+        app.container_menu_edits.clear();
+        for (entry_name, value) in edits {
+            app.apply_cmd(polygram_core::Command::SetValue {
+                object: object_id.clone(),
+                entry: entry_name,
+                value,
+            });
+        }
+    }
+
+    // Удалить показатель.
+    if let Some(entry_name) = delete_entry {
+        app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
+            object: object_id.clone(),
+            entry: entry_name,
+        });
+    }
+
+    if close_dialog {
+        app.container_menu_target = None;
+        app.container_menu_edits.clear();
+    }
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {

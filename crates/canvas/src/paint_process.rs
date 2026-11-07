@@ -114,6 +114,7 @@ fn paint_add_row(
 }
 
 /// Рисовать заголовок контейнера: «ЗАПРОС (N) СТАТУС (N)» + точка статуса + кнопка ≡.
+/// Возвращает rect кнопки ≡ (если нужно обрабатывать клик).
 fn paint_container_header(
     painter: &Painter,
     rect: Rect,
@@ -123,7 +124,7 @@ fn paint_container_header(
     zoom: f32,
     theme: &Theme,
     is_hovered: bool,
-) {
+) -> Option<Rect> {
     let label = match dir {
         Direction::Request => "ЗАПРОС",
         Direction::Output => "ВЫХОД",
@@ -189,11 +190,13 @@ fn paint_container_header(
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         text_color,
     );
+
+    Some(btn_rect)
 }
 
 /// Высокопроизводительный процедурный рендер объекта "Процесс".
 /// Рисует: внешняя рамка → заголовок объекта → контейнер Запрос → контейнер Выход.
-/// Возвращает горячие зоны добавления показателя (для клика «+ Добавить показатель»).
+/// Возвращает (горячие зоны добавления показателя, горячие зоны меню контейнеров).
 pub fn paint_process(
     painter: &Painter,
     object: &ObjectGeom,
@@ -204,8 +207,9 @@ pub fn paint_process(
     zoom: f32,
     is_hovered: bool,
     _edit_target: Option<&str>,
-) -> Vec<(String, Direction, Rect)> {
-    let mut hotspots: Vec<(String, Direction, Rect)> = Vec::new();
+) -> (Vec<(String, Direction, Rect)>, Vec<(String, Direction, Rect)>) {
+    let mut add_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
+    let mut menu_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
 
     // --- Геометрия: фиксированные пропорции тела объекта ---
     let req_count = object.requests.len();
@@ -273,14 +277,16 @@ pub fn paint_process(
         Stroke::new(theme.object_border_width * zoom, req_border),
     );
 
-    // Шапка контейнера
+    // Шапка контейнера + кнопка меню
     let req_header_h = req_h_px * 0.20;
     let req_header_rect = Rect::from_min_size(req_rect.min, Vec2::new(req_rect.width(), req_header_h));
     painter.rect_filled(req_header_rect, 0.0, theme.card_bg);
-    paint_container_header(
+    if let Some(btn_rect) = paint_container_header(
         painter, req_header_rect, Direction::Request, &object.requests,
         dynamic, zoom, theme, is_hovered,
-    );
+    ) {
+        menu_hotspots.push((object.id.clone(), Direction::Request, btn_rect));
+    }
 
     // Строки показателей + строка добавления
     let content_top = req_rect.min.y + req_header_h;
@@ -306,7 +312,7 @@ pub fn paint_process(
             Vec2::new(req_rect.width(), row_h_req),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
-        hotspots.push((object.id.clone(), Direction::Request, add_rect));
+        add_hotspots.push((object.id.clone(), Direction::Request, add_rect));
     }
 
     // =============== КОНТЕЙНЕР: ВЫХОД ===============
@@ -321,13 +327,16 @@ pub fn paint_process(
         Stroke::new(theme.object_border_width * zoom, out_border),
     );
 
+    // Шапка контейнера + кнопка меню
     let out_header_h = out_h_px * 0.20;
     let out_header_rect = Rect::from_min_size(out_rect.min, Vec2::new(out_rect.width(), out_header_h));
     painter.rect_filled(out_header_rect, 0.0, theme.card_bg);
-    paint_container_header(
+    if let Some(btn_rect) = paint_container_header(
         painter, out_header_rect, Direction::Output, &object.outputs,
         dynamic, zoom, theme, is_hovered,
-    );
+    ) {
+        menu_hotspots.push((object.id.clone(), Direction::Output, btn_rect));
+    }
 
     let content_top_out = out_rect.min.y + out_header_h;
     let content_h_out = out_rect.height() - out_header_h;
@@ -352,8 +361,8 @@ pub fn paint_process(
             Vec2::new(out_rect.width(), row_h_out),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
-        hotspots.push((object.id.clone(), Direction::Output, add_rect));
+        add_hotspots.push((object.id.clone(), Direction::Output, add_rect));
     }
 
-    hotspots
+    (add_hotspots, menu_hotspots)
 }
