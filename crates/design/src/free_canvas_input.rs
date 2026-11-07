@@ -346,8 +346,7 @@ impl FreeCanvas {
             self.drag_start = response.interact_pointer_pos();
 
             // Проверка попадания в ручку ресайза перед обычным перетаскиванием.
-            if self.tool == DrawTool::Select
-                && !self.selected.is_empty()
+            if !self.selected.is_empty()
                 && !self.prototype_mode
                 && self.resize_mode.is_none()
             {
