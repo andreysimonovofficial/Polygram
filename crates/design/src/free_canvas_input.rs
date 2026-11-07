@@ -173,8 +173,8 @@ impl FreeCanvas {
 
                 // Ручки изменения размера (углы и стороны выделения).
                     if !self.prototype_mode {
-                    let handle_size = 12.0;
-                    let hit_size = 16.0;
+                    let handle_size = 14.0;
+                    let hit_size = 28.0;
                     let hover_pos = ui.ctx().pointer_hover_pos();
                     let mut hovered_handle: Option<ResizeMode> = None;
 
@@ -369,7 +369,7 @@ impl FreeCanvas {
                             Vec2::new(max_x - min_x, max_y - min_y),
                         );
                         let sr = world_rect_to_screen(world_rect);
-                        let hit_size = 16.0;
+                        let hit_size = 28.0;
                         let hover_pos = pos;
 
                         let handles: [(ResizeMode, Pos2); 8] = [
