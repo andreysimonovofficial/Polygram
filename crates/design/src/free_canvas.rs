@@ -54,8 +54,8 @@ pub struct FreeCanvas {
     pub drag_history_saved: bool,
     /// Режим изменения размера (какой угол/сторона захвачен).
     pub resize_mode: Option<ResizeMode>,
-    /// Исходное состояние фигуры перед началом ресайза: (индекс, x, y, w, h).
-    pub resize_origin: Option<(usize, f32, f32, f32, f32)>,
+    /// Исходное состояние выделенных фигур перед началом ресайза: (индекс, x, y, w, h) для каждой.
+    pub resize_origin: Vec<(usize, f32, f32, f32, f32)>,
 }
 
 impl Default for FreeCanvas {
@@ -91,7 +91,7 @@ impl Default for FreeCanvas {
             clipboard: None,
             drag_history_saved: false,
             resize_mode: None,
-            resize_origin: None,
+            resize_origin: Vec::new(),
         }
     }
 }
