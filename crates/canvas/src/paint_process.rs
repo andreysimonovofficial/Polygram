@@ -48,7 +48,6 @@ impl LayoutRgba {
 
 /// Позиция обводки.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutStrokePosition {
     #[default]
     Center,
@@ -58,7 +57,6 @@ enum LayoutStrokePosition {
 
 /// Толщина шрифта.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutFontWeight {
     Thin,
     ExtraLight,
@@ -74,7 +72,6 @@ enum LayoutFontWeight {
 
 /// Семейство шрифта.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutFontFamily {
     #[default]
     Inter,
@@ -83,7 +80,6 @@ enum LayoutFontFamily {
 
 /// Выравнивание по горизонтали.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutTextAlign {
     Left,
     Center,
@@ -92,7 +88,6 @@ enum LayoutTextAlign {
 
 /// Выравнивание по вертикали.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutTextAlignV {
     Top,
     Middle,
@@ -101,7 +96,6 @@ enum LayoutTextAlignV {
 
 /// Инструмент фигуры.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum LayoutDrawTool {
     Select,
     Rect,
@@ -348,6 +342,10 @@ fn paint_layout_shape(
     screen_rect: Rect,
     scale: f32,
 ) {
+    // Пропускать фигуры с некорректным размером, чтобы избежать паники в egui.
+    if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
+        return;
+    }
     let fill = resolve_fill(shape);
     let stroke_color = resolve_stroke_color(shape);
     let stroke_width = resolve_stroke_width(shape);
