@@ -155,6 +155,10 @@ impl Hierarchy {
         self.metric_defs[ix.idx()].name = name;
     }
 
+    pub fn set_metric_def_unit(&mut self, ix: MetricDefIx, unit: String) {
+        self.metric_defs[ix.idx()].unit = unit;
+    }
+
     pub fn add_object_metric(
         &mut self,
         object: ObjectIx,

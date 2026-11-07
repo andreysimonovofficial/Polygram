@@ -426,18 +426,31 @@ pub fn handle_container_menu_dialog(
         Direction::Output => obj.outputs.iter().collect(),
     };
 
-    // Инициализировать буферы редактирования для всех показателей.
+    // Инициализировать буферы редактирования (имя, значение, единица).
     if app.container_menu_edits.is_empty() {
         for entry in &entries {
-            app.container_menu_edits.push((entry.name.clone(), format!("{:.0}", entry.value)));
+            app.container_menu_edits.push((
+                entry.name.clone(),
+                format!("{:.0}", entry.value),
+                entry.unit.clone(),
+            ));
         }
     } else {
-        // Синхронизировать буферы с текущими показателями (добавить новые, удалить старые).
-        let entry_names: std::collections::HashSet<&str> = entries.iter().map(|e| e.name.as_str()).collect();
-        app.container_menu_edits.retain(|(n, _)| entry_names.contains(n.as_str()));
+        let entry_names: std::collections::HashSet<&str> =
+            entries.iter().map(|e| e.name.as_str()).collect();
+        app.container_menu_edits
+            .retain(|(n, _, _)| entry_names.contains(n.as_str()));
         for entry in &entries {
-            if !app.container_menu_edits.iter().any(|(n, _)| *n == entry.name) {
-                app.container_menu_edits.push((entry.name.clone(), format!("{:.0}", entry.value)));
+            if !app
+                .container_menu_edits
+                .iter()
+                .any(|(n, _, _)| *n == entry.name)
+            {
+                app.container_menu_edits.push((
+                    entry.name.clone(),
+                    format!("{:.0}", entry.value),
+                    entry.unit.clone(),
+                ));
             }
         }
     }
@@ -461,29 +474,30 @@ pub fn handle_container_menu_dialog(
                         ui.label(&entry.name);
                         ui.label("значение:");
 
-                        // Найти или создать буфер для этого показателя.
                         let buf_idx = app
                             .container_menu_edits
                             .iter()
-                            .position(|(n, _)| *n == entry.name);
+                            .position(|(n, _, _)| *n == entry.name);
                         if buf_idx.is_none() {
                             app.container_menu_edits.push((
                                 entry.name.clone(),
                                 format!("{:.0}", entry.value),
+                                entry.unit.clone(),
                             ));
                         }
                         let buf_idx = app
                             .container_menu_edits
                             .iter()
-                            .position(|(n, _)| *n == entry.name)
+                            .position(|(n, _, _)| *n == entry.name)
                             .unwrap();
-                        let buf = &mut app.container_menu_edits[buf_idx].1;
+                        let (value_buf, unit_buf) = {
+                            let e = &mut app.container_menu_edits[buf_idx];
+                            (&mut e.1, &mut e.2)
+                        };
 
-                        ui.text_edit_singleline(buf);
-
-                        if !entry.unit.is_empty() {
-                            ui.label(&entry.unit);
-                        }
+                        ui.text_edit_singleline(value_buf);
+                        ui.label("единица:");
+                        ui.text_edit_singleline(unit_buf);
 
                         if ui.button("🗑").clicked() {
                             delete_entry = Some(entry.name.clone());
@@ -503,22 +517,40 @@ pub fn handle_container_menu_dialog(
             });
         });
 
-    // Применить изменения значений.
+    // Применить изменения значений и единиц измерения.
     if apply_edits {
-        let edits: Vec<(String, f64)> = app
+        let value_cmds: Vec<(String, f64)> = app
             .container_menu_edits
             .iter()
-            .filter_map(|(entry_name, value_str)| {
+            .filter_map(|(entry_name, value_str, _)| {
                 let value: f64 = value_str.trim().parse().unwrap_or(0.0);
                 Some((entry_name.clone(), value))
             })
             .collect();
+        let unit_cmds: Vec<(String, String)> = app
+            .container_menu_edits
+            .iter()
+            .filter_map(|(entry_name, _, unit_str)| {
+                let unit = unit_str.trim().to_owned();
+                if !unit.is_empty() {
+                    Some((entry_name.clone(), unit))
+                } else {
+                    None
+                }
+            })
+            .collect();
         app.container_menu_edits.clear();
-        for (entry_name, value) in edits {
+        for (entry_name, value) in value_cmds {
             app.apply_cmd(polygram_core::Command::SetValue {
                 object: object_id.clone(),
                 entry: entry_name,
                 value,
+            });
+        }
+        for (metric_def, unit) in unit_cmds {
+            app.apply_cmd(polygram_core::Command::SetMetricDefUnit {
+                metric_def,
+                unit,
             });
         }
     }

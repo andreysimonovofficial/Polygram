@@ -12,7 +12,7 @@ mod reroute_all;
 pub use auto_layout::handle_auto_layout;
 pub use edges::{handle_connect, handle_disconnect};
 pub use layout::handle_move_object;
-pub use metric_defs::{handle_add_metric_def, handle_remove_metric_def, handle_rename_metric_def};
+pub use metric_defs::{handle_add_metric_def, handle_remove_metric_def, handle_rename_metric_def, handle_set_metric_def_unit};
 pub use metric_entries::{
     handle_add_metric_entry, handle_remove_metric_entry, handle_set_fact, handle_set_max,
     handle_set_required, handle_set_value,
@@ -42,6 +42,9 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         Command::RemoveMetricDef { metric_def } => handle_remove_metric_def(engine, &metric_def),
         Command::RenameMetricDef { metric_def, name } => {
             handle_rename_metric_def(engine, &metric_def, name)
+        }
+        Command::SetMetricDefUnit { metric_def, unit } => {
+            handle_set_metric_def_unit(engine, &metric_def, unit)
         }
         Command::AddMetricEntry {
             object,

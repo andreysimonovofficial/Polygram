@@ -40,3 +40,16 @@ pub fn handle_rename_metric_def(
         .push(crate::event::EventKind::MetricDefRenamed { metric_def: ix.0 });
     Ok(Applied::default())
 }
+
+pub fn handle_set_metric_def_unit(
+    engine: &mut Engine,
+    metric_def: &str,
+    unit: String,
+) -> Result<Applied> {
+    let ix = engine.find_metric_def(metric_def)?;
+    engine.hier.set_metric_def_unit(ix, unit);
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricDefRenamed { metric_def: ix.0 });
+    Ok(Applied::default())
+}

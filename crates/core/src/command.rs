@@ -58,6 +58,10 @@ pub enum Command {
         metric_def: String,
         name: String,
     },
+    SetMetricDefUnit {
+        metric_def: String,
+        unit: String,
+    },
 
     /// Добавить запись показателя в контейнер объекта.
     AddMetricEntry {
