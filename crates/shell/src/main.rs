@@ -27,6 +27,8 @@ fn load_icon() -> egui::IconData {
 /// Зарегистрировать шрифты Inter (как в Design Tool), чтобы FontFamily::Name("inter-*")
 /// не вызывал панику при отрисовке текста. Шрифты из папки `fonts/` рядом с exe
 /// (или working dir для cargo run), файлы вида inter-regular.ttf, inter-semibold.ttf и т.д.
+/// Также регистрирует Unicode fallback (Segoe UI Symbol), чтобы символы ≡, ⚙ и др.
+/// отображались вместо квадратов.
 fn register_fonts(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
 
@@ -36,14 +38,15 @@ fn register_fonts(ctx: &egui::Context) {
         "bold", "extrabold", "black",
     ];
 
-    let _fallback_key = load_any_system_font(&mut fonts);
-    let _unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
+    let fallback_key = load_any_system_font(&mut fonts);
+    let unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
 
     for family in families {
         for weight in weights {
             let key = format!("{}-{}", family, weight);
             let mut loaded = false;
 
+            // 1. Папка fonts/ рядом с исполняемым файлом.
             if let Some(dir) = std::env::current_exe()
                 .ok()
                 .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -59,6 +62,7 @@ fn register_fonts(ctx: &egui::Context) {
                     loaded = true;
                 }
             }
+            // 2. Относительно текущей рабочей директории (для cargo run).
             if !loaded {
                 let path = format!("fonts/{}.ttf", key);
                 if let Ok(data) = std::fs::read(&path) {
@@ -71,8 +75,8 @@ fn register_fonts(ctx: &egui::Context) {
                     loaded = true;
                 }
             }
+            // 3. Относительно crates/shell/fonts/ (для cargo run из корня репозитория).
             if !loaded {
-                // 3. Относительно crates/shell/fonts/ (для cargo run из корня репозитория).
                 let path = format!("crates/shell/fonts/{}.ttf", key);
                 if let Ok(data) = std::fs::read(&path) {
                     fonts.font_data.insert(key.clone(), FontData::from_owned(data));
@@ -84,9 +88,47 @@ fn register_fonts(ctx: &egui::Context) {
                     loaded = true;
                 }
             }
+            // 4. Fallback на любой доступный системный шрифт, чтобы egui не паниковал.
+            if !loaded {
+                if let Some(fb) = &fallback_key {
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(fb.clone());
+                }
+            }
+            // 5. Unicode fallback — для символов, которых нет в основном шрифте.
+            if let Some(uf) = &unicode_fallback_key {
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name(key.clone().into()))
+                    .or_default()
+                    .push(uf.clone());
+            }
         }
     }
 
+    // Добавить шрифты в стандартные семейства egui.
+    if let Some(fb) = &fallback_key {
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .push(fb.clone());
+    }
+    if let Some(uf) = &unicode_fallback_key {
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .push(uf.clone());
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push(uf.clone());
+    }
     fonts
         .families
         .entry(egui::FontFamily::Proportional)
@@ -111,13 +153,47 @@ fn register_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-fn load_any_system_font(_fonts: &mut FontDefinitions) -> String {
-    // egui уже имеет системный шрифт по умолчанию, просто возвращаем ключ fallback.
-    "__system_fallback__".to_owned()
+/// Загрузить любой доступный системный шрифт Windows как гарантированный fallback.
+/// Возвращает Some(key) если удалось загрузить, иначе None.
+fn load_any_system_font(fonts: &mut FontDefinitions) -> Option<String> {
+    for path in [
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/times.ttf",
+    ] {
+        if let Ok(data) = std::fs::read(path) {
+            let key = "system".to_owned();
+            fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+            fonts
+                .families
+                .entry(egui::FontFamily::Name(key.clone().into()))
+                .or_default()
+                .push(key.clone());
+            return Some(key);
+        }
+    }
+    None
 }
 
-fn load_unicode_fallback_font(_fonts: &mut FontDefinitions) -> String {
-    "__unicode_fallback__".to_owned()
+/// Загрузить шрифт с широкой поддержкой символов Юникода (Segoe UI Symbol),
+/// чтобы символы ≡, ⚙ и др. отображались вместо квадратов.
+fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
+    for path in [
+        "C:/Windows/Fonts/seguisym.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+    ] {
+        if let Ok(data) = std::fs::read(path) {
+            let key = "unicode-fallback".to_owned();
+            fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+            fonts
+                .families
+                .entry(egui::FontFamily::Name(key.clone().into()))
+                .or_default()
+                .push(key.clone());
+            return Some(key);
+        }
+    }
+    None
 }
 
 impl eframe::App for PolygramApp {
