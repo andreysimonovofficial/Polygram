@@ -125,7 +125,7 @@ pub fn context_menu(
                     *close_menu = true;
                 }
                 if object_id.is_none() {
-                    if ui.button("Добавить объект здесь").clicked() {
+                    if ui.button("Создать Процесс").clicked() {
                         let world_pos = app
                             .canvas
                             .camera
@@ -140,7 +140,7 @@ pub fn context_menu(
                         app.apply_cmd(cmd);
                         *close_menu = true;
                     }
-                    if ui.button("Добавить отдел здесь").clicked() {
+                    if ui.button("Добавить Отдел").clicked() {
                         let world_pos = app
                             .canvas
                             .camera
