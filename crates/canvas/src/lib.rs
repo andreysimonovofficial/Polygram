@@ -7,6 +7,7 @@ mod hit_test;
 mod paint_department;
 mod paint_edge;
 mod paint_object;
+mod paint_process;
 mod theme;
 
 pub use camera::Camera;
@@ -14,6 +15,7 @@ pub use hit_test::{header_at, object_at};
 pub use paint_department::paint_department_frame;
 pub use paint_edge::paint_edge;
 pub use paint_object::{paint_container, paint_object};
+pub use paint_process::paint_process;
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Shape, Stroke, Vec2};
@@ -141,15 +143,27 @@ impl Canvas {
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
-            paint_object(
-                painter,
-                object,
-                dynamic,
-                &self.theme,
-                rect_px,
-                cell_px,
-                is_hovered,
-            );
+            if object.kind == NodeKind::Process {
+                paint_process(
+                    painter,
+                    object,
+                    dynamic,
+                    &self.theme,
+                    rect_px,
+                    cell_px,
+                    is_hovered,
+                );
+            } else {
+                paint_object(
+                    painter,
+                    object,
+                    dynamic,
+                    &self.theme,
+                    rect_px,
+                    cell_px,
+                    is_hovered,
+                );
+            }
         }
     }
 
