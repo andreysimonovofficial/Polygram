@@ -14,9 +14,8 @@ pub use camera::Camera;
 pub use hit_test::{header_at, object_at};
 pub use paint_department::paint_department_frame;
 pub use paint_edge::paint_edge;
-pub use paint_object::{paint_container, paint_object};
+pub use paint_object::paint_object;
 pub use paint_process::paint_process;
-pub use paint_process::title_text_rect;
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Vec2};

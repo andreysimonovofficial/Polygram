@@ -1,430 +1,209 @@
-//! Рендер объекта "Процесс" по шаблону design.json (полная копия макета со stub-кнопками).
+//! Процедурный рендер объекта "Процесс" (конструктор-style, без design.json).
 //!
-//! Стратегия:
-//! - Шаблон design.json — это FreeCanvasDoc с фигурами в абсолютных пикселях
-//!   макета (базовый размер 372×380). Каждая figura отображается в экранные
-//!   координаты внутри rect процесса с линейным масштабированием.
-//! - Обводка рисуется константной толщиной в экранных пикселях (не меняется от зума).
-//! - Текст рисуется через painter.text() с galley (замер ширины), шрифт Inter.
-//! - Интерактивные зоны ("≡", "+ Добавить показатель") зарегистрированы как
-//!   hit-тест заглушки — функциональность будет добавлена позже.
+//! Все константы в начале файла — крути их, результат меняется сразу.
+//! Высота объекта растёт под контент: заголовок + 2 × (заголовок контейнера + строки показателей).
+//! Всё считается из констант: нет наложения статики и динамики, нет двойной отрисовки.
 
 use crate::theme::Theme;
-use egui::{Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2};
-use crate::paint_container;
+use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::types::Direction;
-use polygram_core::{DynamicState, ObjectGeom};
-use serde::Deserialize;
-use std::sync::OnceLock;
+use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 
-/// Базовый размер макета design.json (в пикселях макета).
-pub const DESIGN_W: f32 = 372.0;
-pub const DESIGN_H: f32 = 380.0;
+// ┌─────────────────────────────────────────────────────────────┐
+// │ КОНСТАНТЫ-КОНСТРУКТОР                                       │
+// └─────────────────────────────────────────────────────────────┘
 
-/// Текстовое поле названия процесса (shape "ui-1") в пикселях макета.
-pub const TITLE_TEXT_X: f32 = 46.0;
-pub const TITLE_TEXT_Y: f32 = 33.0;
-pub const TITLE_TEXT_W: f32 = 142.0;
-pub const TITLE_TEXT_H: f32 = 20.0;
+/// Высота заголовка объекта (в ячейках).
+pub const OBJECT_HEADER_HEIGHT_CELLS: f32 = 1.0;
+/// Высота заголовка контейнера (в ячейках).
+pub const CONTAINER_HEADER_HEIGHT_CELLS: f32 = 0.5;
+/// Высота одной строки показателя (в ячейках).
+pub const METRIC_ROW_HEIGHT_CELLS: f32 = 0.6;
+/// Внутренний отступ внутри контейнера (в ячейках).
+pub const PADDING_CELLS: f32 = 0.25;
+/// Максимум видимых показателей на сторону (лимит UI, не ядра).
+pub const MAX_VISIBLE_METRICS: usize = 4;
 
-/// Экранный rect текстового поля названия процесса (shape "ui-1").
-pub fn title_text_rect(
-    screen_min: egui::Pos2,
-    cell_px: f32,
-    rect_w: i32,
-    rect_h: i32,
-) -> egui::Rect {
-    let scale_x = (rect_w as f32 * cell_px) / DESIGN_W;
-    let scale_y = (rect_h as f32 * cell_px) / DESIGN_H;
-    egui::Rect::from_min_size(
-        screen_min
-            + egui::Vec2::new(TITLE_TEXT_X * scale_x, TITLE_TEXT_Y * scale_y),
-        egui::Vec2::new(TITLE_TEXT_W * scale_x, TITLE_TEXT_H * scale_y),
-    )
+/// Высота контейнера для заданного количества показателей (в ячейках).
+fn container_height_cells(metric_count: usize) -> f32 {
+    let visible = metric_count.min(MAX_VISIBLE_METRICS);
+    let add_row = if visible < MAX_VISIBLE_METRICS { 1.0 } else { 0.0 };
+    CONTAINER_HEADER_HEIGHT_CELLS + (visible as f32 + add_row) * METRIC_ROW_HEIGHT_CELLS + 2.0 * PADDING_CELLS
 }
 
-/// Точка в формате макета.
-#[derive(Clone, Copy, Debug, Deserialize)]
-struct LayoutPoint {
-    pub x: f32,
-    pub y: f32,
-}
-
-/// Цвет RGBA в формате макета.
-#[derive(Clone, Copy, Debug, Deserialize)]
-struct LayoutRgba {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    #[serde(default = "default_alpha")]
-    pub a: u8,
-}
-
-fn default_alpha() -> u8 {
-    255
-}
-
-impl LayoutRgba {
-    fn to_color32(self) -> Color32 {
-        Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
+/// Ранг статуса (чем выше — тем хуже).
+fn status_rank(s: StatusCode) -> u8 {
+    match s {
+        StatusCode::Ok => 0,
+        StatusCode::Unknown | StatusCode::Disabled => 1,
+        StatusCode::Unconnected => 2,
+        StatusCode::Warning => 3,
+        StatusCode::Deficit => 4,
+        StatusCode::Surplus => 5,
+        StatusCode::Invalid => 6,
     }
 }
 
-/// Позиция обводки.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-enum LayoutStrokePosition {
-    #[default]
-    Center,
-    Inside,
-    Outside,
-}
-
-/// Толщина шрифта.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-enum LayoutFontWeight {
-    Thin,
-    ExtraLight,
-    Light,
-    #[default]
-    Regular,
-    Medium,
-    SemiBold,
-    Bold,
-    ExtraBold,
-    Black,
-}
-
-/// Семейство шрифта.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-enum LayoutFontFamily {
-    #[default]
-    Inter,
-    SegoeUI,
-}
-
-/// Выравнивание по горизонтали.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-enum LayoutTextAlign {
-    Left,
-    Center,
-    Right,
-}
-
-/// Выравнивание по вертикали.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-enum LayoutTextAlignV {
-    Top,
-    Middle,
-    Bottom,
-}
-
-/// Инструмент фигуры.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-enum LayoutDrawTool {
-    Select,
-    Rect,
-    Line,
-    Ellipse,
-    Text,
-}
-
-/// Состояние для наведения/нажатия.
-#[derive(Clone, Debug, Default, Deserialize)]
-struct LayoutStateStyle {
-    pub fill: Option<LayoutRgba>,
-    pub stroke: Option<LayoutRgba>,
-    pub stroke_width: Option<f32>,
-}
-
-/// Состояния фигуры.
-#[derive(Clone, Debug, Default, Deserialize)]
-struct LayoutShapeStates {
-    pub hover: Option<LayoutStateStyle>,
-    pub pressed: Option<LayoutStateStyle>,
-}
-
-/// Одна фигура из design.json.
-#[derive(Clone, Debug, Deserialize)]
-struct LayoutShape {
-    pub id: String,
-    pub tool: LayoutDrawTool,
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
-    pub fill: Option<LayoutRgba>,
-    pub stroke: LayoutRgba,
-    pub stroke_width: f32,
-    #[serde(default)]
-    pub stroke_position: LayoutStrokePosition,
-    pub corner_radius: f32,
-    pub corner_tl: f32,
-    pub corner_tr: f32,
-    pub corner_bl: f32,
-    pub corner_br: f32,
-    pub text: String,
-    pub font_size: f32,
-    pub text_color: LayoutRgba,
-    pub text_align: LayoutTextAlign,
-    pub text_align_v: LayoutTextAlignV,
-    #[serde(default)]
-    pub font_weight: LayoutFontWeight,
-    #[serde(default)]
-    pub font_family: LayoutFontFamily,
-    #[serde(default)]
-    pub states: LayoutShapeStates,
-    #[serde(default)]
-    pub group_id: Option<String>,
-    #[serde(default)]
-    pub parent_id: Option<String>,
-    #[serde(default)]
-    pub is_container: bool,
-    #[serde(default = "default_true")]
-    pub reacts_to_parent: bool,
-    #[serde(default)]
-    pub child_react_mode: String,
-    #[serde(default)]
-    pub child_react_allow: Vec<String>,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-/// Весь документ дизайна процесса.
-#[derive(Clone, Debug, Deserialize)]
-struct LayoutDoc {
-    pub version: u32,
-    pub name: String,
-    pub bg: LayoutRgba,
-    pub grid: LayoutRgba,
-    pub show_grid: bool,
-    pub shapes: Vec<LayoutShape>,
-    #[serde(default)]
-    pub prototype_mode: bool,
-}
-
-/// Загрузить шаблон процесса из встроенного design.json.
-fn load_process_layout() -> LayoutDoc {
-    let json = include_str!("process_design.json");
-    serde_json::from_str(json).expect("Failed to parse process_design.json")
-}
-
-/// Hit-тест зоны интерактивных элементов (stub).
-/// Каждая зона: прямоугольник в экранных координатах + идентификатор действия.
-#[derive(Clone, Debug)]
-pub struct ProcessHitZone {
-    pub rect: Rect,
-    pub action: ProcessAction,
-}
-
-/// Действия stub-кнопок процесса (реализация позже).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProcessAction {
-    /// Кнопка меню "≡" в контейнере Запрос.
-    RequestMenu,
-    /// Кнопка меню "≡" в контейнере Выход.
-    OutputMenu,
-    /// Ссылка "+ Добавить показатель" в контейнере Запрос.
-    AddRequestMetric,
-    /// Ссылка "+ Добавить показатель" в контейнере Выход.
-    AddOutputMetric,
-}
-
-/// Собранный шаблон процесса: фигуры + hit-тест зоны.
-#[derive(Clone, Debug)]
-pub struct ProcessTemplate {
-    pub doc: LayoutDoc,
-    pub hit_zones: Vec<ProcessHitZone>,
-}
-
-impl ProcessTemplate {
-    pub fn load() -> Self {
-        let doc = load_process_layout();
-        let mut hit_zones = Vec::new();
-
-        for shape in &doc.shapes {
-            match shape.id.as_str() {
-                "ui-7" | "shape-2" => {
-                    hit_zones.push(ProcessHitZone {
-                        rect: Rect::from_min_size(
-                            Pos2::new(shape.x, shape.y),
-                            Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
-                        ),
-                        action: ProcessAction::RequestMenu,
-                    });
-                }
-                "ui-13" | "shape-3" => {
-                    hit_zones.push(ProcessHitZone {
-                        rect: Rect::from_min_size(
-                            Pos2::new(shape.x, shape.y),
-                            Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
-                        ),
-                        action: ProcessAction::OutputMenu,
-                    });
-                }
-                "ui-9" => {
-                    hit_zones.push(ProcessHitZone {
-                        rect: Rect::from_min_size(
-                            Pos2::new(shape.x, shape.y),
-                            Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
-                        ),
-                        action: ProcessAction::AddRequestMetric,
-                    });
-                }
-                "ui-15" => {
-                    hit_zones.push(ProcessHitZone {
-                        rect: Rect::from_min_size(
-                            Pos2::new(shape.x, shape.y),
-                            Vec2::new(shape.w.max(1.0), shape.h.max(1.0)),
-                        ),
-                        action: ProcessAction::AddOutputMetric,
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        Self { doc, hit_zones }
+/// Худший статус среди записей.
+fn worst_status(entries: &[polygram_core::EntryGeom], dynamic: &DynamicState) -> StatusCode {
+    let mut worst: u8 = 0;
+    for e in entries {
+        let r = status_rank(dynamic.status[e.ix as usize]);
+        if r > worst { worst = r; }
+    }
+    match worst {
+        4 => StatusCode::Deficit,
+        5 => StatusCode::Surplus,
+        3 => StatusCode::Warning,
+        2 => StatusCode::Unconnected,
+        6 => StatusCode::Invalid,
+        _ => StatusCode::Ok,
     }
 }
 
-/// Текущий загруженный шаблон (одна экземпляр на все процессы).
-static PROCESS_TEMPLATE: OnceLock<ProcessTemplate> = OnceLock::new();
-
-fn get_template() -> &'static ProcessTemplate {
-    PROCESS_TEMPLATE.get_or_init(ProcessTemplate::load)
-}
-
-/// Разрешить цвет fill фигуры с учётом состояния (пока только Normal — заглушка).
-fn resolve_fill(shape: &LayoutShape) -> Color32 {
-    shape
-        .fill
-        .map(|c| c.to_color32())
-        .unwrap_or(Color32::TRANSPARENT)
-}
-
-/// Разрешить цвет обводки фигуры.
-fn resolve_stroke_color(shape: &LayoutShape) -> Color32 {
-    shape.stroke.to_color32()
-}
-
-/// Разрешить толщину обводки (масштабируется на зум, как в Design Tool).
-fn resolve_stroke_width(shape: &LayoutShape, zoom: f32) -> f32 {
-    shape.stroke_width.max(0.0) * zoom
-}
-
-/// Получить FontId для фигуры (размер шрифта масштабируется на зум, как в Design Tool).
-fn layout_font_id(shape: &LayoutShape, zoom: f32) -> FontId {
-    let size = shape.font_size.max(6.0).max(8.0) * zoom;
-    let weight = match shape.font_weight {
-        LayoutFontWeight::Thin => egui::FontFamily::Name("inter-thin".into()),
-        LayoutFontWeight::ExtraLight => egui::FontFamily::Name("inter-extralight".into()),
-        LayoutFontWeight::Light => egui::FontFamily::Name("inter-light".into()),
-        LayoutFontWeight::Regular => egui::FontFamily::Name("inter-regular".into()),
-        LayoutFontWeight::Medium => egui::FontFamily::Name("inter-medium".into()),
-        LayoutFontWeight::SemiBold => egui::FontFamily::Name("inter-semibold".into()),
-        LayoutFontWeight::Bold => egui::FontFamily::Name("inter-bold".into()),
-        LayoutFontWeight::ExtraBold => egui::FontFamily::Name("inter-extrabold".into()),
-        LayoutFontWeight::Black => egui::FontFamily::Name("inter-black".into()),
-    };
-    FontId::new(size, weight)
-}
-
-/// Вычислить скругление фигуры.
-fn layout_rounding(shape: &LayoutShape) -> egui::Rounding {
-    if shape.corner_tl == shape.corner_tr
-        && shape.corner_tr == shape.corner_bl
-        && shape.corner_bl == shape.corner_br
-    {
-        egui::Rounding::same(shape.corner_radius)
-    } else {
-        egui::Rounding {
-            nw: shape.corner_tl,
-            ne: shape.corner_tr,
-            sw: shape.corner_bl,
-            se: shape.corner_br,
-        }
-    }
-}
-
-/// Скорректировать rect под позицию обводки (как в Design Tool).
-fn stroke_rect_for_position(rect: Rect, stroke_width: f32, position: LayoutStrokePosition) -> Rect {
-    let max_shrink = (rect.width().min(rect.height()) / 2.0).max(0.0);
-    let shrink = match position {
-        LayoutStrokePosition::Outside => 0.0,
-        LayoutStrokePosition::Center => (stroke_width / 2.0).min(max_shrink),
-        LayoutStrokePosition::Inside => stroke_width.min(max_shrink),
-    };
-    rect.shrink(shrink)
-}
-
-/// Рисовать одну фигуру из шаблона design.json.
-fn paint_layout_shape(
+/// Рисовать одну строку показателя: точка статуса слева, имя, значение справа.
+fn paint_metric_row(
     painter: &Painter,
-    shape: &LayoutShape,
-    screen_rect: Rect,
+    rect: Rect,
+    entry: &polygram_core::EntryGeom,
+    dynamic: &DynamicState,
     zoom: f32,
-    text_override: Option<&str>,
+    theme: &Theme,
+    is_hovered: bool,
 ) {
-    // Пропускать фигуры с некорректным размером, чтобы избежать паники в egui.
-    if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
-        return;
-    }
-    let fill = resolve_fill(shape);
-    let stroke_color = resolve_stroke_color(shape);
-    let stroke_width = resolve_stroke_width(shape, zoom);
-    let stroke = Stroke::new(stroke_width, stroke_color);
+    let status = dynamic.status[entry.ix as usize];
+    let dot_color = super::status_dot_color(status, theme);
+    let dot_radius = theme.port_radius.max(2.0) * zoom;
+    let cy = rect.center().y;
 
-    match shape.tool {
-        LayoutDrawTool::Select => {}
-        LayoutDrawTool::Rect | LayoutDrawTool::Text => {
-            painter.rect_filled(screen_rect, layout_rounding(shape) * zoom, fill);
-            if stroke_width > 0.0 {
-                let stroke_rect = stroke_rect_for_position(screen_rect, stroke_width, shape.stroke_position);
-                painter.rect_stroke(stroke_rect, layout_rounding(shape) * zoom, stroke);
-            }
-        }
-        LayoutDrawTool::Ellipse => {
-            let center = screen_rect.center();
-            let fill_radii = Vec2::new(screen_rect.width() / 2.0, screen_rect.height() / 2.0);
-            painter.add(egui::Shape::ellipse_filled(center, fill_radii, fill));
-            if stroke_width > 0.0 {
-                let radii = fill_radii - Vec2::splat(stroke_width.min(fill_radii.x.min(fill_radii.y)));
-                painter.add(egui::Shape::ellipse_stroke(center, radii, stroke));
-            }
-        }
-        LayoutDrawTool::Line => {
-            let p1 = Pos2::new(screen_rect.min.x, screen_rect.min.y);
-            let p2 = Pos2::new(screen_rect.max.x, screen_rect.max.y);
-            painter.line_segment([p1, p2], stroke);
-        }
-    }
+    // Точка статуса
+    painter.circle_filled(
+        Pos2::new(rect.min.x + 8.0 * zoom, cy),
+        dot_radius,
+        dot_color,
+    );
 
-    // Текст
-    let text = text_override.unwrap_or(&shape.text);
-    if !text.is_empty() {
-        let text_color = shape.text_color.to_color32();
-        let font_id = layout_font_id(shape, zoom);
-        let galley = painter.layout_no_wrap(text.to_owned(), font_id, text_color);
-        let text_w = galley.size().x;
-        let text_h = galley.size().y;
-        let x = match shape.text_align {
-            LayoutTextAlign::Left => screen_rect.min.x,
-            LayoutTextAlign::Center => screen_rect.center().x - text_w / 2.0,
-            LayoutTextAlign::Right => screen_rect.max.x - text_w,
-        };
-        let y = match shape.text_align_v {
-            LayoutTextAlignV::Top => screen_rect.min.y,
-            LayoutTextAlignV::Middle => screen_rect.center().y - text_h / 2.0,
-            LayoutTextAlignV::Bottom => screen_rect.max.y - text_h,
-        };
-        painter.galley(Pos2::new(x, y), galley, text_color);
-    }
+    // Имя записи
+    let name_color = if is_hovered { theme.text } else { theme.text_muted };
+    painter.text(
+        Pos2::new(rect.min.x + 16.0 * zoom, cy),
+        egui::Align2::LEFT_CENTER,
+        &entry.name,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        name_color,
+    );
+
+    // Значение (справа)
+    let value_text = format!("{:.0}", entry.value);
+    painter.text(
+        Pos2::new(rect.max.x - 8.0 * zoom, cy),
+        egui::Align2::RIGHT_CENTER,
+        &value_text,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        name_color,
+    );
 }
 
-/// Высокопроизводительный рендер объекта "Процесс" по макету design.json.
-/// Возвращает «горячие зоны» добавления показателя (контейнер, направление, экранный rect).
+/// Рисовать строку "+ Добавить показатель" (центрированная, кликабельная).
+fn paint_add_row(
+    painter: &Painter,
+    rect: Rect,
+    zoom: f32,
+    theme: &Theme,
+    is_hovered: bool,
+) {
+    let add_text = "+ Добавить показатель";
+    let add_color = if is_hovered { theme.text } else { theme.text_muted };
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        add_text,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        add_color,
+    );
+}
+
+/// Рисовать заголовок контейнера: «ЗАПРОС (N) СТАТУС (N)» + точка статуса + кнопка ≡.
+fn paint_container_header(
+    painter: &Painter,
+    rect: Rect,
+    dir: Direction,
+    entries: &[polygram_core::EntryGeom],
+    dynamic: &DynamicState,
+    zoom: f32,
+    theme: &Theme,
+    is_hovered: bool,
+) {
+    let label = match dir {
+        Direction::Request => "ЗАПРОС",
+        Direction::Output => "ВЫХОД",
+    };
+    let status = worst_status(entries, dynamic);
+    let status_text = super::status_label_ru(status, dir);
+    let problem_count = entries.iter().filter(|e| dynamic.status[e.ix as usize] != StatusCode::Ok).count();
+    let status_full = if problem_count > 0 {
+        format!("{} ({})", status_text, problem_count)
+    } else {
+        status_text.to_string()
+    };
+    let count_text = format!("{} ({}) {}", label, entries.len(), status_full);
+    let header_color = if status != StatusCode::Ok {
+        super::status_dot_color(status, theme)
+    } else {
+        theme.text_muted
+    };
+    let text_color = if is_hovered { theme.text } else { header_color };
+
+    // Точка статуса контейнера (слева)
+    let dot_color = super::status_dot_color(status, theme);
+    let dot_radius = theme.port_radius.max(2.0) * zoom;
+    painter.circle_filled(
+        Pos2::new(rect.min.x + 8.0 * zoom, rect.center().y),
+        dot_radius,
+        dot_color,
+    );
+
+    // Кнопка ≡ (справа)
+    let btn_size = 24.0 * zoom;
+    let btn_rect = Rect::from_min_size(
+        rect.max - Vec2::new(btn_size, rect.height()),
+        Vec2::new(btn_size, rect.height()),
+    );
+    painter.rect_stroke(btn_rect, 0.0, Stroke::new(1.0 * zoom, theme.card_border));
+    let btn_color = if is_hovered { theme.text } else { header_color };
+    painter.text(
+        btn_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "≡",
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        btn_color,
+    );
+
+    // Текст заголовка (с усечением если не влазит)
+    let text_w_est = count_text.len() as f32 * 7.0 * zoom;
+    let avail_w = (btn_rect.min.x - rect.min.x - 32.0 * zoom).max(0.0);
+    let display = if text_w_est > avail_w && avail_w > 14.0 * zoom {
+        let n = (avail_w / (7.0 * zoom)) as usize;
+        if n > 4 {
+            count_text.chars().take(n - 4).collect::<String>() + "..."
+        } else {
+            "...".to_string()
+        }
+    } else {
+        count_text.clone()
+    };
+    painter.text(
+        Pos2::new(rect.min.x + 16.0 * zoom, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        &display,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        text_color,
+    );
+}
+
+/// Высокопроизводительный процедурный рендер объекта "Процесс".
+/// Рисует: внешняя рамка → заголовок объекта → контейнер Запрос → контейнер Выход.
+/// Возвращает горячие зоны добавления показателя (для клика «+ Добавить показатель»).
 pub fn paint_process(
     painter: &Painter,
     object: &ObjectGeom,
@@ -434,88 +213,156 @@ pub fn paint_process(
     cell_px: f32,
     zoom: f32,
     is_hovered: bool,
-    edit_target: Option<&str>,
+    _edit_target: Option<&str>,
 ) -> Vec<(String, Direction, Rect)> {
-    let template = get_template();
-
-    // Масштаб макета → экран (линейный, по обеим осям независимо).
-    let scale_x = rect_px.width() / DESIGN_W;
-    let scale_y = rect_px.height() / DESIGN_H;
-    let offset = rect_px.min;
-
-    // Фигуры шаблона контейнера показателей рисуем динамически через paint_container,
-    // поэтому статические фигуры контейнеров (границы, заголовки, кнопки) пропускаем.
-    let skipped = [
-        "ui-6", "ui-7", "ui-8", "ui-9", // Запрос: заголовок, кнопка меню, фон, кнопка добавления
-        "ui-12", "ui-13", "ui-14", "ui-15", // Выход: заголовок, кнопка меню, фон, кнопка добавления
-    ];
-
-    // Отрисовать все фигуры шаблона.
-    for shape in &template.doc.shapes {
-        if skipped.contains(&shape.id.as_str()) {
-            continue;
-        }
-        // Во время инлайн-режима не рисуем статический текст названия —
-        // TextEdit нарисуется поверх точно на этом же месте.
-        if edit_target == Some(object.id.as_str()) && shape.id == "ui-1" {
-            continue;
-        }
-        let id_text = format!("#{}", object.id);
-        let text = if shape.id == "ui-1" {
-            Some(object.name.as_str())
-        } else if shape.id == "ui-2" {
-            Some(id_text.as_str())
-        } else {
-            None
-        };
-        let screen_rect = Rect::from_min_size(
-            Pos2::new(
-                offset.x + shape.x * scale_x,
-                offset.y + shape.y * scale_y,
-            ),
-            Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
-        );
-        paint_layout_shape(painter, shape, screen_rect, zoom, text);
-    }
-
-    // Динамические контейнера показателей (Запрос / Выход).
-    let header_h = cell_px * theme.object_header_height_cells;
-    let container_h = (rect_px.height() - header_h) / 2.0;
-    let req_rect = Rect::from_min_size(
-        rect_px.min + Vec2::new(0.0, header_h),
-        Vec2::new(rect_px.width(), container_h),
-    );
-    let out_rect = Rect::from_min_size(
-        rect_px.min + Vec2::new(0.0, header_h + container_h),
-        Vec2::new(rect_px.width(), container_h),
-    );
-
     let mut hotspots: Vec<(String, Direction, Rect)> = Vec::new();
-    if let Some(r) = paint_container(
-        painter,
-        object,
-        dynamic,
-        theme,
+
+    // --- Геометрия из констант (ячейки → пиксели) ---
+    let header_h_px = cell_px * OBJECT_HEADER_HEIGHT_CELLS;
+    let req_count = object.requests.len();
+    let out_count = object.outputs.len();
+    let total_h_cells = OBJECT_HEADER_HEIGHT_CELLS
+        + container_height_cells(req_count)
+        + container_height_cells(out_count);
+    let total_h_px = cell_px * total_h_cells;
+
+    // Если контент выше доступного места — масштабируем вертикально, чтобы всё поместилось.
+    let avail_h = rect_px.height();
+    let scale_h = if total_h_px > avail_h { avail_h / total_h_px.max(1.0) } else { 1.0 };
+
+    // --- Внешняя рамка объекта ---
+    let border_color = if is_hovered { theme.text } else { theme.card_border };
+    let border_width = if is_hovered {
+        theme.object_border_hover_width * zoom
+    } else {
+        theme.object_border_width * zoom
+    };
+    painter.rect_filled(rect_px, theme.object_corner_radius * zoom, theme.card_bg);
+    painter.rect_stroke(
+        rect_px,
+        theme.object_corner_radius * zoom,
+        Stroke::new(border_width, border_color),
+    );
+
+    // --- Заголовок объекта (имя + #ID) ---
+    let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h_px));
+    painter.rect_filled(header_rect, 0.0, theme.card_header);
+
+    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
+    let name_color = if is_hovered { theme.text } else { theme.text_muted };
+    painter.text(
+        Pos2::new(rect_px.min.x + 8.0 * zoom, rect_px.min.y + header_h_px / 2.0),
+        egui::Align2::LEFT_CENTER,
+        &title,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        name_color,
+    );
+
+    let id_text = format!("#{}", object.id);
+    painter.text(
+        Pos2::new(rect_px.max.x - 8.0 * zoom, rect_px.min.y + header_h_px / 2.0),
+        egui::Align2::RIGHT_CENTER,
+        &id_text,
+        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        name_color,
+    );
+
+    // =============== КОНТЕЙНЕР: ЗАПРОС ===============
+    let req_h_px = cell_px * container_height_cells(req_count) * scale_h;
+    let req_rect = Rect::from_min_size(
+        rect_px.min + Vec2::new(0.0, header_h_px),
+        Vec2::new(rect_px.width(), req_h_px),
+    );
+    // Граница контейнера
+    let req_border = if is_hovered { theme.text } else { theme.card_border };
+    painter.rect_stroke(
         req_rect,
-        cell_px,
-        zoom,
-        Direction::Request,
-        is_hovered,
-    ) {
-        hotspots.push((object.id.clone(), Direction::Request, r));
+        theme.object_corner_radius * zoom * 0.5,
+        Stroke::new(theme.object_border_width * zoom, req_border),
+    );
+
+    // Шапка контейнера
+    let req_header_h = cell_px * CONTAINER_HEADER_HEIGHT_CELLS * scale_h;
+    let req_header_rect = Rect::from_min_size(req_rect.min, Vec2::new(req_rect.width(), req_header_h));
+    painter.rect_filled(req_header_rect, 0.0, theme.card_bg);
+    paint_container_header(
+        painter, req_header_rect, Direction::Request, &object.requests,
+        dynamic, zoom, theme, is_hovered,
+    );
+
+    // Строки показателей + строка добавления
+    let content_top = req_rect.min.y + req_header_h;
+    let content_h = req_rect.height() - req_header_h;
+    let visible_req = req_count.min(MAX_VISIBLE_METRICS);
+    let show_add_req = visible_req < MAX_VISIBLE_METRICS;
+    let total_rows_req = visible_req + if show_add_req { 1 } else { 0 };
+    let row_h_req = if total_rows_req > 0 { content_h / total_rows_req as f32 } else { 0.0 };
+
+    for (i, entry) in object.requests.iter().enumerate().take(MAX_VISIBLE_METRICS) {
+        let row_rect = Rect::from_min_size(
+            req_rect.min + Vec2::new(0.0, content_top + i as f32 * row_h_req),
+            Vec2::new(req_rect.width(), row_h_req),
+        );
+        if is_hovered {
+            painter.rect_filled(row_rect, 0.0, theme.card_header);
+        }
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
     }
-    if let Some(r) = paint_container(
-        painter,
-        object,
-        dynamic,
-        theme,
+    if show_add_req {
+        let add_rect = Rect::from_min_size(
+            req_rect.min + Vec2::new(0.0, content_top + visible_req as f32 * row_h_req),
+            Vec2::new(req_rect.width(), row_h_req),
+        );
+        paint_add_row(painter, add_rect, zoom, theme, is_hovered);
+        hotspots.push((object.id.clone(), Direction::Request, add_rect));
+    }
+
+    // =============== КОНТЕЙНЕР: ВЫХОД ===============
+    let out_h_px = cell_px * container_height_cells(out_count) * scale_h;
+    let out_rect = Rect::from_min_size(
+        rect_px.min + Vec2::new(0.0, header_h_px + req_h_px),
+        Vec2::new(rect_px.width(), out_h_px),
+    );
+    let out_border = if is_hovered { theme.text } else { theme.card_border };
+    painter.rect_stroke(
         out_rect,
-        cell_px,
-        zoom,
-        Direction::Output,
-        is_hovered,
-    ) {
-        hotspots.push((object.id.clone(), Direction::Output, r));
+        theme.object_corner_radius * zoom * 0.5,
+        Stroke::new(theme.object_border_width * zoom, out_border),
+    );
+
+    let out_header_h = cell_px * CONTAINER_HEADER_HEIGHT_CELLS * scale_h;
+    let out_header_rect = Rect::from_min_size(out_rect.min, Vec2::new(out_rect.width(), out_header_h));
+    painter.rect_filled(out_header_rect, 0.0, theme.card_bg);
+    paint_container_header(
+        painter, out_header_rect, Direction::Output, &object.outputs,
+        dynamic, zoom, theme, is_hovered,
+    );
+
+    let content_top_out = out_rect.min.y + out_header_h;
+    let content_h_out = out_rect.height() - out_header_h;
+    let visible_out = out_count.min(MAX_VISIBLE_METRICS);
+    let show_add_out = visible_out < MAX_VISIBLE_METRICS;
+    let total_rows_out = visible_out + if show_add_out { 1 } else { 0 };
+    let row_h_out = if total_rows_out > 0 { content_h_out / total_rows_out as f32 } else { 0.0 };
+
+    for (i, entry) in object.outputs.iter().enumerate().take(MAX_VISIBLE_METRICS) {
+        let row_rect = Rect::from_min_size(
+            out_rect.min + Vec2::new(0.0, content_top_out + i as f32 * row_h_out),
+            Vec2::new(out_rect.width(), row_h_out),
+        );
+        if is_hovered {
+            painter.rect_filled(row_rect, 0.0, theme.card_header);
+        }
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
     }
+    if show_add_out {
+        let add_rect = Rect::from_min_size(
+            out_rect.min + Vec2::new(0.0, content_top_out + visible_out as f32 * row_h_out),
+            Vec2::new(out_rect.width(), row_h_out),
+        );
+        paint_add_row(painter, add_rect, zoom, theme, is_hovered);
+        hotspots.push((object.id.clone(), Direction::Output, add_rect));
+    }
+
     hotspots
 }

@@ -1,8 +1,8 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{object_at, title_text_rect};
+use polygram_canvas::object_at;
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, NodeKind};
 use polygram_core::Command;
-use egui::{Key, Pos2};
+use egui::{Key, Pos2, Rect, Vec2};
 
 pub fn context_menu(
     app: &mut PolygramApp,
@@ -429,11 +429,23 @@ pub fn inline_rename_editor(
     };
 
     let cell_px = app.canvas.cell_px();
+    let zoom = app.canvas.camera.zoom;
+    let theme = &app.canvas.theme;
     let screen_min = app.canvas.camera.world_to_screen(
         Pos2::new(object.rect.x as f32, object.rect.y as f32),
         app.canvas.cell_size,
     );
-    let edit_rect = title_text_rect(screen_min, cell_px, object.rect.w, object.rect.h);
+    let header_h_px = cell_px * 1.0; // OBJECT_HEADER_HEIGHT_CELLS = 1.0
+    let edit_rect = Rect::from_min_size(
+        Pos2::new(
+            screen_min.x + 16.0 * zoom,
+            screen_min.y + header_h_px / 2.0 - (theme.text_size * zoom) / 2.0,
+        ),
+        Vec2::new(
+            (object.rect.w as f32 * cell_px - 32.0 * zoom).max(60.0),
+            theme.text_size * zoom,
+        ),
+    );
 
     let mut commit = false;
     let mut cancel = false;
