@@ -196,8 +196,12 @@ pub fn handle_canvas_interaction(
                             let world_x = (cursor.x / old_zoom - app.canvas.camera.offset.x) / cell_size;
                             let world_y = (cursor.y / old_zoom - app.canvas.camera.offset.y) / cell_size;
                             // Новое смещение, чтобы та же мировая точка осталась под курсором.
-                            app.canvas.camera.offset.x = (cursor.x / new_zoom - world_x * cell_size).round();
-                            app.canvas.camera.offset.y = (cursor.y / new_zoom - world_y * cell_size).round();
+                            // Округляем до кратных cell_size, чтобы объекты лежали на линиях сетки.
+                            let cell_size = app.canvas.cell_size;
+                            app.canvas.camera.offset.x =
+                                ((cursor.x / new_zoom - world_x * cell_size) / cell_size).round() * cell_size;
+                            app.canvas.camera.offset.y =
+                                ((cursor.y / new_zoom - world_y * cell_size) / cell_size).round() * cell_size;
                         }
                         app.canvas.camera.zoom = new_zoom;
                         ctx.request_repaint();
@@ -209,9 +213,12 @@ pub fn handle_canvas_interaction(
         if canvas_response.dragged_by(egui::PointerButton::Secondary)
             || canvas_response.dragged_by(egui::PointerButton::Middle)
         {
+            let cell_size = app.canvas.cell_size;
             app.canvas.camera.offset += ui.input(|i| i.pointer.delta());
-            app.canvas.camera.offset.x = app.canvas.camera.offset.x.round();
-            app.canvas.camera.offset.y = app.canvas.camera.offset.y.round();
+            app.canvas.camera.offset.x =
+                (app.canvas.camera.offset.x / cell_size).round() * cell_size;
+            app.canvas.camera.offset.y =
+                (app.canvas.camera.offset.y / cell_size).round() * cell_size;
             ctx.request_repaint();
         }
 
