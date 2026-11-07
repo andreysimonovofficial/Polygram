@@ -157,8 +157,9 @@ impl DesignApp {
 
     /// Список путей-кандидатов к системному файлу шрифта Windows для комбинации семейства и насыщенности.
     /// Возвращает пути в порядке убывания предпочтительности.
-    /// Для Inter подгружаются переменные шрифты из C:/Users/andre/Downloads/Inter/,
-    /// которые поддерживают все насыщенности через ось wght.
+    /// Для Inter подгружаются статические начертания из C:/Users/andre/Downloads/Inter/
+    /// (Inter_18pt-Thin.ttf, Inter_18pt-Bold.ttf и т.д.), чтобы каждая насыщенность
+    /// использовала свой файл шрифта.
     fn font_file_candidates(family: FontFamily, weight: FontWeight) -> Vec<String> {
         let base = match family {
             FontFamily::Arial => "arial",
@@ -167,11 +168,23 @@ impl DesignApp {
         };
         let mut candidates: Vec<String> = Vec::new();
 
-        // Для Inter пробуем переменный шрифт из Downloads (поддерживает все насыщенности).
+        // Для Inter пробуем статические начертания из Downloads (каждая насыщенность — свой файл).
         if family == FontFamily::Inter {
-            candidates.push(
-                "C:/Users/andre/Downloads/Inter/Inter-VariableFont_opsz,wght.ttf".to_owned(),
-            );
+            let weight_name = match weight {
+                FontWeight::Thin => "Thin",
+                FontWeight::ExtraLight => "ExtraLight",
+                FontWeight::Light => "Light",
+                FontWeight::Regular => "Regular",
+                FontWeight::Medium => "Medium",
+                FontWeight::SemiBold => "SemiBold",
+                FontWeight::Bold => "Bold",
+                FontWeight::ExtraBold => "ExtraBold",
+                FontWeight::Black => "Black",
+            };
+            candidates.push(format!(
+                "C:/Users/andre/Downloads/Inter/Inter_18pt-{}.ttf",
+                weight_name
+            ));
         }
 
         match weight {
