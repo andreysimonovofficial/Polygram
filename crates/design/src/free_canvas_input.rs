@@ -5,7 +5,7 @@ use crate::design_format::{DrawTool, FreeShape, ShapeState, ChildReactMode};
 use crate::free_canvas::FreeCanvas;
 use egui::{PointerButton, Pos2, Rect, Sense, Stroke, Vec2};
 use egui::Color32;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 /// Режим изменения размера фигуры за угол или сторону.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1205,16 +1205,16 @@ impl FreeCanvas {
             }
         }
 
-        let mut queue: Vec<usize> = (0..n).filter(|&i| remaining_deps[i] == 0).collect();
+        let mut queue: VecDeque<usize> = (0..n).filter(|&i| remaining_deps[i] == 0).collect();
         let mut order = Vec::with_capacity(n);
 
-        while let Some(i) = queue.pop() {
+        while let Some(i) = queue.pop_front() {
             order.push(i);
             for j in 0..n {
                 if parent_idx[j] == Some(i) {
                     remaining_deps[j] -= 1;
                     if remaining_deps[j] == 0 {
-                        queue.push(j);
+                        queue.push_back(j);
                     }
                 }
             }
