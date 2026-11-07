@@ -37,10 +37,12 @@ impl DesignApp {
         }
     }
 
-    /// Зарегистрировать системные шрифты Windows в egui, чтобы FontFamily::Name
+    /// Зарегистрировать шрифты в egui, чтобы FontFamily::Name
     /// (Arial / Inter / Segoe UI) не вызывал панику при отрисовке текста.
-    /// Загружаются разные файлы шрифтов для каждой комбинации семейство + насыщенность,
-    /// чтобы выбор насыщенности влиял на внешний вид текста.
+    /// Шрифты загружаются из папки `fonts/` рядом с исполняемым файлом
+    /// (файлы вида arial-regular.ttf, arial-bold.ttf и т.д.), чтобы
+    /// использовались именно те начертания, что выбраны в интерфейсе.
+    /// Если файла нет — используется системный шрифт Windows как fallback.
     pub fn register_fonts(ctx: &Context) {
         let mut fonts = FontDefinitions::default();
 
@@ -65,29 +67,41 @@ impl DesignApp {
             for weight in weights {
                 let key = font_key(family, weight);
                 let mut loaded = false;
-                for path in Self::font_file_candidates(family, weight) {
-                    if let Ok(data) = std::fs::read(&path) {
-                        fonts.font_data.insert(key.clone(), FontData::from_owned(data));
-                        fonts
-                            .families
-                                .entry(egui::FontFamily::Name(key.clone().into()))
-                            .or_default()
-                            .push(key.clone());
-                        loaded = true;
-                        break;
-                    }
+                // Сначала пробуем встроенный/папочный шрифт рядом с приложением.
+                let local_path = format!("fonts/{}.ttf", key);
+                if let Ok(data) = std::fs::read(&local_path) {
+                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(key.clone());
+                    loaded = true;
                 }
+                // Fallback на системный шрифт Windows.
                 if !loaded {
-                    // Fallback: попробуем регулярное начертание того же семейства.
-                    let regular_key = font_key(family, FontWeight::Regular);
-                    if regular_key != key {
-                        if fonts.font_data.contains_key(&regular_key) {
+                    for path in Self::font_file_candidates(family, weight) {
+                        if let Ok(data) = std::fs::read(&path) {
+                            fonts.font_data.insert(key.clone(), FontData::from_owned(data));
                             fonts
                                 .families
-                            .entry(egui::FontFamily::Name(key.clone().into()))
+                                .entry(egui::FontFamily::Name(key.clone().into()))
                                 .or_default()
-                                .push(regular_key.clone());
+                                .push(key.clone());
+                            loaded = true;
+                            break;
                         }
+                    }
+                }
+                // Если и системного нет — используем регулярное начертание того же семейства.
+                if !loaded {
+                    let regular_key = font_key(family, FontWeight::Regular);
+                    if regular_key != key && fonts.font_data.contains_key(&regular_key) {
+                        fonts
+                            .families
+                            .entry(egui::FontFamily::Name(key.clone().into()))
+                            .or_default()
+                            .push(regular_key.clone());
                     }
                 }
             }
@@ -108,7 +122,7 @@ impl DesignApp {
         ctx.set_fonts(fonts);
     }
 
-    /// Список путей-кандидатов к файлу шрифта Windows для комбинации семейства и насыщенности.
+    /// Список путей-кандидатов к системному файлу шрифта Windows для комбинации семейства и насыщенности.
     /// Возвращает пути в порядке убывания предпочтительности.
     fn font_file_candidates(family: FontFamily, weight: FontWeight) -> Vec<String> {
         let base = match family {
