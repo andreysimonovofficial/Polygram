@@ -290,9 +290,10 @@ fn resolve_stroke_width(shape: &LayoutShape) -> f32 {
     shape.stroke_width.max(0.0)
 }
 
-/// Получить FontId для фигуры (шрифт Inter, размер в экранных пикселях).
-fn layout_font_id(shape: &LayoutShape, scale: f32) -> FontId {
-    let size = (shape.font_size.max(6.0) * scale).max(8.0);
+/// Получить FontId для фигуры (шрифт Inter, фиксированный размер в экранных пикселях,
+/// не меняющийся при зуме).
+fn layout_font_id(shape: &LayoutShape) -> FontId {
+    let size = shape.font_size.max(6.0).max(8.0);
     let weight = match shape.font_weight {
         LayoutFontWeight::Thin => egui::FontFamily::Name("inter-thin".into()),
         LayoutFontWeight::ExtraLight => egui::FontFamily::Name("inter-extralight".into()),
@@ -340,7 +341,6 @@ fn paint_layout_shape(
     painter: &Painter,
     shape: &LayoutShape,
     screen_rect: Rect,
-    scale: f32,
 ) {
     // Пропускать фигуры с некорректным размером, чтобы избежать паники в egui.
     if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
@@ -379,7 +379,7 @@ fn paint_layout_shape(
     // Текст
     if !shape.text.is_empty() {
         let text_color = shape.text_color.to_color32();
-        let font_id = layout_font_id(shape, scale);
+        let font_id = layout_font_id(shape);
         let galley = painter.layout_no_wrap(shape.text.clone(), font_id, text_color);
         let text_w = galley.size().x;
         let text_h = galley.size().y;
@@ -423,7 +423,7 @@ pub fn paint_process(
             ),
             Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
         );
-        paint_layout_shape(painter, shape, screen_rect, scale_x.min(scale_y));
+        paint_layout_shape(painter, shape, screen_rect);
     }
 
     // TODO: hit-тест зоны доступны в template.hit_zones — будут использованы
