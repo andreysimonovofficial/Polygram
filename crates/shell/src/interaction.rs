@@ -140,7 +140,7 @@ pub fn context_menu(
                         app.apply_cmd(cmd);
                         *close_menu = true;
                     }
-                    if ui.button("Добавить Отдел").clicked() {
+                    if ui.button("Создать отдел").clicked() {
                         let world_pos = app
                             .canvas
                             .camera
