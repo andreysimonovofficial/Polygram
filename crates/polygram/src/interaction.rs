@@ -111,8 +111,15 @@ pub fn context_menu(
                         ui.separator();
                     }
                     if ui.button("Переименовать объект").clicked() {
+                        let obj_name = published
+                            .geometry
+                            .objects
+                            .iter()
+                            .find(|n| n.id == *object_id)
+                            .map(|n| n.name.clone())
+                            .unwrap_or_else(|| object_id.to_string());
                         app.rename_target = Some(object_id.clone());
-                        app.rename_input = object_id.clone();
+                        app.rename_input = obj_name;
                         *close_menu = true;
                     }
                 }
@@ -132,9 +139,9 @@ pub fn context_menu(
                             .screen_to_world(*pos, app.canvas.cell_px());
                         let cmd = Command::AddObject {
                             id: None,
-                            name: "Новый объект".to_owned(),
+                            name: "Процесс".to_owned(),
                             kind: NodeKind::Process,
-                            at: Some([world_pos.x as i32, world_pos.y as i32]),
+                            at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                             parent: None,
                         };
                         app.apply_cmd(cmd);
@@ -176,6 +183,26 @@ pub fn handle_canvas_interaction(
         ui.id().with("canvas"),
         egui::Sense::click_and_drag(),
     );
+
+    // Двойной клик по шапке объекта — открыть редактирование названия.
+    if canvas_response.double_clicked() {
+        if let Some(pos) = canvas_response.interact_pointer_pos() {
+            if let Some(object_id) = app.canvas.header_at(&published.geometry, pos) {
+                let obj_name = published
+                    .geometry
+                    .objects
+                    .iter()
+                    .find(|o| o.id == object_id)
+                    .map(|o| o.name.clone())
+                    .unwrap_or_else(|| object_id.to_string());
+                app.drag_object = None;
+                app.drag_start_screen = None;
+                app.drag_start_cell = None;
+                app.rename_target = Some(object_id.to_owned());
+                app.rename_input = obj_name;
+            }
+        }
+    }
 
     // Камера: колесико — зум (приближение вверх, к курсору),
     // правая/средняя кнопка — панорамирование.

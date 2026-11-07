@@ -341,6 +341,7 @@ fn paint_layout_shape(
     shape: &LayoutShape,
     screen_rect: Rect,
     zoom: f32,
+    text_override: Option<&str>,
 ) {
     // Пропускать фигуры с некорректным размером, чтобы избежать паники в egui.
     if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
@@ -377,10 +378,11 @@ fn paint_layout_shape(
     }
 
     // Текст
-    if !shape.text.is_empty() {
+    let text = text_override.unwrap_or(&shape.text);
+    if !text.is_empty() {
         let text_color = shape.text_color.to_color32();
         let font_id = layout_font_id(shape, zoom);
-        let galley = painter.layout_no_wrap(shape.text.clone(), font_id, text_color);
+        let galley = painter.layout_no_wrap(text.to_owned(), font_id, text_color);
         let text_w = galley.size().x;
         let text_h = galley.size().y;
         let x = match shape.text_align {
@@ -400,7 +402,7 @@ fn paint_layout_shape(
 /// Высокопроизводительный рендер объекта "Процесс" по макету design.json.
 pub fn paint_process(
     painter: &Painter,
-    _object: &ObjectGeom,
+    object: &ObjectGeom,
     _dynamic: &DynamicState,
     _theme: &Theme,
     rect_px: Rect,
@@ -416,16 +418,21 @@ pub fn paint_process(
     let offset = rect_px.min;
 
     // Отрисовать все фигуры шаблона.
-    for shape in &template.doc.shapes {
-        let screen_rect = Rect::from_min_size(
-            Pos2::new(
-                offset.x + shape.x * scale_x,
-                offset.y + shape.y * scale_y,
-            ),
-            Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
-        );
-        paint_layout_shape(painter, shape, screen_rect, zoom);
-    }
+        for shape in &template.doc.shapes {
+            let text = if shape.id == "ui-1" {
+                Some(object.name.as_str())
+            } else {
+                None
+            };
+            let screen_rect = Rect::from_min_size(
+                Pos2::new(
+                    offset.x + shape.x * scale_x,
+                    offset.y + shape.y * scale_y,
+                ),
+                Vec2::new(shape.w.max(1.0) * scale_x, shape.h.max(1.0) * scale_y),
+            );
+            paint_layout_shape(painter, shape, screen_rect, zoom, text);
+        }
 
     // TODO: hit-тест зоны доступны в template.hit_zones — будут использованы
     // после того, как будет определено, за что каждая кнопка отвечает.
