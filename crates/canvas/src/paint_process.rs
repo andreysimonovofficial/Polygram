@@ -209,12 +209,14 @@ pub fn paint_process(
     let header_h_px = total_h * 0.10;
     let pad = 8.0 * zoom;
     let container_rect = Rect::from_min_size(
-        Pos2::new(rect_px.min.x + pad, rect_px.min.y + header_h_px),
-        Vec2::new(rect_px.width() - 2.0 * pad, total_h - header_h_px - pad),
+        Pos2::new(rect_px.min.x + pad, rect_px.min.y + header_h_px + pad),
+        Vec2::new(rect_px.width() - 2.0 * pad, total_h - header_h_px - 2.0 * pad),
     );
     let container_h = container_rect.height();
-    let req_h_px = container_h * 0.5;
-    let out_h_px = container_h * 0.5;
+    let gap = pad;
+    let split_h = container_h - gap;
+    let req_h_px = split_h * 0.5;
+    let out_h_px = split_h * 0.5;
 
     // --- Внешняя рамка объекта ---
     let border_color = if is_hovered { theme.text } else { theme.card_border };
@@ -304,7 +306,7 @@ pub fn paint_process(
 
     // =============== КОНТЕЙНЕР: ВЫХОД ===============
     let out_rect = Rect::from_min_size(
-        Pos2::new(container_rect.min.x, container_rect.min.y + req_h_px),
+        Pos2::new(container_rect.min.x, container_rect.min.y + req_h_px + gap),
         Vec2::new(container_rect.width(), out_h_px),
     );
     let out_border = if is_hovered { theme.text } else { theme.card_border };
