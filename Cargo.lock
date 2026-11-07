@@ -3178,6 +3178,8 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "polygram-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

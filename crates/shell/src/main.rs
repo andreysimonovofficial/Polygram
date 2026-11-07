@@ -10,7 +10,7 @@ mod panels;
 mod status;
 
 use app::PolygramApp;
-use eframe::egui;
+use eframe::egui::{self, FontData, FontDefinitions};
 
 fn load_icon() -> egui::IconData {
     let img = image::load_from_memory(include_bytes!("../assets/favicon.png"))
@@ -22,6 +22,96 @@ fn load_icon() -> egui::IconData {
         width,
         height,
     }
+}
+
+/// Зарегистрировать шрифты Inter (как в Design Tool), чтобы FontFamily::Name("inter-*")
+/// не вызывал панику при отрисовке текста. Шрифты из папки `fonts/` рядом с exe
+/// (или working dir для cargo run), файлы вида inter-regular.ttf, inter-semibold.ttf и т.д.
+fn register_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+
+    let families = ["inter"];
+    let weights = [
+        "thin", "extralight", "light", "regular", "medium", "semibold",
+        "bold", "extrabold", "black",
+    ];
+
+    let fallback_key = load_any_system_font(&mut fonts);
+    let unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
+
+    for family in families {
+        for weight in weights {
+            let key = format!("{}-{}", family, weight);
+            let mut loaded = false;
+
+            if let Some(dir) = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            {
+                let path = dir.join(format!("fonts/{}.ttf", key));
+                if let Ok(data) = std::fs::read(&path) {
+                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(key.clone());
+                    loaded = true;
+                }
+            }
+            if !loaded {
+                let path = format!("fonts/{}.ttf", key);
+                if let Ok(data) = std::fs::read(&path) {
+                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Name(key.clone().into()))
+                        .or_default()
+                        .push(key.clone());
+                    loaded = true;
+                }
+            }
+            if !loaded {
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name(key.clone().into()))
+                    .or_default()
+                    .push(fallback_key.clone());
+            }
+        }
+    }
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .push("inter-regular".to_owned());
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .push("inter-semibold".to_owned());
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("inter-regular".to_owned());
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("inter-semibold".to_owned());
+
+    ctx.set_fonts(fonts);
+}
+
+fn load_any_system_font(_fonts: &mut FontDefinitions) -> String {
+    // egui уже имеет системный шрифт по умолчанию, просто возвращаем ключ fallback.
+    "__system_fallback__".to_owned()
+}
+
+fn load_unicode_fallback_font(_fonts: &mut FontDefinitions) -> String {
+    "__unicode_fallback__".to_owned()
 }
 
 impl eframe::App for PolygramApp {
@@ -62,6 +152,9 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Polygram Shell",
         options,
-        Box::new(|_cc| Ok(Box::new(PolygramApp::new()))),
+        Box::new(|cc| {
+            register_fonts(&cc.egui_ctx);
+            Ok(Box::new(PolygramApp::new()))
+        }),
     )
 }
