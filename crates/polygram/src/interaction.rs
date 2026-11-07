@@ -186,7 +186,7 @@ pub fn handle_canvas_interaction(
             if let egui::Event::MouseWheel { delta, .. } = event {
                 if delta.y != 0.0 {
                     // Приближение при прокрутке вверх (delta.y < 0).
-                    let factor = (-delta.y * 0.01).exp();
+                    let factor = (-delta.y * 0.05).exp();
                     let old_zoom = app.canvas.camera.zoom;
                     let new_zoom = (old_zoom * factor).clamp(0.1, 10.0);
                     if new_zoom != old_zoom {
