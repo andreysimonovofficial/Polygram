@@ -156,7 +156,7 @@ impl FreeCanvas {
         ui.horizontal(|ui| {
             ui.label("Позиция обводки:");
             let mut position = shape.stroke_position;
-            egui::ComboBox::from_label("")
+            egui::ComboBox::new("stroke_position", "")
                 .selected_text(match position {
                     StrokePosition::Center => "По центру",
                     StrokePosition::Inside => "Внутри",
@@ -239,18 +239,18 @@ impl FreeCanvas {
             ui.separator();
             ui.label("Текст:");
             changed |= ui.text_edit_singleline(&mut shape.text).changed();
-            changed |= ui
-                .add(
-                    DragValue::new(&mut shape.font_size)
-                        .prefix("Размер шрифта: ")
-                        .speed(0.5)
-                .range(4.0..=200.0),
+        changed |= ui
+            .add(
+                DragValue::new(&mut shape.font_size)
+                    .prefix("Размер шрифта: ")
+                    .speed(0.5)
+                    .range(4.0..=200.0),
             )
             .changed();
         ui.horizontal(|ui| {
             ui.label("Шрифт:");
             let mut family = shape.font_family;
-            egui::ComboBox::from_label("")
+            egui::ComboBox::new("text_font_family", "")
                 .selected_text(match family {
                     FontFamily::Arial => "Arial",
                     FontFamily::Inter => "Inter",
@@ -272,7 +272,7 @@ impl FreeCanvas {
         ui.horizontal(|ui| {
             ui.label("Насыщенность:");
             let mut weight = shape.font_weight;
-            egui::ComboBox::from_label("")
+            egui::ComboBox::new("text_font_weight", "")
                 .selected_text(match weight {
                     FontWeight::Thin => "Thin",
                     FontWeight::ExtraLight => "Extra Light",
