@@ -1,6 +1,6 @@
 use eframe::egui;
 use polygram_canvas::Canvas;
-use polygram_core::{runtime::EngineRuntime, Command};
+use polygram_core::{runtime::EngineRuntime, Command, Direction, MetricKind};
 
 pub struct PolygramApp {
     pub runtime: EngineRuntime,
@@ -15,6 +15,12 @@ pub struct PolygramApp {
     /// Инлайн-редактирование названия объекта прямо на холсте (Figma-стиль).
     pub edit_target: Option<String>,
     pub edit_input: String,
+    /// Модальное диалоговое окно добавления показателя.
+    pub add_metric_target: Option<(String, Direction)>,
+    pub add_metric_name: String,
+    pub add_metric_kind: MetricKind,
+    pub add_metric_value: String,
+    pub add_metric_unit: String,
     pub drag_object: Option<String>,
     pub drag_start_screen: Option<egui::Pos2>,
     pub drag_start_cell: Option<(i32, i32)>,
@@ -45,6 +51,11 @@ impl PolygramApp {
             rename_input: String::new(),
             edit_target: None,
             edit_input: String::new(),
+            add_metric_target: None,
+            add_metric_name: String::new(),
+            add_metric_kind: MetricKind::Number,
+            add_metric_value: String::new(),
+            add_metric_unit: String::new(),
             drag_object: None,
             drag_start_screen: None,
             drag_start_cell: None,

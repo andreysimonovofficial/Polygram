@@ -1,7 +1,7 @@
 use crate::app::PolygramApp;
 use polygram_canvas::object_at;
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, NodeKind};
-use polygram_core::Command;
+use polygram_core::{Command, MetricKind};
 use egui::{Key, Pos2, Rect, Vec2};
 
 pub fn context_menu(
@@ -333,7 +333,7 @@ pub fn handle_canvas_interaction(
     app.canvas
         .paint(ui, &published.geometry, &published.dynamic, hovered_object, app.edit_target.as_deref());
 
-    // Добавить показатель по клику на строку "+ Добавить показатель".
+    // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         for (object_id, dir, rect) in &app.canvas.add_metric_hotspots {
@@ -357,21 +357,14 @@ pub fn handle_canvas_interaction(
                 if n >= MAX_UI_METRICS_PER_SIDE {
                     continue;
                 }
-                let name = match dir {
+                app.add_metric_target = Some((object_id.clone(), *dir));
+                app.add_metric_name = match dir {
                     Direction::Request => format!("request{}", n + 1),
                     Direction::Output => format!("out{}", n + 1),
                 };
-                app.apply_cmd(Command::AddMetricEntry {
-                    object: object_id.clone(),
-                    dir: *dir,
-                    id: None,
-                    metric_def: "по умолчанию".into(),
-                    name,
-                    value: 0.0,
-                    required: 0.0,
-                    max: None,
-                    fact: 0.0,
-                });
+                app.add_metric_kind = MetricKind::Number;
+                app.add_metric_value = "0".to_owned();
+                app.add_metric_unit = String::new();
                 app.drag_object = None;
                 app.drag_start_screen = None;
                 app.drag_start_cell = None;
@@ -379,6 +372,8 @@ pub fn handle_canvas_interaction(
             }
         }
     }
+
+    handle_add_metric_dialog(app, ctx);
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
@@ -486,5 +481,117 @@ pub fn inline_rename_editor(
     } else if cancel {
         app.edit_target = None;
         app.edit_input.clear();
+    }
+}
+
+/// Модальное диалоговое окно добавления показателя.
+pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
+    let Some((object_id, dir)) = &app.add_metric_target else {
+        return;
+    };
+    let object_id = object_id.clone();
+    let dir = *dir;
+
+    let label = match dir {
+        Direction::Request => "ЗАПРОС",
+        Direction::Output => "ВЫХОД",
+    };
+
+    let mut done = false;
+    let mut cancelled = false;
+
+    egui::Window::new(format!("Добавить показатель — {label}"))
+        .default_size([320.0, 240.0])
+        .resizable(false)
+        .collapsible(false)
+        .show(ctx, |ui| {
+            ui.label("Имя показателя:");
+            ui.text_edit_singleline(&mut app.add_metric_name);
+
+            ui.separator();
+            ui.label("Тип:");
+            egui::ComboBox::new("add_metric_kind", "")
+                .selected_text(format!("{:?}", app.add_metric_kind))
+                .show_ui(ui, |ui| {
+                    for kind in [
+                        MetricKind::Number,
+                        MetricKind::Time,
+                        MetricKind::Percentage,
+                        MetricKind::Binary,
+                        MetricKind::Duration,
+                        MetricKind::Formula,
+                    ] {
+                        if ui.selectable_label(app.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
+                            app.add_metric_kind = kind;
+                        }
+                    }
+                });
+
+            ui.separator();
+            ui.label("Значение:");
+            ui.text_edit_singleline(&mut app.add_metric_value);
+
+            ui.separator();
+            ui.label("Единица измерения:");
+            ui.text_edit_singleline(&mut app.add_metric_unit);
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("OK").clicked() {
+                    done = true;
+                }
+                if ui.button("Отмена").clicked() {
+                    cancelled = true;
+                }
+            });
+        });
+
+    if cancelled {
+        app.add_metric_target = None;
+        app.add_metric_name.clear();
+        app.add_metric_value.clear();
+        app.add_metric_unit.clear();
+        return;
+    }
+
+    if done {
+        let name = app.add_metric_name.trim().to_owned();
+        if name.is_empty() {
+            app.add_metric_target = None;
+            app.add_metric_name.clear();
+            app.add_metric_value.clear();
+            app.add_metric_unit.clear();
+            return;
+        }
+
+        let kind = app.add_metric_kind;
+        let unit = app.add_metric_unit.trim().to_owned();
+        let value: f64 = app.add_metric_value.trim().parse().unwrap_or(0.0);
+
+        app.apply_cmd(Command::AddMetricDef {
+            id: None,
+            name: name.clone(),
+            kind,
+            unit,
+            api: None,
+        });
+
+        app.apply_cmd(Command::AddMetricEntry {
+            object: object_id,
+            dir,
+            id: None,
+            metric_def: name.clone(),
+            name,
+            value,
+            required: 0.0,
+            max: None,
+            fact: 0.0,
+        });
+
+        app.add_metric_target = None;
+        app.add_metric_name.clear();
+        app.add_metric_kind = MetricKind::Number;
+        app.add_metric_value.clear();
+        app.add_metric_unit.clear();
     }
 }

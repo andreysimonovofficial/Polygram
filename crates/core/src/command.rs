@@ -143,5 +143,7 @@ pub fn default_unit(kind: MetricKind) -> &'static str {
         MetricKind::Time => "чч:мм",
         MetricKind::Percentage => "%",
         MetricKind::Binary => "",
+        MetricKind::Duration => "чч:мм",
+        MetricKind::Formula => "",
     }
 }

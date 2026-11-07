@@ -45,6 +45,8 @@ pub enum MetricKind {
     Time,
     Percentage,
     Binary,
+    Duration,
+    Formula,
 }
 
 /// Направление контейнера: Запрос (вход) или Выход.
