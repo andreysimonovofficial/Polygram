@@ -218,7 +218,6 @@ pub fn paint_process(
     let mut hotspots: Vec<(String, Direction, Rect)> = Vec::new();
 
     // --- Геометрия из констант (ячейки → пиксели) ---
-    let header_h_px = cell_px * OBJECT_HEADER_HEIGHT_CELLS;
     let req_count = object.requests.len();
     let out_count = object.outputs.len();
     let total_h_cells = OBJECT_HEADER_HEIGHT_CELLS
@@ -229,6 +228,8 @@ pub fn paint_process(
     // Если контент выше доступного места — масштабируем вертикально, чтобы всё поместилось.
     let avail_h = rect_px.height();
     let scale_h = if total_h_px > avail_h { avail_h / total_h_px.max(1.0) } else { 1.0 };
+
+    let header_h_px = cell_px * OBJECT_HEADER_HEIGHT_CELLS * scale_h;
 
     // --- Внешняя рамка объекта ---
     let border_color = if is_hovered { theme.text } else { theme.card_border };
@@ -300,7 +301,7 @@ pub fn paint_process(
 
     for (i, entry) in object.requests.iter().enumerate().take(MAX_VISIBLE_METRICS) {
         let row_rect = Rect::from_min_size(
-            req_rect.min + Vec2::new(0.0, content_top + i as f32 * row_h_req),
+            Pos2::new(req_rect.min.x, content_top + i as f32 * row_h_req),
             Vec2::new(req_rect.width(), row_h_req),
         );
         if is_hovered {
@@ -310,7 +311,7 @@ pub fn paint_process(
     }
     if show_add_req {
         let add_rect = Rect::from_min_size(
-            req_rect.min + Vec2::new(0.0, content_top + visible_req as f32 * row_h_req),
+            Pos2::new(req_rect.min.x, content_top + visible_req as f32 * row_h_req),
             Vec2::new(req_rect.width(), row_h_req),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
@@ -347,7 +348,7 @@ pub fn paint_process(
 
     for (i, entry) in object.outputs.iter().enumerate().take(MAX_VISIBLE_METRICS) {
         let row_rect = Rect::from_min_size(
-            out_rect.min + Vec2::new(0.0, content_top_out + i as f32 * row_h_out),
+            Pos2::new(out_rect.min.x, content_top_out + i as f32 * row_h_out),
             Vec2::new(out_rect.width(), row_h_out),
         );
         if is_hovered {
@@ -357,7 +358,7 @@ pub fn paint_process(
     }
     if show_add_out {
         let add_rect = Rect::from_min_size(
-            out_rect.min + Vec2::new(0.0, content_top_out + visible_out as f32 * row_h_out),
+            Pos2::new(out_rect.min.x, content_top_out + visible_out as f32 * row_h_out),
             Vec2::new(out_rect.width(), row_h_out),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
