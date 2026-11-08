@@ -104,7 +104,8 @@ impl McpServer {
             "serverInfo": {
                 "name": "polygram",
                 "version": "0.1.0"
-            }
+            },
+            "instructions": "Polygram MCP Server — инструкция для агентов:\n\nПОРЯДОК РАБОТЫ:\n1. Сначала вызовите get_commands, чтобы увидеть полный список команд с примерами.\n2. Используйте отдельные инструменты (add_object, rename_object и т.д.) вместо execute_command — у них понятные поля.\n3. execute_command принимает произвольную JSON-команду в поле command.\n\nФОРМАТ КОМАНД:\n- Каждая команда — JSON с полем \"cmd\" (имя команды) и остальными полями в зависимости от типа.\n- Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}\n\nИМЕНА:\n- Пока пишите имена объектов латиницей (поддержка кириллицы в разработке).\n- ID объекта можно не указывать — сгенерируется автоматически.\n- Позиция at=[x,y] можно не указывать — подберётся автоматически.\n\nОШИБКИ:\n- Если команда не принимается, проверьте поле cmd и обязательные поля через get_commands.\n- При неверном JSON или неизвестном cmd вернётся понятное сообщение со списком доступных команд."
         })
     }
 
@@ -112,30 +113,99 @@ impl McpServer {
         json!({
             "tools": [
                 {
-                    "name": "execute_command",
-                    "description": "Выполнить команду Polygram (JSON)",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "command": { "type": "string", "description": "JSON-команда" }
-                        },
-                        "required": ["command"]
-                    }
+                    "name": "get_commands",
+                    "description": "Справочник всех команд Polygram с описанием полей и примерами. Вызовите этот инструмент первым, чтобы узнать формат команд.",
+                    "inputSchema": { "type": "object", "properties": {} }
                 },
                 {
                     "name": "get_snapshot",
-                    "description": "Получить последний снимок состояния",
+                    "description": "Получить полный снимок состояния графа (объекты, метрики, связи).",
                     "inputSchema": { "type": "object", "properties": {} }
                 },
                 {
                     "name": "get_objects",
-                    "description": "Список всех объектов",
+                    "description": "Список всех объектов на холсте.",
                     "inputSchema": { "type": "object", "properties": {} }
                 },
                 {
                     "name": "get_stats",
-                    "description": "Статистика графа",
+                    "description": "Статистика графа: количество объектов, связей, показателей.",
                     "inputSchema": { "type": "object", "properties": {} }
+                },
+                {
+                    "name": "add_object",
+                    "description": "Создать объект на холсте (процесс, отдел или портал). Имя пишите латиницей.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "description": "Имя объекта (латиницей), например \"Claude\"" },
+                            "kind": { "type": "string", "description": "Тип: process (процесс), department (отдел), portal (портал). По умолчанию process." },
+                            "id": { "type": "string", "description": "Идентификатор объекта. Если не указан, сгенерируется автоматически." },
+                            "at": { "type": "array", "description": "Позиция [x, y]. Если не указана, подбирается автоматически." },
+                            "parent": { "type": "string", "description": "ID родительского отдела. null — корень." }
+                        },
+                        "required": ["name"]
+                    }
+                },
+                {
+                    "name": "rename_object",
+                    "description": "Переименовать существующий объект.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "object": { "type": "string", "description": "ID объекта для переименования" },
+                            "name": { "type": "string", "description": "Новое имя объекта (латиницей)" }
+                        },
+                        "required": ["object", "name"]
+                    }
+                },
+                {
+                    "name": "remove_object",
+                    "description": "Удалить объект с холста.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "object": { "type": "string", "description": "ID объекта для удаления" }
+                        },
+                        "required": ["object"]
+                    }
+                },
+                {
+                    "name": "move_object",
+                    "description": "Переместить объект на новые координаты.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "object": { "type": "string", "description": "ID объекта" },
+                            "at": { "type": "array", "description": "Новая позиция [x, y]" }
+                        },
+                        "required": ["object", "at"]
+                    }
+                },
+                {
+                    "name": "add_metric_def",
+                    "description": "Создать глобальный показатель (метрику).",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "description": "Имя показателя" },
+                            "kind": { "type": "string", "description": "Тип: number, time, percentage, binary, duration, formula" },
+                            "unit": { "type": "string", "description": "Единица измерения, например \"$\" или \"шт.\"" },
+                            "id": { "type": "string", "description": "Идентификатор показателя. Если не указан, сгенерируется автоматически." }
+                        },
+                        "required": ["name", "kind"]
+                    }
+                },
+                {
+                    "name": "execute_command",
+                    "description": "Выполнить произвольную команду Polygram в формате JSON. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def, remove_metric_def, rename_metric_def, set_metric_def_unit, add_metric_entry, remove_metric_entry, set_value, set_required, set_max, set_fact, connect, disconnect, auto_layout, reroute_all. Каждая команда имеет поле cmd с именем команды и остальные поля в зависимости от типа. Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "command": { "type": "string", "description": "JSON-команда, например {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}" }
+                        },
+                        "required": ["command"]
+                    }
                 }
             ]
         })
@@ -144,15 +214,111 @@ impl McpServer {
     fn handle_tools_call(&self, params: Value) -> Value {
         let name = match params.get("name").and_then(|v| v.as_str()) {
             Some(n) => n,
-            None => return mcp_tool_error("Missing tool name"),
+            None => return mcp_tool_error("Не указано имя инструмента. Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, get_snapshot, get_objects, get_stats, execute_command."),
         };
         let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
         match name {
+            "get_commands" => mcp_tool_result(&serde_json::to_string(&json!({
+                "commands": [
+                    {"cmd": "add_object", "example": "{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}", "description": "Создать объект (процесс/отдел/портал)"},
+                    {"cmd": "rename_object", "example": "{\"cmd\":\"rename_object\",\"object\":\"claude\",\"name\":\"Новое имя\"}", "description": "Переименовать объект"},
+                    {"cmd": "remove_object", "example": "{\"cmd\":\"remove_object\",\"object\":\"claude\"}", "description": "Удалить объект"},
+                    {"cmd": "move_object", "example": "{\"cmd\":\"move_object\",\"object\":\"claude\",\"at\":[100,200]}", "description": "Переместить объект"},
+                    {"cmd": "add_metric_def", "example": "{\"cmd\":\"add_metric_def\",\"name\":\"Прибыль\",\"kind\":\"number\",\"unit\":\"$\"}", "description": "Создать показатель"},
+                    {"cmd": "get_snapshot", "example": "{\"cmd\":\"get_snapshot\"}", "description": "Снимок состояния графа"},
+                    {"cmd": "get_objects", "example": "{\"cmd\":\"get_objects\"}", "description": "Список объектов"},
+                    {"cmd": "get_stats", "example": "{\"cmd\":\"get_stats\"}", "description": "Статистика графа"}
+                ]
+            })).unwrap()),
+            "add_object" => {
+                let name = match args.get("name").and_then(|v| v.as_str()) {
+                    Some(n) => n.to_owned(),
+                    None => return mcp_tool_error("Для add_object требуется поле name (имя объекта). Пример: {\"name\":\"Claude\",\"kind\":\"process\"}"),
+                };
+                let kind = args.get("kind").and_then(|v| v.as_str()).unwrap_or("process");
+                let cmd = Command::AddObject {
+                    id: args.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                    name,
+                    kind: match kind {
+                        "department" => polygram_core::types::NodeKind::Department,
+                        "portal" => polygram_core::types::NodeKind::Portal,
+                        _ => polygram_core::types::NodeKind::Process,
+                    },
+                    at: args.get("at").and_then(|v| v.as_array()).map(|arr| {
+                        arr.iter().filter_map(|v| v.as_i64()).map(|v| v as i32).collect::<Vec<_>>().try_into().unwrap_or([0, 0])
+                    }),
+                    parent: args.get("parent").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                };
+                self.apply_command(cmd, &args)
+            }
+            "rename_object" => {
+                let object = match args.get("object").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для rename_object требуется поле object (ID объекта)."),
+                };
+                let name = match args.get("name").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для rename_object требуется поле name (новое имя)."),
+                };
+                let cmd = Command::RenameObject { object, name };
+                self.apply_command(cmd, &args)
+            }
+            "remove_object" => {
+                let object = match args.get("object").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для remove_object требуется поле object (ID объекта)."),
+                };
+                let cmd = Command::RemoveObject { object };
+                self.apply_command(cmd, &args)
+            }
+            "move_object" => {
+                let object = match args.get("object").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для move_object требуется поле object (ID объекта)."),
+                };
+                let at = match args.get("at").and_then(|v| v.as_array()) {
+                    Some(arr) => {
+                        let coords: Vec<i32> = arr.iter().filter_map(|v| v.as_i64()).map(|v| v as i32).collect();
+                        if coords.len() != 2 {
+                            return mcp_tool_error("Для move_object поле at должно быть массивом из двух чисел [x, y].");
+                        }
+                        [coords[0], coords[1]]
+                    }
+                    None => return mcp_tool_error("Для move_object требуется поле at ([x, y])."),
+                };
+                let cmd = Command::MoveObject { object, at };
+                self.apply_command(cmd, &args)
+            }
+            "add_metric_def" => {
+                let name = match args.get("name").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для add_metric_def требуется поле name (имя показателя)."),
+                };
+                let kind = match args.get("kind").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_owned(),
+                    None => return mcp_tool_error("Для add_metric_def требуется поле kind (number, time, percentage, binary, duration, formula)."),
+                };
+                let cmd = Command::AddMetricDef {
+                    id: args.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                    name,
+                    kind: match kind.as_str() {
+                        "time" => polygram_core::types::MetricKind::Time,
+                        "percentage" => polygram_core::types::MetricKind::Percentage,
+                        "binary" => polygram_core::types::MetricKind::Binary,
+                        "duration" => polygram_core::types::MetricKind::Duration,
+                        "formula" => polygram_core::types::MetricKind::Formula,
+                        _ => polygram_core::types::MetricKind::Number,
+                    },
+                    unit: args.get("unit").and_then(|v| v.as_str()).unwrap_or("ед.").to_owned(),
+                    api: None,
+                };
+                self.apply_command(cmd, &args)
+            }
             "execute_command" => {
                 let cmd_json = match args.get("command").and_then(|v| v.as_str()) {
                     Some(s) => s,
-                    None => return mcp_tool_error("Missing command argument"),
+                    None => return mcp_tool_error("Для execute_command требуется поле command (JSON-команда). Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def и другие. См. get_commands."),
                 };
                 if let Some(base) = &self.http_base {
                     match proxy_post_command(base, cmd_json) {
@@ -174,23 +340,22 @@ impl McpServer {
                 } else {
                     let cmd: Command = match serde_json::from_str(cmd_json) {
                         Ok(c) => c,
-                        Err(_) => return mcp_tool_error("Invalid command JSON"),
+                        Err(e) => return mcp_tool_error(&format!("Не удалось распарсить JSON-команду: {e}. Пример: {{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}}. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def. См. get_commands.")),
                     };
                     let cmd_str = serde_json::to_string(&cmd).unwrap_or_else(|_| cmd_json.to_owned());
                     match self.api.apply(cmd) {
                         Ok(applied) => {
-                            let result = format!("OK ревизия {}", applied.rev);
                             if let Some(tx) = &self.mcp_tx {
-                                let _ = tx.send(McpEvent { cmd: cmd_str, result });
+                                let _ = tx.send(McpEvent { cmd: cmd_str, result: format!("OK ревизия {}", applied.rev) });
                             }
                             mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
                         }
                         Err(e) => {
-                            let result = format!("Ошибка: {e:?}");
+                            let err_str = format!("{e:?}");
                             if let Some(tx) = &self.mcp_tx {
-                                let _ = tx.send(McpEvent { cmd: cmd_str, result });
+                                let _ = tx.send(McpEvent { cmd: cmd_str, result: err_str.clone() });
                             }
-                            mcp_tool_error(&format!("{e:?}"))
+                            mcp_tool_error(&err_str)
                         }
                     }
                 }
@@ -199,10 +364,7 @@ impl McpServer {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/snapshot") {
                         Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
-                        Err(e) => {
-                            let err_str = format!("{e}");
-                            mcp_tool_error(&err_str)
-                        }
+                        Err(e) => mcp_tool_error(&format!("{e}"))
                     }
                 } else {
                     let pub_ = self.api.snapshot();
@@ -213,10 +375,7 @@ impl McpServer {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/objects") {
                         Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
-                        Err(e) => {
-                            let err_str = format!("{e}");
-                            mcp_tool_error(&err_str)
-                        }
+                        Err(e) => mcp_tool_error(&format!("{e}"))
                     }
                 } else {
                     let objects = self.api.objects();
@@ -227,17 +386,53 @@ impl McpServer {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/stats") {
                         Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
-                        Err(e) => {
-                            let err_str = format!("{e}");
-                            mcp_tool_error(&err_str)
-                        }
+                        Err(e) => mcp_tool_error(&format!("{e}"))
                     }
                 } else {
                     let stats = self.api.stats();
                     mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
                 }
             }
-            _ => mcp_tool_error("Unknown tool"),
+            _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, get_snapshot, get_objects, get_stats, execute_command.")),
+        }
+    }
+
+    fn apply_command(&self, cmd: Command, _args: &Value) -> Value {
+        if let Some(base) = &self.http_base {
+            let cmd_json = serde_json::to_string(&cmd).unwrap();
+            match proxy_post_command(base, &cmd_json) {
+                Ok(body) => {
+                    let cmd_str = cmd_json;
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: body.clone() });
+                    }
+                    mcp_tool_result(&body)
+                }
+                Err(e) => {
+                    let err_str = format!("прокси HTTP: {e}");
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_json, result: err_str.clone() });
+                    }
+                    mcp_tool_error(&err_str)
+                }
+            }
+        } else {
+            let cmd_str = serde_json::to_string(&cmd).unwrap();
+            match self.api.apply(cmd) {
+                Ok(applied) => {
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: format!("OK ревизия {}", applied.rev) });
+                    }
+                    mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
+                }
+                Err(e) => {
+                    let err_str = format!("{e:?}");
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: err_str.clone() });
+                    }
+                    mcp_tool_error(&err_str)
+                }
+            }
         }
     }
 }

@@ -178,7 +178,11 @@ fn handle_connection(mut stream: std::net::TcpStream, api: Arc<ApiService>) -> s
         None => (data, &data[0..0]),
     };
 
-    let header_str = String::from_utf8_lossy(header_bytes);
+    // HTTP-заголовки — ASCII, читаем как UTF-8 (всегда корректно для заголовков).
+    let header_str = match String::from_utf8(header_bytes.to_vec()) {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
     let mut lines = header_str.lines();
     let request_line = lines.next().unwrap_or("");
     let mut parts = request_line.split_whitespace();
@@ -195,13 +199,18 @@ fn handle_connection(mut stream: std::net::TcpStream, api: Arc<ApiService>) -> s
         }
     }
 
-    // Если тело обрезано буфером, добиваем чтением.
-    let mut body = String::from_utf8_lossy(body_bytes).to_string();
+    // Тело запроса — JSON в кодировке UTF-8. Читаем без потерь.
+    let mut body = match String::from_utf8(body_bytes.to_vec()) {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
     if body.len() < content_length {
         let missing = content_length - body.len();
         let mut extra = vec![0u8; missing];
         if let Ok(n) = stream.read(&mut extra) {
-            body.push_str(&String::from_utf8_lossy(&extra[..n]));
+            if let Ok(extra_str) = String::from_utf8(extra[..n].to_vec()) {
+                body.push_str(&extra_str);
+            }
         }
     }
 
