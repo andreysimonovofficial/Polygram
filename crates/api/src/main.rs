@@ -1,5 +1,6 @@
 use axum::{extract::State, routing::{get, post}, Json, Router};
 use polygram_api::ApiService;
+use polygram_core::Command;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -15,18 +16,26 @@ async fn get_stats() -> Json<serde_json::Value> {
     Json(json!({"edges": 0, "metric_defs": 0, "object_metrics": 0, "objects": 0, "rev": 0}))
 }
 
-async fn get_objects() -> Json<serde_json::Value> {
-    Json(json!([]))
+async fn get_objects(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let views = api.objects();
+    Json(serde_json::to_value(&views).unwrap_or_default())
 }
 
-async fn post_command(body: String) -> Json<serde_json::Value> {
-    if body.contains("shutdown") {
-        std::process::exit(0);
+async fn post_command(State(api): State<Arc<ApiService>>, body: String) -> Json<serde_json::Value> {
+    let cmd: Command = match serde_json::from_str(&body) {
+        Ok(c) => c,
+        Err(e) => return Json(json!({"ok": false, "error": format!("не удалось разобрать команду: {e}")})),
+    };
+
+    match api.apply(cmd) {
+        Ok(applied) => Json(json!({
+            "ok": true,
+            "rev": applied.rev,
+            "created": applied.created,
+            "at": applied.at,
+        })),
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
     }
-    if body.contains("restart_server") {
-        std::process::exit(0);
-    }
-    Json(json!({"ok": false, "error": "not implemented"}))
 }
 
 #[tokio::main]

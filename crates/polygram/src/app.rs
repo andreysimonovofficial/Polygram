@@ -148,9 +148,9 @@ impl PolygramApp {
             match result {
                 Ok(resp) => {
                     let status = resp.status();
-                    let body: Value = resp.json().unwrap_or_default();
-                    let ok = status.is_success();
-                    let result_str = if ok {
+            let body: Value = resp.json().unwrap_or_default();
+            let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+            let result_str = if ok {
                         format!("OK (HTTP {status})")
                     } else {
                         let error = body.get("error").and_then(|v| v.as_str()).unwrap_or("неизвестная ошибка");
