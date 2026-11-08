@@ -303,17 +303,14 @@ pub fn handle_canvas_interaction(
                 let target = app.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
                 // Отправляем на сервер только если позиция реально изменилась относительно начала перетаскивания.
                 if (target.0, target.1) != (start_x, start_y) {
-                    let already_pending = app.pending_move_target.as_ref() == Some(&(object_id.clone(), [target.0, target.1]));
-                    if !already_pending {
-                        app.pending_move_target = Some((object_id.clone(), [target.0, target.1]));
-                        app.apply_cmd(Command::MoveObject {
-                            object: object_id.clone(),
-                            at: [target.0, target.1],
-                        });
-                    }
+                    app.pending_move = Some((object_id.clone(), app.last_rev));
+                    app.apply_cmd(Command::MoveObject {
+                        object: object_id,
+                        at: [target.0, target.1],
+                    });
                 }
-                // Очищаем предсказание — сервер ответит своим снимком, который станет источником истины.
-                app.predicted_positions.remove(&object_id);
+                // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
+                // иначе будет виден скачок на старую позицию.
             }
         }
 

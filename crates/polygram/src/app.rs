@@ -46,8 +46,8 @@ pub struct PolygramApp {
     /// Предсказанные позиции объектов при перетаскивании (client-side prediction).
     /// Ключ — id объекта, значение — клетка (x, y).
     pub predicted_positions: HashMap<String, (i32, i32)>,
-    /// Последняя отправленная на сервер цель перемещения (для избежания дублей).
-    pub pending_move_target: Option<(String, [i32; 2])>,
+    /// Ожидает подтверждения от сервера: (id объекта, ревизия на момент отправки команды).
+    pub pending_move: Option<(String, u64)>,
 }
 
 pub struct CommandLogEntry {
@@ -104,7 +104,7 @@ impl PolygramApp {
             connection_log: Vec::new(),
             reconnect_tick: 150,
             predicted_positions: HashMap::new(),
-            pending_move_target: None,
+            pending_move: None,
         }
     }
 
@@ -171,6 +171,14 @@ impl PolygramApp {
                 self.api_error = None;
                 self.last_status = format!("Ревизия {}", self.last_rev);
                 self.add_connection_log(true, &format!("Снимок получен, ревизия {}", new_rev));
+                // Reconciliation: если сервер подтвердил наше перемещение (rev вырос),
+                // убираем предсказанную позицию для этого объекта.
+                if let Some((ref obj_id, rev_at_move)) = self.pending_move {
+                    if new_rev > rev_at_move {
+                        self.predicted_positions.remove(obj_id);
+                        self.pending_move = None;
+                    }
+                }
             }
         }
     }
