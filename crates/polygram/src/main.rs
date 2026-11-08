@@ -13,7 +13,7 @@ mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
-use polygram_api::ApiService;
+use polygram_api::{http::router, ApiService};
 use server_control::ServerControl;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -266,7 +266,8 @@ fn auto_save_path() -> PathBuf {
         .join("polygram_auto.pg")
 }
 
-fn main() -> eframe::Result {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> eframe::Result {
     let auto_save_path = auto_save_path();
 
     // Загрузить существующее состояние, если файл автосохранения есть.
@@ -300,10 +301,21 @@ fn main() -> eframe::Result {
         sc.lock().unwrap().start_mcp();
     });
 
-    // HTTP-API — для удобной проверки и интеграции (делит состояние с GUI и MCP).
-    let sc_http = Arc::clone(&server_control);
-    thread::spawn(move || {
-        sc_http.lock().unwrap().start_http(8080);
+    // HTTP-API — как задача tokio, делит состояние с GUI и MCP.
+    let api_for_http = Arc::clone(&api);
+    tokio::spawn(async move {
+        let app = router(api_for_http);
+        let listener = match tokio::net::TcpListener::bind("127.0.0.1:8080").await {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("HTTP bind error на порту 8080: {e}");
+                return;
+            }
+        };
+        println!("Polygram HTTP API listening on http://127.0.0.1:8080");
+        if let Err(e) = axum::serve(listener, app).await {
+            eprintln!("HTTP serve error: {e}");
+        }
     });
 
     let options = eframe::NativeOptions {
@@ -326,9 +338,6 @@ fn main() -> eframe::Result {
             )))
         }),
     );
-
-    // Остановить HTTP-сервер перед выходом, чтобы освободить порт.
-    server_control.lock().unwrap().stop_http();
 
     // Сохранить состояние при закрытии окна.
     if let Err(e) = api_for_exit.save_to_file(&auto_save_path_for_exit) {

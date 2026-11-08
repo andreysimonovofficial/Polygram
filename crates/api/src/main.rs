@@ -3,12 +3,18 @@
 use polygram_api::http::router;
 use polygram_api::mcp::McpServer;
 use polygram_api::ApiService;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
     let api = Arc::new(ApiService::default());
+    let auto_save_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+        .join("polygram_auto.pg");
+    api.set_auto_save_path(auto_save_path.clone());
 
     // MCP сервер в отдельном потоке (stdio)
     let mcp_api = Arc::clone(&api);

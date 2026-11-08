@@ -5,7 +5,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use polygram_core::Command;
+use polygram_core::{Command, types::NodeKind};
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -16,11 +17,26 @@ pub struct HttpState {
     pub api: Arc<ApiService>,
 }
 
+#[derive(Deserialize)]
+pub struct CreateObject {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub name: String,
+    #[serde(default)]
+    pub kind: NodeKind,
+    /// Клетка левого верхнего угла. Если не задано — подберётся автоматически.
+    #[serde(default)]
+    pub at: Option<[i32; 2]>,
+    /// Внешний id родительского отдела (None — корень).
+    #[serde(default)]
+    pub parent: Option<String>,
+}
+
 pub fn router(api: Arc<ApiService>) -> Router {
     Router::new()
         .route("/api/snapshot", get(get_snapshot))
         .route("/api/stats", get(get_stats))
-        .route("/api/objects", get(get_objects))
+        .route("/api/objects", get(get_objects).post(post_object))
         .route("/api/objects/:id", get(get_object))
         .route("/api/commands", post(post_command))
         .route("/api/commands/batch", post(post_batch))
@@ -29,9 +45,7 @@ pub fn router(api: Arc<ApiService>) -> Router {
 
 async fn get_snapshot(State(state): State<HttpState>) -> Json<serde_json::Value> {
     let api = state.api.clone();
-    let published = tokio::task::spawn_blocking(move || api.snapshot())
-        .await
-        .unwrap();
+    let published = api.snapshot();
     Json(json!({
         "rev": published.rev,
         "dynamic": published.dynamic.as_ref().clone(),
@@ -64,6 +78,32 @@ async fn get_object(
         .await
         .unwrap();
     Json(json!(object))
+}
+
+async fn post_object(
+    State(state): State<HttpState>,
+    Json(req): Json<CreateObject>,
+) -> Json<serde_json::Value> {
+    let api = state.api.clone();
+    let cmd = Command::AddObject {
+        id: req.id,
+        name: req.name,
+        kind: req.kind,
+        at: req.at,
+        parent: req.parent,
+    };
+    let result = tokio::task::spawn_blocking(move || api.apply(cmd))
+        .await
+        .unwrap();
+    match result {
+        Ok(applied) => Json(json!({
+            "ok": true,
+            "rev": applied.rev,
+            "created": applied.created,
+            "at": applied.at,
+        })),
+        Err(e) => Json(json!({"ok": false, "error": format!("{e:?}")})),
+    }
 }
 
 async fn post_command(
