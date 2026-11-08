@@ -1,4 +1,5 @@
 use crate::app::PolygramApp;
+use std::env;
 use std::sync::Arc;
 
 pub fn command_log_panel(app: &PolygramApp, ctx: &egui::Context) {
@@ -142,7 +143,73 @@ pub fn mcp_panel(app: &mut PolygramApp, ctx: &egui::Context) {
             }
 
             ui.separator();
-            ui.label("MCP-клиенты подключаются через stdio.");
-            ui.monospace("polygram.exe — встроенный сервер (stdin/stdout)");
+
+            // Путь к MCP-серверу.
+            let mcp_exe = env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| env::current_dir().unwrap_or_default())
+                .join("polygram-mcp.exe");
+            let mcp_exe_str = mcp_exe.display().to_string();
+            let mcp_exe_json = mcp_exe_str.replace('\\', "\\\\");
+
+            // Конфиг для Claude Desktop.
+            ui.heading("Claude Desktop");
+            ui.separator();
+            let claude_config = format!(
+                "{{\n  \"mcpServers\": {{\n    \"polygram\": {{\n      \"command\": \"{}\",\n      \"args\": []\n    }}\n  }}\n}}",
+                mcp_exe_json
+            );
+            egui::ScrollArea::vertical()
+                .max_height(120.0)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut claude_config.clone())
+                            .code_editor()
+                            .desired_rows(6)
+                            .interactive(false),
+                    );
+                });
+            if ui.button("Копировать конфиг Claude Desktop").clicked() {
+                ctx.copy_text(claude_config);
+            }
+
+            ui.separator();
+
+            // Конфиг для Open WebUI.
+            ui.heading("Open WebUI");
+            ui.separator();
+            ui.label("Имя сервера:");
+            ui.monospace("polygram");
+            ui.label("Тип:");
+            ui.monospace("stdio");
+            ui.label("Команда:");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut mcp_exe_str.clone())
+                        .code_editor()
+                        .interactive(false),
+                );
+                if ui.button("Копировать").clicked() {
+                    ctx.copy_text(mcp_exe_str.clone());
+                }
+            });
+            ui.label("Аргументы:");
+            ui.monospace("(пусто)");
+            ui.separator();
+
+            ui.heading("Примеры команд");
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .max_height(100.0)
+                .show(ui, |ui| {
+                    for cmd in [
+                        r#"{"cmd":"add_object","id":"A","name":"Процесс А","kind":"process"}"#,
+                        r#"{"cmd":"add_metric_def","id":"Деньги","name":"Деньги","kind":"number","unit":"$"}"#,
+                        r#"{"cmd":"add_metric_entry","object":"A","dir":"output","metric_def":"Деньги","name":"Деньги","value":100.0}"#,
+                    ] {
+                        ui.monospace(cmd);
+                    }
+                });
         });
 }
