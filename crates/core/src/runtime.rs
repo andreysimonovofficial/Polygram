@@ -17,6 +17,7 @@ use crate::{
 use std::{
     sync::{mpsc, Arc, RwLock},
     thread,
+    time::Duration,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -53,6 +54,10 @@ pub struct EngineRuntime {
     handle: EngineHandle,
     join: Option<thread::JoinHandle<Engine>>,
 }
+
+// `JoinHandle` is `Send` but not `Sync`, but `join` is private and never
+// exposed through shared references, so `EngineRuntime` can safely be `Sync`.
+unsafe impl Sync for EngineRuntime {}
 
 fn publish(
     engine: &Engine,
@@ -103,18 +108,22 @@ impl EngineRuntime {
                     for msg in batch {
                         match msg {
                             Msg::Apply { scope, cmd, reply } => {
-                                let r = engine.apply(scope, cmd);
+                                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.apply(scope, cmd)))
+                                    .unwrap_or_else(|_| Err(EngineError::Stopped));
                                 replies.push(Box::new(move || {
                                     let _ = reply.send(r);
                                 }));
                             }
                             Msg::Batch { scope, cmds, reply } => {
-                                let r = engine.apply_batch(scope, cmds);
+                                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.apply_batch(scope, cmds)))
+                                    .unwrap_or_else(|_| Err((0, EngineError::Stopped)));
                                 replies.push(Box::new(move || {
                                     let _ = reply.send(r);
                                 }));
                             }
-                            Msg::Query(f) => f(&mut engine),
+                            Msg::Query(f) => {
+                                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut engine)));
+                            }
                             Msg::Stop => {
                                 stop = true;
                                 break;
@@ -192,10 +201,11 @@ impl EngineHandle {
     ) -> Option<R> {
         let (reply, rx) = mpsc::channel();
         let job = Box::new(move |e: &mut Engine| {
-            let _ = reply.send(f(e));
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(e)));
+            let _ = reply.send(result.ok());
         });
         self.tx.send(Msg::Query(job)).ok()?;
-        rx.recv().ok()
+        rx.recv_timeout(Duration::from_secs(5)).ok()?
     }
 
     /// Последний опубликованный снимок (дёшево: клонируется только указатель).

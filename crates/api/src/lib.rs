@@ -9,22 +9,8 @@ use polygram_core::{
     Stats,
 };
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
-
-/// Канал управления жизненным циклом API-сервера.
-#[derive(Clone)]
-pub struct AdminTx {
-    pub restart: mpsc::UnboundedSender<()>,
-    pub change_port: mpsc::UnboundedSender<u16>,
-    pub shutdown: mpsc::UnboundedSender<()>,
-}
-
-pub struct AdminRx {
-    pub restart: mpsc::UnboundedReceiver<()>,
-    pub change_port: mpsc::UnboundedReceiver<u16>,
-    pub shutdown: mpsc::UnboundedReceiver<()>,
-}
 
 /// Главный сервис API. Оборачивает EngineRuntime и предоставляет
 /// срезы состояния и выполнение команд.
@@ -37,27 +23,10 @@ struct ApiServiceInner {
     runtime: EngineRuntime,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
-    /// Канал управления сервером (устанавливается из main.rs).
-    admin_tx: Mutex<Option<AdminTx>>,
-}
-
-/// Пара админ-каналов: Tx уходит в ApiService, Rx — в основной цикл main.rs.
-pub fn admin_channels() -> (AdminTx, AdminRx) {
-    let (restart_tx, restart_rx) = mpsc::unbounded_channel();
-    let (port_tx, port_rx) = mpsc::unbounded_channel();
-    let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel();
-    (
-        AdminTx {
-            restart: restart_tx,
-            change_port: port_tx,
-            shutdown: shutdown_tx,
-        },
-        AdminRx {
-            restart: restart_rx,
-            change_port: port_rx,
-            shutdown: shutdown_rx,
-        },
-    )
+    /// Флаги управления жизненным циклом сервера.
+    restart_flag: Arc<AtomicBool>,
+    shutdown_flag: Arc<AtomicBool>,
+    port_cell: Arc<AtomicU16>,
 }
 
 impl ApiService {
@@ -67,14 +36,26 @@ impl ApiService {
             inner: Arc::new(ApiServiceInner {
                 runtime,
                 auto_save_path: Mutex::new(None),
-                admin_tx: Mutex::new(None),
+                restart_flag: Arc::new(AtomicBool::new(false)),
+                shutdown_flag: Arc::new(AtomicBool::new(false)),
+                port_cell: Arc::new(AtomicU16::new(8080)),
             }),
         }
     }
 
-    /// Установить канал управления сервером (вызывается из main.rs перед стартом HTTP).
-    pub fn set_admin_tx(&self, admin_tx: AdminTx) {
-        *self.inner.admin_tx.lock().unwrap() = Some(admin_tx);
+    /// Флаг перезапуска сервера.
+    pub fn restart_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.inner.restart_flag)
+    }
+
+    /// Флаг остановки сервера.
+    pub fn shutdown_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.inner.shutdown_flag)
+    }
+
+    /// Ячейка текущего порта.
+    pub fn port_cell(&self) -> Arc<AtomicU16> {
+        Arc::clone(&self.inner.port_cell)
     }
 
     pub fn handle(&self) -> polygram_core::runtime::EngineHandle {
@@ -124,19 +105,10 @@ impl ApiService {
         // Админ-команды не модифицируют ядро — они управляют жизненным циклом сервера.
         match &cmd {
             Command::RestartServer => {
-                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
-                    let _ = tx.restart.send(());
-                }
-                return Ok(polygram_core::command::Applied {
-                    rev: self.snapshot().rev,
-                    created: None,
-                    at: None,
-                });
+                std::process::exit(0);
             }
             Command::ChangePort { port } => {
-                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
-                    let _ = tx.change_port.send(*port);
-                }
+                self.inner.port_cell.store(*port, Ordering::SeqCst);
                 return Ok(polygram_core::command::Applied {
                     rev: self.snapshot().rev,
                     created: None,
@@ -144,14 +116,7 @@ impl ApiService {
                 });
             }
             Command::Shutdown => {
-                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
-                    let _ = tx.shutdown.send(());
-                }
-                return Ok(polygram_core::command::Applied {
-                    rev: self.snapshot().rev,
-                    created: None,
-                    at: None,
-                });
+                std::process::exit(0);
             }
             Command::ReloadConfig => {
                 return Ok(polygram_core::command::Applied {
