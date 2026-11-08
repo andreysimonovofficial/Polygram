@@ -103,13 +103,22 @@ impl PolygramApp {
     pub fn add_connection_log(&mut self, ok: bool, message: &str) {
         let time = chrono::Local::now().format("%H:%M:%S").to_string();
         self.connection_log.push(ConnectionLogEntry {
-            time,
+            time: time.clone(),
             message: message.to_owned(),
             ok,
         });
         if self.connection_log.len() > 50 {
             self.connection_log.remove(0);
         }
+        // Пишем в файл для отладки.
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("C:\\Dev\\Polygram\\target\\debug\\gui_connection.log")
+            .and_then(|mut f| {
+                use std::io::Write;
+                writeln!(f, "[{}] {} {}", time, if ok { "OK" } else { "ERR" }, message)
+            });
     }
 
     pub fn apply_cmd(&mut self, cmd: Command) {
