@@ -1,11 +1,14 @@
-use axum::{routing::{get, post}, Json, Router};
+use axum::{extract::State, routing::{get, post}, Json, Router};
 use polygram_api::ApiService;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-async fn get_snapshot() -> Json<serde_json::Value> {
-    Json(json!({"rev": 0, "dynamic": {}, "geometry": {}}))
+async fn get_snapshot(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    match serde_json::to_value(&*api.snapshot()) {
+        Ok(value) => Json(value),
+        Err(_) => Json(json!({"rev": 0, "dynamic": {"rev": 0}, "geometry": {"rev": 0, "objects": [], "edges": []}})),
+    }
 }
 
 async fn get_stats() -> Json<serde_json::Value> {
@@ -53,7 +56,8 @@ async fn main() {
         .route("/api/snapshot", get(get_snapshot))
         .route("/api/stats", get(get_stats))
         .route("/api/objects", get(get_objects))
-        .route("/api/commands", post(post_command));
+        .route("/api/commands", post(post_command))
+        .with_state(api.clone());
 
     let listener = match tokio::net::TcpListener::bind("0.0.0.0:8080").await {
         Ok(l) => l,
