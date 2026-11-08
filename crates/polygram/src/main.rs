@@ -195,6 +195,15 @@ impl eframe::App for PolygramApp {
         // Опрос снимка состояния из API-сервера.
         self.poll_snapshot();
 
+        // Периодическая попытка переподключения, если API недоступен (раз в ~50 кадров ≈ 1 сек).
+        if !self.api_connected {
+            self.reconnect_tick = self.reconnect_tick.saturating_sub(1);
+            if self.reconnect_tick == 0 {
+                self.reconnect_tick = 150;
+                self.try_connect_once();
+            }
+        }
+
         let published = self.snapshot.clone().unwrap_or_else(|| {
             Arc::new(Published {
                 rev: 0,
@@ -228,7 +237,7 @@ impl eframe::App for PolygramApp {
 
         panels::command_log_panel(self, ctx);
 
-        panels::mcp_panel(self, ctx);
+        panels::connection_panel(self, ctx);
 
         if self.warmup_frames > 0 {
             self.warmup_frames -= 1;
@@ -264,6 +273,8 @@ fn main() -> eframe::Result {
             app.api_client = api_client;
             app.api_base = api_base;
             app.snapshot_rx = snapshot_rx;
+            // Первая попытка подключения к API.
+            app.try_connect_once();
             Ok(Box::new(app))
         }),
     );

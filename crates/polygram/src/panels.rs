@@ -33,77 +33,108 @@ pub fn command_log_panel(app: &PolygramApp, ctx: &egui::Context) {
         });
 }
 
-/// Панель статуса API-сервера.
-/// Показывает подключение к polygram-api (работает 24/7), ревизию, порт.
-pub fn mcp_panel(app: &mut PolygramApp, ctx: &egui::Context) {
-    if !app.show_mcp_panel {
-        return;
-    }
-
-    egui::SidePanel::left("mcp_panel")
+/// Панель подключения к API-серверу.
+/// Показывает статус, адрес, последнюю ошибку и лог попыток подключения.
+pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
+    egui::SidePanel::left("connection_panel")
         .default_width(340.0)
         .show(ctx, |ui| {
-            ui.heading("API сервер (polygram-api)");
+            ui.heading("Подключение к API");
             ui.separator();
 
-            // Статус подключения.
-            ui.horizontal(|ui| {
-                ui.label("HTTP API:");
-                if app.api_connected {
-                    ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "подключён");
-                } else {
-                    ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "недоступен");
-                }
-            });
+            // Адрес API.
             ui.horizontal(|ui| {
                 ui.label("Адрес:");
-                ui.monospace(&app.api_base);
-            });
-            ui.horizontal(|ui| {
-                ui.label("Ревизия:");
-                ui.monospace(app.last_rev.to_string());
-            });
-            ui.separator();
-
-            // Кнопки администрирования (чедние те же HTTP-команды).
-            ui.heading("Управление сервером");
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button("Перезапустить сервер").clicked() {
-                    app.apply_cmd(Command::RestartServer);
-                    app.command_log.push(crate::app::CommandLogEntry {
-                        cmd: "{\"cmd\":\"restart_server\"}".to_owned(),
-                        result: "Команда отправлена".to_owned(),
-                    });
-                }
-                if ui.button("Остановить сервер").clicked() {
-                    app.apply_cmd(Command::Shutdown);
-                    app.command_log.push(crate::app::CommandLogEntry {
-                        cmd: "{\"cmd\":\"shutdown\"}".to_owned(),
-                        result: "Команда отправлена".to_owned(),
-                    });
+                if ui.text_edit_singleline(&mut app.api_base).lost_focus() {
+                    app.try_connect_once();
                 }
             });
 
+            // Кнопка подключения.
+            ui.horizontal(|ui| {
+                if ui.button("Подключиться / Обновить").clicked() {
+                    app.try_connect_once();
+                }
+                if app.api_connected {
+                    ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● онлайн");
+                } else {
+                    ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● офлайн");
+                }
+            });
+
+            // Ревизия.
+            if app.api_connected {
+                ui.horizontal(|ui| {
+                    ui.label("Ревизия:");
+                    ui.monospace(app.last_rev.to_string());
+                });
+            }
+
+            // Последняя ошибка.
+            if let Some(ref err) = app.api_error {
+                ui.separator();
+                ui.label("Ошибка:");
+                ui.colored_label(egui::Color32::from_rgb(244, 67, 54), err);
+            }
+
             ui.separator();
 
-            // Смена порта.
-            let mut port_str = "8080".to_owned();
-            ui.horizontal(|ui| {
-                ui.label("Новый порт:");
-                if ui.text_edit_singleline(&mut port_str).lost_focus() {
-                    if let Ok(new_port) = port_str.parse::<u16>() {
-                        app.apply_cmd(Command::ChangePort { port: new_port });
+            // Лог подключений.
+            ui.heading("Лог подключения");
+            egui::ScrollArea::vertical()
+                .max_height(150.0)
+                .show(ui, |ui| {
+                    for entry in &app.connection_log {
+                        let color = if entry.ok {
+                            egui::Color32::from_rgb(76, 175, 80)
+                        } else {
+                            egui::Color32::from_rgb(244, 67, 54)
+                        };
+                        ui.colored_label(color, format!("[{}] {}", entry.time, entry.message));
                     }
-                }
-                if ui.button("Применить порт").clicked() {
-                    if let Ok(new_port) = port_str.parse::<u16>() {
-                        app.apply_cmd(Command::ChangePort { port: new_port });
-                    }
-                }
-            });
+                });
 
             ui.separator();
+
+            // Кнопки администрирования сервера (через те же HTTP-команды).
+            if app.api_connected {
+                ui.heading("Управление сервером");
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Перезапустить сервер").clicked() {
+                        app.apply_cmd(Command::RestartServer);
+                        app.command_log.push(crate::app::CommandLogEntry {
+                            cmd: "{\"cmd\":\"restart_server\"}".to_owned(),
+                            result: "Команда отправлена".to_owned(),
+                        });
+                    }
+                    if ui.button("Остановить сервер").clicked() {
+                        app.apply_cmd(Command::Shutdown);
+                        app.command_log.push(crate::app::CommandLogEntry {
+                            cmd: "{\"cmd\":\"shutdown\"}".to_owned(),
+                            result: "Команда отправлена".to_owned(),
+                        });
+                    }
+                });
+
+                ui.separator();
+                let mut port_str = "8080".to_owned();
+                ui.horizontal(|ui| {
+                    ui.label("Новый порт:");
+                    if ui.text_edit_singleline(&mut port_str).lost_focus() {
+                        if let Ok(new_port) = port_str.parse::<u16>() {
+                            app.apply_cmd(Command::ChangePort { port: new_port });
+                        }
+                    }
+                    if ui.button("Применить порт").clicked() {
+                        if let Ok(new_port) = port_str.parse::<u16>() {
+                            app.apply_cmd(Command::ChangePort { port: new_port });
+                        }
+                    }
+                });
+
+                ui.separator();
+            }
 
             // Путь к MCP-серверу для Claude Desktop.
             let mcp_exe = std::env::current_exe()
@@ -121,12 +152,12 @@ pub fn mcp_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 mcp_exe_json
             );
             egui::ScrollArea::vertical()
-                .max_height(120.0)
+                .max_height(100.0)
                 .show(ui, |ui| {
                     ui.add(
                         egui::TextEdit::multiline(&mut claude_config.clone())
                             .code_editor()
-                            .desired_rows(6)
+                            .desired_rows(5)
                             .interactive(false),
                     );
                 });
