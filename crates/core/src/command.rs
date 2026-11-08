@@ -124,6 +124,12 @@ pub enum Command {
 
     AutoLayout,
     RerouteAll,
+
+    /// Управление сервером — единые для GUI, MCP и HTTP.
+    RestartServer,
+    ChangePort { port: u16 },
+    Shutdown,
+    ReloadConfig,
 }
 
 fn default_throughput() -> f64 {

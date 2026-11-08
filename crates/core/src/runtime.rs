@@ -19,11 +19,11 @@ use std::{
     thread,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Published {
     pub rev: u64,
-    pub dynamic: Arc<DynamicState>,
-    pub geometry: Arc<Geometry>,
+    pub dynamic: DynamicState,
+    pub geometry: Geometry,
 }
 
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
@@ -61,13 +61,13 @@ fn publish(
 ) -> Arc<Published> {
     let geometry =
         if prev.geometry.rev != engine.geometry_rev() || prev.rev == 0 && engine.rev() == 0 {
-            Arc::new(engine.geometry())
+            engine.geometry()
         } else {
             prev.geometry.clone()
         };
     let next = Arc::new(Published {
         rev: engine.rev(),
-        dynamic: Arc::new(engine.dynamic_state()),
+        dynamic: engine.dynamic_state(),
         geometry,
     });
     *slot.write().expect("замок публикации") = next.clone();
@@ -79,8 +79,8 @@ impl EngineRuntime {
         let (tx, rx) = mpsc::channel::<Msg>();
         let first = Arc::new(Published {
             rev: engine.rev(),
-            dynamic: Arc::new(engine.dynamic_state()),
-            geometry: Arc::new(engine.geometry()),
+            dynamic: engine.dynamic_state(),
+            geometry: engine.geometry(),
         });
         let published = Arc::new(RwLock::new(first.clone()));
         let slot = published.clone();

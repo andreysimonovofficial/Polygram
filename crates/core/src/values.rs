@@ -222,7 +222,7 @@ impl Values {
     }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct DynamicState {
     pub rev: u64,
     pub value: Vec<f64>,

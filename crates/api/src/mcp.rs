@@ -335,7 +335,7 @@ impl McpServer {
             }
             "get_snapshot" => {
                 let pub_ = self.api.snapshot();
-                mcp_tool_result(&serde_json::to_string(&json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.as_ref().clone(), "geometry": pub_.geometry.as_ref().clone() })).unwrap())
+                mcp_tool_result(&serde_json::to_string(&json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.clone(), "geometry": pub_.geometry.clone() })).unwrap())
             }
             "get_objects" => {
                 let objects = self.api.objects();

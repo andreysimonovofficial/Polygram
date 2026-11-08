@@ -10,6 +10,21 @@ use polygram_core::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
+
+/// Канал управления жизненным циклом API-сервера.
+#[derive(Clone)]
+pub struct AdminTx {
+    pub restart: mpsc::UnboundedSender<()>,
+    pub change_port: mpsc::UnboundedSender<u16>,
+    pub shutdown: mpsc::UnboundedSender<()>,
+}
+
+pub struct AdminRx {
+    pub restart: mpsc::UnboundedReceiver<()>,
+    pub change_port: mpsc::UnboundedReceiver<u16>,
+    pub shutdown: mpsc::UnboundedReceiver<()>,
+}
 
 /// Главный сервис API. Оборачивает EngineRuntime и предоставляет
 /// срезы состояния и выполнение команд.
@@ -22,6 +37,27 @@ struct ApiServiceInner {
     runtime: EngineRuntime,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
+    /// Канал управления сервером (устанавливается из main.rs).
+    admin_tx: Mutex<Option<AdminTx>>,
+}
+
+/// Пара админ-каналов: Tx уходит в ApiService, Rx — в основной цикл main.rs.
+pub fn admin_channels() -> (AdminTx, AdminRx) {
+    let (restart_tx, restart_rx) = mpsc::unbounded_channel();
+    let (port_tx, port_rx) = mpsc::unbounded_channel();
+    let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel();
+    (
+        AdminTx {
+            restart: restart_tx,
+            change_port: port_tx,
+            shutdown: shutdown_tx,
+        },
+        AdminRx {
+            restart: restart_rx,
+            change_port: port_rx,
+            shutdown: shutdown_rx,
+        },
+    )
 }
 
 impl ApiService {
@@ -31,8 +67,14 @@ impl ApiService {
             inner: Arc::new(ApiServiceInner {
                 runtime,
                 auto_save_path: Mutex::new(None),
+                admin_tx: Mutex::new(None),
             }),
         }
+    }
+
+    /// Установить канал управления сервером (вызывается из main.rs перед стартом HTTP).
+    pub fn set_admin_tx(&self, admin_tx: AdminTx) {
+        *self.inner.admin_tx.lock().unwrap() = Some(admin_tx);
     }
 
     pub fn handle(&self) -> polygram_core::runtime::EngineHandle {
@@ -79,6 +121,48 @@ impl ApiService {
         &self,
         cmd: Command,
     ) -> Result<polygram_core::command::Applied, polygram_core::error::EngineError> {
+        // Админ-команды не модифицируют ядро — они управляют жизненным циклом сервера.
+        match &cmd {
+            Command::RestartServer => {
+                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
+                    let _ = tx.restart.send(());
+                }
+                return Ok(polygram_core::command::Applied {
+                    rev: self.snapshot().rev,
+                    created: None,
+                    at: None,
+                });
+            }
+            Command::ChangePort { port } => {
+                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
+                    let _ = tx.change_port.send(*port);
+                }
+                return Ok(polygram_core::command::Applied {
+                    rev: self.snapshot().rev,
+                    created: None,
+                    at: None,
+                });
+            }
+            Command::Shutdown => {
+                if let Some(tx) = &*self.inner.admin_tx.lock().unwrap() {
+                    let _ = tx.shutdown.send(());
+                }
+                return Ok(polygram_core::command::Applied {
+                    rev: self.snapshot().rev,
+                    created: None,
+                    at: None,
+                });
+            }
+            Command::ReloadConfig => {
+                return Ok(polygram_core::command::Applied {
+                    rev: self.snapshot().rev,
+                    created: None,
+                    at: None,
+                });
+            }
+            _ => {}
+        }
+
         let result = self.inner.runtime.handle().apply(cmd);
         if result.is_ok() {
             let _ = self.maybe_save();

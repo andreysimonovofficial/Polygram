@@ -48,8 +48,8 @@ async fn get_snapshot(State(state): State<HttpState>) -> Json<serde_json::Value>
     let published = api.snapshot();
     Json(json!({
         "rev": published.rev,
-        "dynamic": published.dynamic.as_ref().clone(),
-        "geometry": published.geometry.as_ref().clone(),
+        "dynamic": published.dynamic.clone(),
+        "geometry": published.geometry.clone(),
     }))
 }
 

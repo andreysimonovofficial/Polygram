@@ -1,5 +1,5 @@
 use crate::engine::Engine;
-use crate::{command::Command, error::Result};
+use crate::{command::Applied, command::Command, error::Result};
 
 mod auto_layout;
 mod edges;
@@ -108,5 +108,11 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         } => handle_disconnect(engine, &from_object, &from_entry, &to_object, &to_entry),
         Command::AutoLayout => handle_auto_layout(engine),
         Command::RerouteAll => handle_reroute_all(engine),
+
+        // Админ-команды не модифицируют ядро, они управляют жизненным циклом API-сервера.
+        Command::RestartServer => Ok(Applied { rev: 0, created: None, at: None }),
+        Command::ChangePort { .. } => Ok(Applied { rev: 0, created: None, at: None }),
+        Command::Shutdown => Ok(Applied { rev: 0, created: None, at: None }),
+        Command::ReloadConfig => Ok(Applied { rev: 0, created: None, at: None }),
     }
 }
