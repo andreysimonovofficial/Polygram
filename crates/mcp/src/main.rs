@@ -172,7 +172,7 @@ impl McpServer {
     fn handle_tools_call(&self, params: Value) -> Value {
         let name = match params.get("name").and_then(|v| v.as_str()) {
             Some(n) => n,
-            None => return jsonrpc_error(None, -32602, "Missing tool name"),
+            None => return mcp_tool_error("Missing tool name"),
         };
         let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -180,31 +180,29 @@ impl McpServer {
             "execute_command" => {
                 let cmd_json = match args.get("command").and_then(|v| v.as_str()) {
                     Some(s) => s,
-                    None => return jsonrpc_error(None, -32602, "Missing command argument"),
+                    None => return mcp_tool_error("Missing command argument"),
                 };
                 if let Some(base) = &self.http_base {
-                    // Прокси в HTTP API запущенного GUI — единое ядро.
                     match proxy_post_command(base, cmd_json) {
                         Ok(body) => {
                             let cmd_str = cmd_json.to_owned();
                             if let Some(tx) = &self.mcp_tx {
                                 let _ = tx.send(McpEvent { cmd: cmd_str, result: body.clone() });
                             }
-                            serde_json::from_str::<Value>(&body).unwrap_or(json!({"ok": true}))
+                            mcp_tool_result(&body)
                         }
                         Err(e) => {
                             let err_str = format!("прокси HTTP: {e}");
                             if let Some(tx) = &self.mcp_tx {
                                 let _ = tx.send(McpEvent { cmd: cmd_json.to_owned(), result: err_str.clone() });
                             }
-                            json!({"ok": false, "error": err_str})
+                            mcp_tool_error(&err_str)
                         }
                     }
                 } else {
-                    // Standalone — своё ядро.
                     let cmd: Command = match serde_json::from_str(cmd_json) {
                         Ok(c) => c,
-                        Err(_) => return jsonrpc_error(None, -32602, "Invalid command JSON"),
+                        Err(_) => return mcp_tool_error("Invalid command JSON"),
                     };
                     let cmd_str = serde_json::to_string(&cmd).unwrap_or_else(|_| cmd_json.to_owned());
                     match self.api.apply(cmd) {
@@ -213,14 +211,14 @@ impl McpServer {
                             if let Some(tx) = &self.mcp_tx {
                                 let _ = tx.send(McpEvent { cmd: cmd_str, result });
                             }
-                            json!({ "ok": true, "rev": applied.rev })
+                            mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
                         }
                         Err(e) => {
                             let result = format!("Ошибка: {e:?}");
                             if let Some(tx) = &self.mcp_tx {
                                 let _ = tx.send(McpEvent { cmd: cmd_str, result });
                             }
-                            json!({ "ok": false, "error": format!("{e:?}") })
+                            mcp_tool_error(&format!("{e:?}"))
                         }
                     }
                 }
@@ -228,48 +226,72 @@ impl McpServer {
             "get_snapshot" => {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/snapshot") {
-                        Ok(v) => v,
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
                         Err(e) => {
                             let err_str = format!("{e}");
-                            json!({"ok": false, "error": err_str})
+                            mcp_tool_error(&err_str)
                         }
                     }
                 } else {
                     let pub_ = self.api.snapshot();
-                    json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.as_ref().clone(), "geometry": pub_.geometry.as_ref().clone() })
+                    mcp_tool_result(&serde_json::to_string(&json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.as_ref().clone(), "geometry": pub_.geometry.as_ref().clone() })).unwrap())
                 }
             }
             "get_objects" => {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/objects") {
-                        Ok(v) => v,
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
                         Err(e) => {
                             let err_str = format!("{e}");
-                            json!({"ok": false, "error": err_str})
+                            mcp_tool_error(&err_str)
                         }
                     }
                 } else {
                     let objects = self.api.objects();
-                    json!({ "objects": objects })
+                    mcp_tool_result(&serde_json::to_string(&json!({ "objects": objects })).unwrap())
                 }
             }
             "get_stats" => {
                 if let Some(base) = &self.http_base {
                     match proxy_get(base, "/api/stats") {
-                        Ok(v) => v,
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
                         Err(e) => {
                             let err_str = format!("{e}");
-                            json!({"ok": false, "error": err_str})
+                            mcp_tool_error(&err_str)
                         }
                     }
                 } else {
                     let stats = self.api.stats();
-                    json!({ "stats": stats })
+                    mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
                 }
             }
-            _ => jsonrpc_error(None, -32602, "Unknown tool"),
+            _ => mcp_tool_error("Unknown tool"),
         }
     }
+}
+
+fn mcp_tool_result(text: &str) -> Value {
+    json!({
+        "content": [
+            {
+                "type": "text",
+                "text": text
+            }
+        ],
+        "isError": false
+    })
+}
+
+fn mcp_tool_error(text: &str) -> Value {
+    json!({
+        "content": [
+            {
+                "type": "text",
+                "text": text
+            }
+        ],
+        "isError": true
+    })
 }
 
 fn jsonrpc_error(id: Option<&Value>, code: i32, message: &str) -> Value {
