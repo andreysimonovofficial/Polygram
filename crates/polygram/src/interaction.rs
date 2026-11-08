@@ -274,7 +274,8 @@ pub fn handle_canvas_interaction(
             }
         }
 
-        // Перетаскивание: пересчитываем целевую клетку и двигаем объект командой.
+        // Перетаскивание: предсказываем позицию мгновенно (client-side prediction),
+        // команду на сервер отправляем только при отпускании мыши.
         if let (Some(ref object_id), Some(start_screen), Some((start_x, start_y))) =
             (&app.drag_object, app.drag_start_screen, app.drag_start_cell)
         {
@@ -285,29 +286,35 @@ pub fn handle_canvas_interaction(
                     let dx = (delta.x / cell_px).round() as i32;
                     let dy = (delta.y / cell_px).round() as i32;
                     let target = [start_x + dx, start_y + dy];
-                    let current_cell = published
-                        .geometry
-                        .objects
-                        .iter()
-                        .find(|o| o.id == *object_id)
-                        .map(|o| (o.rect.x, o.rect.y));
-                    if current_cell != Some((target[0], target[1])) {
-                        app.apply_cmd(Command::MoveObject {
-                            object: object_id.clone(),
-                            at: target,
-                        });
-                    }
+                    // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
+                    app.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
                 }
             }
         }
 
-        // Завершение перетаскивания при отпускании левой кнопки мыши.
+        // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
         if app.drag_object.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
         {
-            app.drag_object = None;
+            let drag_object = app.drag_object.take();
+            let drag_start_cell = app.drag_start_cell.take();
             app.drag_start_screen = None;
-            app.drag_start_cell = None;
+            if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
+                let target = app.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
+                // Отправляем на сервер только если позиция реально изменилась относительно начала перетаскивания.
+                if (target.0, target.1) != (start_x, start_y) {
+                    let already_pending = app.pending_move_target.as_ref() == Some(&(object_id.clone(), [target.0, target.1]));
+                    if !already_pending {
+                        app.pending_move_target = Some((object_id.clone(), [target.0, target.1]));
+                        app.apply_cmd(Command::MoveObject {
+                            object: object_id.clone(),
+                            at: [target.0, target.1],
+                        });
+                    }
+                }
+                // Очищаем предсказание — сервер ответит своим снимком, который станет источником истины.
+                app.predicted_positions.remove(&object_id);
+            }
         }
 
         // Контекстное меню по правой кнопке (только клик, не перетаскивание).
@@ -330,8 +337,7 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas
-        .paint(ui, &published.geometry, &published.dynamic, hovered_object, app.edit_target.as_deref());
+    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.edit_target.as_deref());
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {

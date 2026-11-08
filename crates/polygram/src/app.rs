@@ -3,6 +3,7 @@ use polygram_canvas::Canvas;
 use polygram_core::{Command, Direction, MetricKind, Published};
 use reqwest::blocking::Client;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,6 +43,11 @@ pub struct PolygramApp {
     pub connection_log: Vec<ConnectionLogEntry>,
     /// Таймер периодической попытки переподключения (в кадрах).
     pub reconnect_tick: u32,
+    /// Предсказанные позиции объектов при перетаскивании (client-side prediction).
+    /// Ключ — id объекта, значение — клетка (x, y).
+    pub predicted_positions: HashMap<String, (i32, i32)>,
+    /// Последняя отправленная на сервер цель перемещения (для избежания дублей).
+    pub pending_move_target: Option<(String, [i32; 2])>,
 }
 
 pub struct CommandLogEntry {
@@ -97,6 +103,8 @@ impl PolygramApp {
             api_error: None,
             connection_log: Vec::new(),
             reconnect_tick: 150,
+            predicted_positions: HashMap::new(),
+            pending_move_target: None,
         }
     }
 
@@ -165,6 +173,19 @@ impl PolygramApp {
                 self.add_connection_log(true, &format!("Снимок получен, ревизия {}", new_rev));
             }
         }
+    }
+
+    /// Вернуть геометрию с подменой позиций объектов на предсказанные
+    /// (client-side prediction для отзывчивого перетаскивания).
+    pub fn geometry_with_predictions(&self, published: &Published) -> polygram_core::geometry::Geometry {
+        let mut geometry = published.geometry.clone();
+        for obj in &mut geometry.objects {
+            if let Some((x, y)) = self.predicted_positions.get(&obj.id) {
+                obj.rect.x = *x;
+                obj.rect.y = *y;
+            }
+        }
+        geometry
     }
 
     pub fn try_connect_once(&mut self) {
