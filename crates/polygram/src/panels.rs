@@ -89,8 +89,9 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 ui.heading("Сервер API (polygram-api)");
                 ui.separator();
                 let api_running = app.api_process_running();
+                let api_alive = app.api_connected || api_running;
                 ui.horizontal(|ui| {
-                    if api_running {
+                    if api_alive {
                         ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
                     } else {
                         ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
