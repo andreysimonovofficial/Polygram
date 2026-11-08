@@ -251,11 +251,6 @@ impl eframe::App for PolygramApp {
 
         palette::command_palette(self, ctx);
 
-        // Окно управления MCP-сервером.
-        if self.show_mcp_window {
-            menu::mcp_window(self, ctx);
-        }
-
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             status::status_bar(self, ui);
         });
