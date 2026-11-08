@@ -39,7 +39,8 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
     egui::SidePanel::left("connection_panel")
         .default_width(340.0)
         .show(ctx, |ui| {
-            ui.heading("Подключение к API");
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("Подключение к API");
             ui.separator();
 
             // Адрес API.
@@ -203,5 +204,6 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         ui.monospace(cmd);
                     }
                 });
+            });
         });
 }
