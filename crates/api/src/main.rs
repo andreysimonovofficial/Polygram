@@ -8,12 +8,26 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let api = Arc::new(ApiService::default());
     let auto_save_path = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
         .join("polygram_auto.pg");
+    let api = if auto_save_path.exists() {
+        match ApiService::load_from_file(&auto_save_path) {
+            Ok(api) => {
+                eprintln!("Загружено автосохранение: {}", auto_save_path.display());
+                api
+            }
+            Err(e) => {
+                eprintln!("Не удалось загрузить автосохранение: {e}, создаём новый граф");
+                ApiService::default()
+            }
+        }
+    } else {
+        ApiService::default()
+    };
+    let api = Arc::new(api);
     api.set_auto_save_path(auto_save_path.clone());
 
     // MCP сервер в отдельном потоке (stdio)
