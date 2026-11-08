@@ -5,6 +5,7 @@ use polygram_api::{http::router, mcp::McpEvent, mcp::McpServer, ApiService};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread;
+use std::time::Duration;
 
 pub struct ServerControl {
     pub api: Arc<ApiService>,
@@ -13,6 +14,8 @@ pub struct ServerControl {
     pub mcp_join: Mutex<Option<thread::JoinHandle<()>>>,
     pub http_port: Mutex<u16>,
     pub http_join: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Флаг остановки HTTP-сервера (проверяется graceful shutdown future).
+    pub http_stop: Arc<AtomicBool>,
 }
 
 impl ServerControl {
@@ -24,6 +27,7 @@ impl ServerControl {
             mcp_join: Mutex::new(None),
             http_port: Mutex::new(8080),
             http_join: Mutex::new(None),
+            http_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -56,9 +60,21 @@ impl ServerControl {
     }
 
     pub fn start_http(&self, port: u16) {
+        // Остановить существующий HTTP-сервер перед запуском нового.
+        self.stop_http();
+
+        // Сбросить флаг остановки для нового сервера.
+        self.http_stop.store(false, Ordering::SeqCst);
+
         let api = Arc::clone(&self.api);
+        let stop = Arc::clone(&self.http_stop);
+
         let handle = thread::spawn(move || {
-            let rt = match tokio::runtime::Runtime::new() {
+            let rt = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(4)
+                .enable_all()
+                .build()
+            {
                 Ok(rt) => rt,
                 Err(e) => {
                     eprintln!("Не удалось создать tokio runtime для HTTP: {e}");
@@ -67,15 +83,24 @@ impl ServerControl {
             };
             rt.block_on(async move {
                 let app = router(api);
-                let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await {
+                let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
                     Ok(l) => l,
                     Err(e) => {
                         eprintln!("HTTP bind error на порту {port}: {e}");
                         return;
                     }
                 };
-                println!("Polygram HTTP API listening on http://0.0.0.0:{port}");
-                if let Err(e) = axum::serve(listener, app).await {
+                println!("Polygram HTTP API listening on http://127.0.0.1:{port}");
+
+                let stop = stop;
+                if let Err(e) = axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        while !stop.load(Ordering::SeqCst) {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                    })
+                    .await
+                {
                     eprintln!("HTTP serve error: {e}");
                 }
             });
@@ -86,12 +111,16 @@ impl ServerControl {
     }
 
     pub fn stop_http(&self) {
-        // HTTP-сервер работает в block_on и не может быть остановлен извне без перезапуска приложения.
-        // Для смены порта используется start_http с новым портом (старый продолжает работать).
+        self.http_stop.store(true, Ordering::SeqCst);
+        let mut join = self.http_join.lock().unwrap();
+        if let Some(handle) = join.take() {
+            let _ = handle.join();
+        }
     }
 
     pub fn restart_http(&self) {
         let port = *self.http_port.lock().unwrap();
+        self.stop_http();
         self.start_http(port);
     }
 

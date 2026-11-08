@@ -60,7 +60,7 @@ impl PolygramApp {
         let canvas = Canvas::new();
         let (mcp_tx, mcp_rx) = mpsc::channel();
         let api = Arc::new(polygram_api::ApiService::default());
-        let server_control = Arc::new(Mutex::new(crate::server_control::ServerControl::new(api, mcp_tx)));
+        let server_control = Arc::new(Mutex::new(crate::server_control::ServerControl::new(Arc::clone(&api), mcp_tx)));
         Self {
             runtime: handle,
             _engine: Some(runtime),

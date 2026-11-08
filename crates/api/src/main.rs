@@ -3,6 +3,7 @@
 use polygram_api::http::router;
 use polygram_api::mcp::McpServer;
 use polygram_api::ApiService;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -11,8 +12,9 @@ async fn main() {
 
     // MCP сервер в отдельном потоке (stdio)
     let mcp_api = Arc::clone(&api);
+    let running = Arc::new(AtomicBool::new(true));
     std::thread::spawn(move || {
-        McpServer::new((*mcp_api).clone()).run();
+        McpServer::new((*mcp_api).clone()).run(Arc::clone(&running));
     });
 
     // HTTP сервер

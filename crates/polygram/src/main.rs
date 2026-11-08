@@ -15,6 +15,7 @@ use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
 use polygram_api::ApiService;
 use server_control::ServerControl;
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -256,8 +257,39 @@ impl eframe::App for PolygramApp {
     }
 }
 
+/// Путь к файлу автосохранения состояния ядра (рядом с exe).
+fn auto_save_path() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+        .join("polygram_auto.pg")
+}
+
 fn main() -> eframe::Result {
-    let api = Arc::new(ApiService::default());
+    let auto_save_path = auto_save_path();
+
+    // Загрузить существующее состояние, если файл автосохранения есть.
+    let api = if auto_save_path.exists() {
+        match ApiService::load_from_file(&auto_save_path) {
+            Ok(api) => {
+                eprintln!("Загружено автосохранение: {}", auto_save_path.display());
+                Arc::new(api)
+            }
+            Err(e) => {
+                eprintln!("Не удалось загрузить автосохранение: {e}");
+                Arc::new(ApiService::default())
+            }
+        }
+    } else {
+        Arc::new(ApiService::default())
+    };
+
+    api.set_auto_save_path(auto_save_path.clone());
+
+    let api_for_exit = Arc::clone(&api);
+    let auto_save_path_for_exit = auto_save_path.clone();
+
     let (mcp_tx, mcp_rx) = mpsc::channel();
 
     let server_control = Arc::new(Mutex::new(ServerControl::new(Arc::clone(&api), mcp_tx)));
@@ -282,7 +314,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     let sc_app = Arc::clone(&server_control);
-    eframe::run_native(
+    let result = eframe::run_native(
         "Polygram",
         options,
         Box::new(move |cc| {
@@ -293,5 +325,15 @@ fn main() -> eframe::Result {
                 sc_app,
             )))
         }),
-    )
+    );
+
+    // Остановить HTTP-сервер перед выходом, чтобы освободить порт.
+    server_control.lock().unwrap().stop_http();
+
+    // Сохранить состояние при закрытии окна.
+    if let Err(e) = api_for_exit.save_to_file(&auto_save_path_for_exit) {
+        eprintln!("Не удалось сохранить автосохранение: {e}");
+    }
+
+    result
 }
