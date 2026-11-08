@@ -2,7 +2,7 @@
   "mcpServers": {
     "polygram": {
       "command": "C:\\Dev\\Polygram\\target\\debug\\polygram-mcp.exe",
-      "args": []
+      "args": ["--http", "http://127.0.0.1:8080"]
     }
   }
 }

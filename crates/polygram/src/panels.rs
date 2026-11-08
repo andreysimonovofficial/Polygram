@@ -157,7 +157,7 @@ pub fn mcp_panel(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.heading("Claude Desktop");
             ui.separator();
             let claude_config = format!(
-                "{{\n  \"mcpServers\": {{\n    \"polygram\": {{\n      \"command\": \"{}\",\n      \"args\": []\n    }}\n  }}\n}}",
+                "{{\n  \"mcpServers\": {{\n    \"polygram\": {{\n      \"command\": \"{}\",\n      \"args\": [\"--http\", \"http://127.0.0.1:8080\"]\n    }}\n  }}\n}}",
                 mcp_exe_json
             );
             egui::ScrollArea::vertical()

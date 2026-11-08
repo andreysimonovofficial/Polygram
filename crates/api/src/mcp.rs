@@ -34,42 +34,14 @@ impl McpServer {
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut out = stdout.lock();
-        let mut stdin = stdin.lock();
 
-        while running.load(Ordering::SeqCst) {
-            // Читаем HTTP-подобные заголовки (Content-Length и т.д.) MCP stdio транспорта.
-            let mut content_length: Option<usize> = None;
-            loop {
-                let mut line = String::new();
-                match stdin.read_line(&mut line) {
-                    Ok(0) => return, // EOF
-                    Ok(_) => {}
-                    Err(_) => return,
-                }
-                let line = line.trim_end_matches(&['\r', '\n'][..]);
-                if line.is_empty() {
-                    break; // Конец заголовков
-                }
-                if let Some(rest) = line.strip_prefix("Content-Length:") {
-                    if let Ok(n) = rest.trim().parse::<usize>() {
-                        content_length = Some(n);
-                    }
-                }
-            }
-
-            let n = match content_length {
-                Some(n) => n,
-                None => continue,
-            };
-
-            // Читаем тело JSON-RPC.
-            let mut body = vec![0u8; n];
-            if stdin.read_exact(&mut body).is_err() {
+        for line in stdin.lock().lines() {
+            if !running.load(Ordering::SeqCst) {
                 break;
             }
-            let line = match String::from_utf8(body) {
-                Ok(s) => s,
-                Err(_) => continue,
+            let line = match line {
+                Ok(l) => l,
+                Err(_) => break,
             };
             if line.trim().is_empty() {
                 continue;
@@ -78,13 +50,7 @@ impl McpServer {
             let response = self.handle_message(&line);
             if let Some(resp) = response {
                 let resp_str = serde_json::to_string(&resp).unwrap();
-                let resp_bytes = resp_str.as_bytes();
-                let _ = write!(
-                    out,
-                    "Content-Length: {}\r\n\r\n{}",
-                    resp_bytes.len(),
-                    resp_str
-                );
+                let _ = writeln!(out, "{}", resp_str);
                 let _ = out.flush();
             }
         }
@@ -98,6 +64,12 @@ impl McpServer {
 
         let method = req.get("method")?.as_str()?;
         let id = req.get("id").cloned();
+
+        // Уведомления (без id) не ждут ответа.
+        if id.is_none() {
+            return None;
+        }
+
         let params = req.get("params").cloned().unwrap_or(json!({}));
 
         let result = match method {
