@@ -13,7 +13,7 @@ mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
-use polygram_api::{http::router, ApiService};
+use polygram_api::ApiService;
 use server_control::ServerControl;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -221,6 +221,22 @@ impl eframe::App for PolygramApp {
             }
         }
 
+        // Горячая перезагрузка состояния из файла автосохранения:
+        // HTTP/MCP создаёт объект → polygram-api пишет polygram_auto.pg → GUI подхватывает "на лету".
+        if let Ok(metadata) = std::fs::metadata(&self.auto_save_path) {
+            if let Ok(mtime) = metadata.modified() {
+                if self.last_mtime != Some(mtime) {
+                    self.last_mtime = Some(mtime);
+                    if let Ok(new_api) = ApiService::load_from_file(&self.auto_save_path) {
+                        let mut sc = self.server_control.lock().unwrap();
+                        let _ = std::mem::replace(&mut sc.api, Arc::new(new_api));
+                        self.runtime = sc.api.handle();
+                        self.last_status = "Объект обновлён через HTTP/MCP".to_owned();
+                    }
+                }
+            }
+        }
+
         menu::top_menu(self, ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -266,8 +282,7 @@ fn auto_save_path() -> PathBuf {
         .join("polygram_auto.pg")
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> eframe::Result {
+fn main() -> eframe::Result {
     let auto_save_path = auto_save_path();
 
     // Загрузить существующее состояние, если файл автосохранения есть.
@@ -301,22 +316,8 @@ async fn main() -> eframe::Result {
         sc.lock().unwrap().start_mcp();
     });
 
-    // HTTP-API — как задача tokio, делит состояние с GUI и MCP.
-    let api_for_http = Arc::clone(&api);
-    tokio::spawn(async move {
-        let app = router(api_for_http);
-        let listener = match tokio::net::TcpListener::bind("127.0.0.1:8080").await {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("HTTP bind error на порту 8080: {e}");
-                return;
-            }
-        };
-        println!("Polygram HTTP API listening on http://127.0.0.1:8080");
-        if let Err(e) = axum::serve(listener, app).await {
-            eprintln!("HTTP serve error: {e}");
-        }
-    });
+    // HTTP-API запускается отдельным процессом (polygram-api) и пишет состояние
+    // в polygram_auto.pg. GUI подхватывает изменения через файл-полинг в update().
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

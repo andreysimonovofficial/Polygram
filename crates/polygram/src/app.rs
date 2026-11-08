@@ -2,8 +2,10 @@ use eframe::egui;
 use polygram_api::{mcp::McpEvent, ApiService};
 use polygram_canvas::Canvas;
 use polygram_core::{runtime::{EngineHandle, EngineRuntime}, Command, Direction, MetricKind};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 pub struct PolygramApp {
     pub runtime: EngineHandle,
@@ -45,6 +47,10 @@ pub struct PolygramApp {
     pub mcp_rx: mpsc::Receiver<McpEvent>,
     /// Управление встроенными серверами (MCP + HTTP).
     pub server_control: Arc<Mutex<crate::server_control::ServerControl>>,
+    /// Путь к файлу автосохранения (для обнаружения изменений из HTTP/MCP).
+    pub auto_save_path: PathBuf,
+    /// Время последней модификации файла автосохранения.
+    pub last_mtime: Option<SystemTime>,
 }
 
 pub struct CommandLogEntry {
@@ -89,6 +95,12 @@ impl PolygramApp {
             show_mcp_panel: false,
             mcp_rx,
             server_control,
+            auto_save_path: std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+                .join("polygram_auto.pg"),
+            last_mtime: None,
         }
     }
 
@@ -125,6 +137,12 @@ impl PolygramApp {
             show_mcp_panel: false,
             mcp_rx,
             server_control,
+            auto_save_path: std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+                .join("polygram_auto.pg"),
+            last_mtime: None,
         }
     }
 
