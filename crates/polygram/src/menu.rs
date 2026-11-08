@@ -39,14 +39,15 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
 
             ui.separator();
 
-            // Вкладка MCP — боковая панель в приложении.
-            let mcp_panel_label = if app.show_mcp_panel {
-                "MCP (панель)"
+            // Показать/скрыть боковую панель (подключение к API).
+            let sidebar_label = if app.show_sidebar {
+                "Скрыть сайдбар"
             } else {
-                "MCP (панель)"
+                "Показать сайдбар"
             };
-            if ui.button(mcp_panel_label).clicked() {
-                app.show_mcp_panel = !app.show_mcp_panel;
+            if ui.button(sidebar_label).clicked() {
+                app.show_sidebar = !app.show_sidebar;
+                ui.close_menu();
             }
 
             ui.separator();

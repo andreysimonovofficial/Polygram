@@ -31,6 +31,7 @@ pub struct PolygramApp {
     pub drag_start_cell: Option<(i32, i32)>,
     pub warmup_frames: u32,
     pub show_mcp_panel: bool,
+    pub show_sidebar: bool,
     pub api_client: Client,
     pub api_base: String,
     pub api_connected: bool,
@@ -43,6 +44,10 @@ pub struct PolygramApp {
     pub connection_log: Vec<ConnectionLogEntry>,
     /// Таймер периодической попытки переподключения (в кадрах).
     pub reconnect_tick: u32,
+    /// Процесс polygram-api (если запущен из GUI).
+    pub api_process: Option<std::process::Child>,
+    /// Процесс polygram-mcp (если запущен из GUI).
+    pub mcp_process: Option<std::process::Child>,
     /// Предсказанные позиции объектов при перетаскивании (client-side prediction).
     /// Ключ — id объекта, значение — клетка (x, y).
     pub predicted_positions: HashMap<String, (i32, i32)>,
@@ -94,6 +99,7 @@ impl PolygramApp {
             drag_start_cell: None,
             warmup_frames: 120,
             show_mcp_panel: false,
+            show_sidebar: true,
             api_client,
             api_base,
             api_connected: false,
@@ -103,6 +109,8 @@ impl PolygramApp {
             api_error: None,
             connection_log: Vec::new(),
             reconnect_tick: 150,
+            api_process: None,
+            mcp_process: None,
             predicted_positions: HashMap::new(),
             pending_move: None,
         }
@@ -253,5 +261,116 @@ impl PolygramApp {
             }
             std::thread::sleep(Duration::from_millis(500));
         });
+    }
+
+    // ── Путь к бинарникам в той же директории, что и текущий exe ──────────
+    fn exe_dir() -> std::path::PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+    }
+
+    pub fn api_exe_path() -> std::path::PathBuf {
+        Self::exe_dir().join("polygram-api.exe")
+    }
+
+    pub fn mcp_exe_path() -> std::path::PathBuf {
+        Self::exe_dir().join("polygram-mcp.exe")
+    }
+
+    // ── polygram-api управление ───────────────────────────────────────────
+
+    pub fn api_process_running(&mut self) -> bool {
+        match &mut self.api_process {
+            Some(child) => match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(_)) => {
+                    self.api_process = None;
+                    false
+                }
+                Err(_) => {
+                    self.api_process = None;
+                    false
+                }
+            },
+            None => false,
+        }
+    }
+
+    pub fn start_api_process(&mut self) {
+        if self.api_process_running() {
+            return;
+        }
+        match std::process::Command::new(Self::api_exe_path()).spawn() {
+            Ok(child) => {
+                self.api_process = Some(child);
+                self.api_error = None;
+                self.add_connection_log(true, "polygram-api запущен");
+            }
+            Err(e) => {
+                self.api_error = Some(format!("Не удалось запустить polygram-api: {e}"));
+                self.add_connection_log(false, &format!("Ошибка запуска polygram-api: {e}"));
+            }
+        }
+    }
+
+    pub fn stop_api_process(&mut self) {
+        if let Some(mut child) = self.api_process.take() {
+            let _ = child.kill();
+            self.add_connection_log(true, "polygram-api остановлен");
+        }
+    }
+
+    pub fn restart_api_process(&mut self) {
+        self.stop_api_process();
+        self.start_api_process();
+    }
+
+    // ── polygram-mcp управление ───────────────────────────────────────────
+
+    pub fn mcp_process_running(&mut self) -> bool {
+        match &mut self.mcp_process {
+            Some(child) => match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(_)) => {
+                    self.mcp_process = None;
+                    false
+                }
+                Err(_) => {
+                    self.mcp_process = None;
+                    false
+                }
+            },
+            None => false,
+        }
+    }
+
+    pub fn start_mcp_process(&mut self) {
+        if self.mcp_process_running() {
+            return;
+        }
+        match std::process::Command::new(Self::mcp_exe_path()).spawn() {
+            Ok(child) => {
+                self.mcp_process = Some(child);
+                self.add_connection_log(true, "polygram-mcp запущен");
+            }
+            Err(e) => {
+                self.api_error = Some(format!("Не удалось запустить polygram-mcp: {e}"));
+                self.add_connection_log(false, &format!("Ошибка запуска polygram-mcp: {e}"));
+            }
+        }
+    }
+
+    pub fn stop_mcp_process(&mut self) {
+        if let Some(mut child) = self.mcp_process.take() {
+            let _ = child.kill();
+            self.add_connection_log(true, "polygram-mcp остановлен");
+        }
+    }
+
+    pub fn restart_mcp_process(&mut self) {
+        self.stop_mcp_process();
+        self.start_mcp_process();
     }
 }
