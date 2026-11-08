@@ -2,7 +2,7 @@
 
 use polygram_core::Command;
 use serde_json::{json, Value};
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
@@ -34,21 +34,57 @@ impl McpServer {
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut out = stdout.lock();
+        let mut stdin = stdin.lock();
 
-        for line in stdin.lock().lines() {
-            if !running.load(Ordering::SeqCst) {
+        while running.load(Ordering::SeqCst) {
+            // Читаем HTTP-подобные заголовки (Content-Length и т.д.) MCP stdio транспорта.
+            let mut content_length: Option<usize> = None;
+            loop {
+                let mut line = String::new();
+                match stdin.read_line(&mut line) {
+                    Ok(0) => return, // EOF
+                    Ok(_) => {}
+                    Err(_) => return,
+                }
+                let line = line.trim_end_matches(&['\r', '\n'][..]);
+                if line.is_empty() {
+                    break; // Конец заголовков
+                }
+                if let Some(rest) = line.strip_prefix("Content-Length:") {
+                    if let Ok(n) = rest.trim().parse::<usize>() {
+                        content_length = Some(n);
+                    }
+                }
+            }
+
+            let n = match content_length {
+                Some(n) => n,
+                None => continue,
+            };
+
+            // Читаем тело JSON-RPC.
+            let mut body = vec![0u8; n];
+            if stdin.read_exact(&mut body).is_err() {
                 break;
             }
-            let line = match line {
-                Ok(l) => l,
-                Err(_) => break,
+            let line = match String::from_utf8(body) {
+                Ok(s) => s,
+                Err(_) => continue,
             };
             if line.trim().is_empty() {
                 continue;
             }
+
             let response = self.handle_message(&line);
             if let Some(resp) = response {
-                let _ = writeln!(out, "{}", serde_json::to_string(&resp).unwrap());
+                let resp_str = serde_json::to_string(&resp).unwrap();
+                let resp_bytes = resp_str.as_bytes();
+                let _ = write!(
+                    out,
+                    "Content-Length: {}\r\n\r\n{}",
+                    resp_bytes.len(),
+                    resp_str
+                );
                 let _ = out.flush();
             }
         }
