@@ -254,7 +254,7 @@ fn main() -> eframe::Result {
     let api_base = "http://127.0.0.1:8080".to_owned();
 
     // Фоновый опрос снимка состояния из API-сервера.
-    let (snapshot_tx, _snapshot_rx) = mpsc::channel();
+    let (snapshot_tx, snapshot_rx) = mpsc::channel();
     PolygramApp::start_snapshot_polling(api_client.clone(), api_base.clone(), snapshot_tx);
 
     let options = eframe::NativeOptions {
@@ -269,7 +269,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
-            let mut app = PolygramApp::new();
+            let mut app = PolygramApp::new(snapshot_rx);
             app.try_connect_once();
             Ok(Box::new(app))
         }),

@@ -35,15 +35,13 @@ pub struct PolygramApp {
 }
 
 impl PolygramApp {
-    pub fn new() -> Self {
+    pub fn new(snapshot_rx: mpsc::Receiver<Arc<Published>>) -> Self {
         let canvas = Canvas::new();
         let api_client = Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap();
         let api_base = "http://127.0.0.1:8080".to_owned();
-        let (snapshot_tx, snapshot_rx) = mpsc::channel();
-        let _ = snapshot_tx;
         Self {
             canvas,
             connection: ConnectionState::new(api_client, api_base, snapshot_rx),
