@@ -140,6 +140,11 @@ fn ollama_reply(client: &Client, user_text: &str) -> Option<String> {
 
 fn wants_create_object(text: &str) -> bool {
     let t = text.to_lowercase();
+    // Не считаем запросом на создание, если просят удалить — иначе слово «Удали»
+    // в «Удали объект» интерпретировалось бы как название нового объекта.
+    if t.contains("удали") || t.contains("удалить") || t.contains("delete") || t.contains("remove") {
+        return false;
+    }
     t.contains("создай") || t.contains("create") || t.contains("объект") || t.contains("объекта")
 }
 
