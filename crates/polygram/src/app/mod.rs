@@ -65,6 +65,8 @@ pub struct PolygramApp {
     pub dialogs: DialogState,
     pub drag: DragState,
     pub right_click: Option<(egui::Pos2, Option<String>)>,
+    /// Выделенные объекты (ID) — групповое выделение через Selection Box и Ctrl+клик.
+    pub selected_objects: Vec<String>,
     pub show_mcp_panel: bool,
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
@@ -91,6 +93,7 @@ impl PolygramApp {
             dialogs: DialogState::new(),
             drag: DragState::new(),
             right_click: None,
+            selected_objects: Vec::new(),
             show_mcp_panel: false,
             show_sidebar: ui_config.show_sidebar,
             show_command_log_panel: ui_config.show_command_log_panel,

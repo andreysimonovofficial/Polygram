@@ -63,6 +63,7 @@ impl Canvas {
         dynamic: &DynamicState,
         hovered_object: Option<&str>,
         edit_target: Option<&str>,
+        selected_objects: &[String],
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -147,6 +148,30 @@ impl Canvas {
                     cell_px,
                     self.camera.zoom,
                     is_hovered,
+                );
+            }
+        }
+
+        // Рамки выделения вокруг выделенных объектов (рисуются поверх всего).
+        if !selected_objects.is_empty() {
+            for object in &geometry.objects {
+                if !selected_objects.iter().any(|id| id == &object.id) {
+                    continue;
+                }
+                let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
+                let rect_px = Rect::from_min_size(
+                    self.camera
+                        .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
+                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                );
+                if !rect_px.intersects(clip_rect) {
+                    continue;
+                }
+                let sr = rect_px.expand(4.0);
+                painter.rect_stroke(
+                    sr,
+                    2.0,
+                    egui::Stroke::new(2.0_f32 * self.camera.zoom, egui::Color32::from_rgb(100, 180, 255)),
                 );
             }
         }

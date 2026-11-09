@@ -2,7 +2,7 @@ use crate::app::PolygramApp;
 use polygram_canvas::object_at;
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, NodeKind};
 use polygram_core::{Command, MetricKind};
-use egui::{Key, Pos2, Rect, Vec2};
+use egui::{Color32, Key, Pos2, Rect, Stroke, Vec2};
 
 pub fn context_menu(
     app: &mut PolygramApp,
@@ -254,6 +254,41 @@ pub fn handle_canvas_interaction(
             ctx.request_repaint();
         }
 
+        // Выделение объектов по клику (только если не перетаскивание и не selection box).
+        if canvas_response.clicked()
+            && app.drag.drag_object.is_none()
+            && app.drag.selection_box_start.is_none()
+        {
+            if let Some(pos) = canvas_response.interact_pointer_pos() {
+                let object_id = object_at(
+                    &published.geometry,
+                    pos,
+                    app.canvas.camera.offset,
+                    app.canvas.camera.zoom,
+                    app.canvas.cell_size,
+                );
+                let ctrl = ctx.input(|i| i.modifiers.ctrl);
+                match object_id {
+                    Some(id) => {
+                        if ctrl {
+                            if app.selected_objects.iter().any(|s| s == id) {
+                                app.selected_objects.retain(|s| s != id);
+                            } else {
+                                app.selected_objects.push(id.to_owned());
+                            }
+                        } else {
+                            app.selected_objects = vec![id.to_owned()];
+                        }
+                    }
+                    None => {
+                        if !ctrl {
+                            app.selected_objects.clear();
+                        }
+                    }
+                }
+            }
+        }
+
         // Перемещение объекта за шапку: зажать левую кнопку на шапке и тащить.
         if canvas_response.drag_started_by(egui::PointerButton::Primary) {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -274,6 +309,9 @@ pub fn handle_canvas_interaction(
                         app.drag.drag_start_screen = Some(pos);
                         app.drag.drag_start_cell = Some((o.rect.x, o.rect.y));
                     }
+                } else {
+                    // Selection Box: начинаем выделение рамкой из пустого места.
+                    app.drag.selection_box_start = Some(pos);
                 }
             }
         }
@@ -292,6 +330,28 @@ pub fn handle_canvas_interaction(
                     let target = [start_x + dx, start_y + dy];
                     // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
                     app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
+                }
+            }
+        } else if let Some(start) = app.drag.selection_box_start {
+            // Selection Box: рисуем резиновый прямоугольник во время перетаскивания.
+            if canvas_response.dragged_by(egui::PointerButton::Primary) {
+                if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    let painter = ui.painter();
+                    let x = start.x.min(cur.x);
+                    let y = start.y.min(cur.y);
+                    let w = (cur.x - start.x).abs();
+                    let h = (cur.y - start.y).abs();
+                    if w > 1.0 && h > 1.0 {
+                        let box_rect = Rect::from_min_size(
+                            Pos2::new(x, y),
+                            Vec2::new(w, h),
+                        );
+                        painter.rect_stroke(
+                            box_rect,
+                            0.0,
+                            Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)),
+                        );
+                    }
                 }
             }
         }
@@ -318,6 +378,44 @@ pub fn handle_canvas_interaction(
             }
         }
 
+        // Завершение выделения рамкой (Selection Box) — выделяем все объекты внутри прямоугольника.
+        if app.drag.selection_box_start.is_some()
+            && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
+        {
+            if let (Some(start), Some(end)) = (app.drag.selection_box_start, canvas_response.interact_pointer_pos()) {
+                let x = start.x.min(end.x);
+                let y = start.y.min(end.y);
+                let w = (end.x - start.x).abs();
+                let h = (end.y - start.y).abs();
+                if w > 4.0 && h > 4.0 {
+                    let cell_px = app.canvas.cell_px();
+                    let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
+                    let ctrl = ctx.input(|i| i.modifiers.ctrl);
+                    let mut newly_selected: Vec<String> = Vec::new();
+                    for object in &published.geometry.objects {
+                        let r = polygram_core::layout::Rect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
+                        let rect_px = Rect::from_min_size(
+                            app.canvas.camera.world_to_screen(Pos2::new(r.x as f32, r.y as f32), app.canvas.cell_size),
+                            Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                        );
+                        if box_rect.intersects(rect_px) {
+                            newly_selected.push(object.id.clone());
+                        }
+                    }
+                    if ctrl {
+                        for id in &newly_selected {
+                            if !app.selected_objects.iter().any(|s| s == id) {
+                                app.selected_objects.push(id.clone());
+                            }
+                        }
+                    } else {
+                        app.selected_objects = newly_selected;
+                    }
+                }
+            }
+            app.drag.selection_box_start = None;
+        }
+
         // Контекстное меню по правой кнопке (только клик, не перетаскивание).
         if canvas_response.secondary_clicked() {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -338,7 +436,7 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref());
+    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects);
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {

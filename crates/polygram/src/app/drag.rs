@@ -6,6 +6,8 @@ pub struct DragState {
     pub drag_start_cell: Option<(i32, i32)>,
     pub predicted_positions: HashMap<String, (i32, i32)>,
     pub pending_move: Option<(String, u64)>,
+    /// Начало выделения рамкой (Selection Box) в экранных координатах.
+    pub selection_box_start: Option<egui::Pos2>,
 }
 
 impl DragState {
@@ -16,6 +18,7 @@ impl DragState {
             drag_start_cell: None,
             predicted_positions: HashMap::new(),
             pending_move: None,
+            selection_box_start: None,
         }
     }
 
