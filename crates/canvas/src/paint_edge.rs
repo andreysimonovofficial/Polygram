@@ -164,15 +164,14 @@ pub fn paint_edge(
     // потом вертикальные и горизонтальные локти маршрута,
     // в конце — горизонтальный отрезок в точку сцепления приёмника.
     // route_pts[0] — порт источника в сетке, route_pts[last] — порт приёмника в сетке.
-    // Первым делом horizontально уходим из точки сцепления источника к X первого локтя,
+    // Первым делом горизонтально уходим из точки сцепления источника к X первого локтя,
     // затем вертикально до первого локтя, дальше все локти маршрута как есть,
     // в конце вертикально до Y приёмника и горизонтально в точку сцепления.
+    // После построения убираем коллинеарные точки, чтобы не было «отростков» на локтях.
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some(fp), Some(tp)) = (from_port, to_port) {
         pts.push(fp);
         if route_pts.len() >= 4 {
-            // Есть локти: horizontально к первому локтю, вертикально до него,
-            // все промежуточные локти, вертикально до Y приёмника, горизонтально в точку
             pts.push(Pos2::new(route_pts[1].x, fp.y));
             pts.push(route_pts[1]);
             for i in 2..route_pts.len() - 1 {
@@ -180,20 +179,38 @@ pub fn paint_edge(
             }
             pts.push(Pos2::new(route_pts[route_pts.len() - 2].x, tp.y));
         } else if route_pts.len() == 3 {
-            // Один локоть: горизонталь, вертикаль через локоть, вертикаль до Y цели, горизонталь в точку
             pts.push(Pos2::new(route_pts[1].x, fp.y));
             pts.push(route_pts[1]);
             pts.push(Pos2::new(route_pts[1].x, tp.y));
         } else if route_pts.len() == 2 {
-            // Прямой маршрут без локтей: horizontально к X цели, вертикально до Y цели
             pts.push(Pos2::new(route_pts[1].x, fp.y));
             pts.push(Pos2::new(route_pts[1].x, tp.y));
         } else {
-            // Нет точек маршрута: horizontально к X цели, вертикально до Y цели
             pts.push(Pos2::new(tp.x, fp.y));
         }
         pts.push(tp);
     }
+
+    // Убираем коллинеарные подряд идущие точки (как в route::simplify ядра),
+    // чтобы на вертикальных сегментах не было лишних остановок — «отростков».
+    let mut simple: Vec<Pos2> = Vec::with_capacity(pts.len());
+    for p in pts {
+        if simple.last() == Some(&p) {
+            continue;
+        }
+        while simple.len() >= 2 {
+            let a = simple[simple.len() - 2];
+            let b = simple[simple.len() - 1];
+            let collinear = (a.x == b.x && b.x == p.x) || (a.y == b.y && b.y == p.y);
+            if collinear {
+                simple.pop();
+            } else {
+                break;
+            }
+        }
+        simple.push(p);
+    }
+    let pts = simple;
 
     if pts.len() < 2 {
         // Фоллбэк: прямая линия от порта к порту.
