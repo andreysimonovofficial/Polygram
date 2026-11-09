@@ -284,8 +284,6 @@ pub fn handle_canvas_interaction(
                     app.canvas.camera.offset.x = cursor.x / new_zoom - world_cursor.x * cell_size;
                     app.canvas.camera.offset.y = cursor.y / new_zoom - world_cursor.y * cell_size;
                     app.canvas.camera.zoom = new_zoom;
-                    // Запоминаем экранную позицию точки зума для отображения крестика.
-                    app.canvas.zoom_target_screen = Some(cursor);
                     ctx.request_repaint();
                 }
             }
@@ -300,7 +298,6 @@ pub fn handle_canvas_interaction(
                 (app.canvas.camera.offset.x / cell_size).round() * cell_size;
             app.canvas.camera.offset.y =
                 (app.canvas.camera.offset.y / cell_size).round() * cell_size;
-            app.canvas.zoom_target_screen = None;
             ctx.request_repaint();
         }
 

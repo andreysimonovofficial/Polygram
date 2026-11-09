@@ -32,8 +32,6 @@ pub struct Canvas {
     pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
     pub container_menu_hotspots: Vec<(String, Direction, Rect)>,
-    /// Экранная позиция точки калибровки зума (размещается под курсором при колёсике).
-    pub zoom_target_screen: Option<egui::Pos2>,
 }
 
 impl Default for Canvas {
@@ -50,7 +48,6 @@ impl Canvas {
             cell_size: 16.0,
             add_metric_hotspots: Vec::new(),
             container_menu_hotspots: Vec::new(),
-            zoom_target_screen: None,
         }
     }
 
@@ -177,21 +174,6 @@ impl Canvas {
                     egui::Stroke::new(2.0_f32 * self.camera.zoom, egui::Color32::from_rgb(100, 180, 255)),
                 );
             }
-        }
-
-        // Видимая точка калибровки зума — экранная позиция под курсором при колёсике.
-        if let Some(screen_pos) = self.zoom_target_screen {
-            let marker = egui::Stroke::new(2.0 * self.camera.zoom, egui::Color32::from_rgb(255, 0, 0));
-            let size = 8.0 * self.camera.zoom;
-            painter.circle_filled(screen_pos, 4.0 * self.camera.zoom, egui::Color32::from_rgb(255, 0, 0));
-            painter.line_segment(
-                [screen_pos + egui::Vec2::new(-size, 0.0), screen_pos + egui::Vec2::new(size, 0.0)],
-                marker,
-            );
-            painter.line_segment(
-                [screen_pos + egui::Vec2::new(0.0, -size), screen_pos + egui::Vec2::new(0.0, size)],
-                marker,
-            );
         }
     }
 
