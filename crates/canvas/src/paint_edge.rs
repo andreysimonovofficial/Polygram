@@ -100,7 +100,7 @@ pub fn paint_edge(
         _ => theme.line,
     };
 
-    // Правильные позиции портов: середина правой границы строки ВЫХОДА → середина левой границы строки ЗАПРОСА
+    // Позиции портов источника/приёмника (нужны только если маршрут ещё не посчитан).
     let from_port = from_obj.and_then(|fo| {
         let r = CoreRect::new(fo.rect.x, fo.rect.y, fo.rect.w, fo.rect.h);
         entry_row_port_screen(&r, &fo.outputs, polygram_core::EntryIx(edge.from), true, cell_px, camera_offset, camera_zoom)
@@ -111,20 +111,24 @@ pub fn paint_edge(
         entry_row_port_screen(&r, &to.requests, polygram_core::EntryIx(edge.to), false, cell_px, camera_offset, camera_zoom)
     });
 
-    // Построить ломаную: порт источника → промежуточные точки маршрута → порт приёмника.
+    // Построить ортогональную ломаную из точек маршрута: порт источника → промежуточные → порт приёмника.
+    // Первая и последняя точки маршрута уже являются портами источника и приёмника, поэтому не
+    // пересчитываем их отдельно — иначе расхождение между сеточной и визуальной моделью строк
+    // порождает диагональные отрезки на концах линии.
     let mut pts: Vec<Pos2> = Vec::new();
-    if let Some(fp) = from_port {
-        pts.push(fp);
-    }
-    // Промежуточные точки из edge.points (кванты → экран), без первых и последних (их заменили на правильные порты).
-    for p in edge.points.iter().skip(1).take(edge.points.len().saturating_sub(2).max(0)) {
-        pts.push(Pos2::new(
-            (p.x as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.x) * camera_zoom,
-            (p.y as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.y) * camera_zoom,
-        ));
-    }
-    if let Some(tp) = to_port {
-        pts.push(tp);
+    if edge.points.is_empty() {
+        // Фоллбэк: маршрут ещё не посчитан — прямая линия между портами.
+        if let (Some(fp), Some(tp)) = (from_port, to_port) {
+            pts.push(fp);
+            pts.push(tp);
+        }
+    } else {
+        for p in &edge.points {
+            pts.push(Pos2::new(
+                (p.x as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.x) * camera_zoom,
+                (p.y as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.y) * camera_zoom,
+            ));
+        }
     }
 
     if pts.len() < 2 {
