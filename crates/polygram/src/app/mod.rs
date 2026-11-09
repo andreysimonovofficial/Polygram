@@ -152,6 +152,38 @@ impl PolygramApp {
         }
     }
 
+    /// Отправить пакет команд одной queries в порядке следования (атомично на сервере).
+    pub fn apply_batch(&mut self, cmds: Vec<Command>) {
+        let cmd_str = serde_json::to_string(&cmds).unwrap_or_default();
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+
+        std::thread::spawn(move || {
+            let result = client
+                .post(format!("{api_base}/api/commands/batch"))
+                .json(&cmds)
+                .send();
+
+            match result {
+                Ok(resp) => {
+                    let status = resp.status();
+                    let body: Value = resp.json().unwrap_or_default();
+                    let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+                    let result_str = if ok {
+                        format!("OK (HTTP {status})")
+                    } else {
+                        let error = body.get("error").and_then(|v| v.as_str()).unwrap_or("неизвестная ошибка");
+                        format!("Ошибка HTTP {status}: {error}")
+                    };
+                    eprintln!("Команды {cmd_str}: {result_str}");
+                }
+                Err(e) => {
+                    eprintln!("Не удалось отправить команды в API: {e}");
+                }
+            }
+        });
+    }
+
     pub fn poll_snapshot(&mut self) {
         while let Ok(new_snapshot) = self.connection.snapshot_rx.try_recv() {
             let new_rev = new_snapshot.rev;

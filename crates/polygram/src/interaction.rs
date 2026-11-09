@@ -913,25 +913,26 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         let unit = app.dialogs.add_metric_unit.trim().to_owned();
         let value: f64 = app.dialogs.add_metric_value.trim().parse().unwrap_or(0.0);
 
-        app.apply_cmd(Command::AddMetricDef {
-            id: Some(name.clone()),
-            name: name.clone(),
-            kind,
-            unit,
-            api: None,
-        });
-
-        app.apply_cmd(Command::AddMetricEntry {
-            object: object_id,
-            dir,
-            id: Some(name.clone()),
-            metric_def: name.clone(),
-            name,
-            value,
-            required: 0.0,
-            max: None,
-            fact: 0.0,
-        });
+        app.apply_batch(vec![
+            Command::AddMetricDef {
+                id: Some(name.clone()),
+                name: name.clone(),
+                kind,
+                unit,
+                api: None,
+            },
+            Command::AddMetricEntry {
+                object: object_id,
+                dir,
+                id: Some(name.clone()),
+                metric_def: name.clone(),
+                name,
+                value,
+                required: 0.0,
+                max: None,
+                fact: 0.0,
+            },
+        ]);
 
         app.dialogs.add_metric_target = None;
         app.dialogs.add_metric_name.clear();
