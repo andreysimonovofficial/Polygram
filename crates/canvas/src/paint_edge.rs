@@ -164,29 +164,30 @@ pub fn paint_edge(
     // потом вертикальные и горизонтальные локти маршрута,
     // в конце — горизонтальный отрезок в точку сцепления приёмника.
     // route_pts[0] — порт источника в сетке, route_pts[last] — порт приёмника в сетке.
-    // Первым делом горизонтально уходим из точки сцепления источника к X первого локтя,
-    // затем вертикально до первого локтя, дальше все локти маршрута как есть,
-    // в конце вертикально до Y приёмника и горизонтально в точку сцепления.
-    // После построения убираем коллинеарные точки, чтобы не было «отростков» на локтях.
+    // На концах используются визуальные Y-точки точек сцепления, а X берется из сетки —
+    // тогда все сегменты строго горизонтальные или вертикальные, без диагоналей.
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some(fp), Some(tp)) = (from_port, to_port) {
         pts.push(fp);
-        if route_pts.len() >= 4 {
-            pts.push(Pos2::new(route_pts[1].x, fp.y));
-            pts.push(route_pts[1]);
-            for i in 2..route_pts.len() - 1 {
-                pts.push(route_pts[i]);
+        match route_pts.len() {
+            0 | 1 => {
+                // Маршрут без точек: один угол
+                pts.push(Pos2::new(tp.x, fp.y));
             }
-            pts.push(Pos2::new(route_pts[route_pts.len() - 2].x, tp.y));
-        } else if route_pts.len() == 3 {
-            pts.push(Pos2::new(route_pts[1].x, fp.y));
-            pts.push(route_pts[1]);
-            pts.push(Pos2::new(route_pts[1].x, tp.y));
-        } else if route_pts.len() == 2 {
-            pts.push(Pos2::new(route_pts[1].x, fp.y));
-            pts.push(Pos2::new(route_pts[1].x, tp.y));
-        } else {
-            pts.push(Pos2::new(tp.x, fp.y));
+            2 => {
+                // Прямой маршрут без локтей: source_grid, target_grid
+                pts.push(Pos2::new(route_pts[1].x, fp.y));
+                pts.push(Pos2::new(route_pts[1].x, tp.y));
+            }
+            _ => {
+                // Есть локти: source_grid, elbow1, ..., elbowN, target_grid
+                pts.push(Pos2::new(route_pts[1].x, fp.y));
+                pts.push(route_pts[1]);
+                for i in 2..route_pts.len() - 1 {
+                    pts.push(route_pts[i]);
+                }
+                pts.push(Pos2::new(route_pts[route_pts.len() - 2].x, tp.y));
+            }
         }
         pts.push(tp);
     }

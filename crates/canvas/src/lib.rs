@@ -75,20 +75,6 @@ impl Canvas {
         self.container_menu_hotspots.clear();
         self.drag_metric_hotspots.clear();
 
-        // Сначала линии (под карточками и отделами)
-        for edge in &geometry.edges {
-            paint_edge(
-                painter,
-                edge,
-                geometry,
-                dynamic,
-                &self.theme,
-                cell_px,
-                self.camera.offset,
-                self.camera.zoom,
-            );
-        }
-
         // Отделы — рамки-контейнеры (под дочерними карточками)
         for object in &geometry.objects {
             if object.kind != NodeKind::Department {
@@ -155,6 +141,20 @@ impl Canvas {
                     is_hovered,
                 );
             }
+        }
+
+        // Линии связи рисуются поверх объектов, чтобы объекты не загораживали их.
+        for edge in &geometry.edges {
+            paint_edge(
+                painter,
+                edge,
+                geometry,
+                dynamic,
+                &self.theme,
+                cell_px,
+                self.camera.offset,
+                self.camera.zoom,
+            );
         }
 
         // Рамки выделения вокруг выделенных объектов (рисуются поверх всего).
