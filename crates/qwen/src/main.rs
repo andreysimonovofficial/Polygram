@@ -1,13 +1,13 @@
 //! Локальный Qwen-агент Polygram (отдельный процесс, не внутри GUI).
-//! Читает общий чат через HTTP API, отвечает через Ollama, создаёт объекты через MCP-инструмент add_object.
-//! Запускается вручную: `cargo run -p polygram-qwen`. Требует запущенного polygram-api (8080);
-//! Ollama (11434) опционален — при недоступности агент отвечает шаблоном.
+//! Читает общий чат через HTTP API, отвечает через Ollama, создаёт объекты
+//! напрямую через HTTP /api/commands (единый сервер, один на всех — не spawn'ит
+//! собственный polygram-mcp.exe). Запускается вручную: `cargo run -p polygram-qwen`.
+//! Требует запущенного polygram-api (8080); Ollama (11434) опционален —
+//! при недоступности агент отвечает шаблоном.
 
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::io::{BufRead, Write};
-use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -43,89 +43,25 @@ fn now_ts() -> u64 {
         .unwrap_or(0)
 }
 
-fn exe_dir() -> std::path::PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-}
-
-fn mcp_exe_path() -> std::path::PathBuf {
-    exe_dir().join("polygram-mcp.exe")
-}
-
-/// Минимальный MCP-клиент (stdio, построчный JSON-RPC 2.0) к polygram-mcp --http.
-struct McpClient {
-    child: std::process::Child,
-    stdin: std::process::ChildStdin,
-    stdout: std::io::BufReader<std::process::ChildStdout>,
-    next_id: u64,
-}
-
-impl McpClient {
-    fn spawn() -> Result<Self, String> {
-        let mcp_exe = mcp_exe_path();
-        let mut child = Command::new(&mcp_exe)
-            .args(["--http", API_BASE])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("не удалось запустить {}: {e}", mcp_exe.display()))?;
-        let stdin = child.stdin.take().ok_or("MCP: нет stdin")?;
-        let stdout = std::io::BufReader::new(child.stdout.take().ok_or("MCP: нет stdout")?);
-        Ok(Self {
-            child,
-            stdin,
-            stdout,
-            next_id: 0,
-        })
-    }
-
-    fn notify(&mut self, method: &str, params: Value) -> Result<(), String> {
-        let msg = json!({"jsonrpc":"2.0","method":method,"params":params});
-        let line = serde_json::to_string(&msg).unwrap();
-        writeln!(self.stdin, "{line}").map_err(|e| e.to_string())?;
-        self.stdin.flush().map_err(|e| e.to_string())
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Result<Value, String> {
-        self.next_id += 1;
-        let id = self.next_id;
-        let msg = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
-        let line = serde_json::to_string(&msg).unwrap();
-        writeln!(self.stdin, "{line}").map_err(|e| e.to_string())?;
-        self.stdin.flush().map_err(|e| e.to_string())?;
-        loop {
-            let mut raw = String::new();
-            self.stdout.read_line(&mut raw).map_err(|e| e.to_string())?;
-            if raw.trim().is_empty() {
-                continue;
-            }
-            let resp: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-            if resp.get("id").and_then(|v| v.as_u64()) == Some(id) {
-                return Ok(resp);
-            }
-        }
-    }
-
-    fn add_object(&mut self, name: &str) -> Result<Value, String> {
-        self.request(
-            "tools/call",
-            json!({
-                "name": "add_object",
-                "arguments": {
-                    "name": name,
-                    "kind": "process",
-                    "author": AGENT_AUTHOR,
-                },
-            }),
-        )
-    }
-}
-
-impl Drop for McpClient {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
+/// Создать объект на холсте через единый HTTP API (с автором qwen, чтобы
+/// запись попала в общий чат — как через MCP-инструмент add_object).
+fn create_object_via_http(client: &Client, name: &str) -> Result<(), String> {
+    let body = json!({
+        "cmd": "add_object",
+        "name": name,
+        "kind": "process",
+        "author": AGENT_AUTHOR,
+    });
+    let resp = client
+        .post(format!("{API_BASE}/api/commands"))
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()
+        .map_err(|e| e.to_string())?;
+    if resp.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("HTTP {}", resp.status()))
     }
 }
 
@@ -214,26 +150,6 @@ fn main() {
         .expect("не удалось создать HTTP-клиент");
     eprintln!("qwen-агент запущен (автор {AGENT_AUTHOR}), API {API_BASE}");
 
-    let mut mcp = match McpClient::spawn() {
-        Ok(c) => {
-            eprintln!("qwen: MCP-клиент подключён к polygram-mcp");
-            Some(c)
-        }
-        Err(e) => {
-            eprintln!("qwen: MCP не запущен ({e}), создание объектов через HTTP будет недоступно");
-            None
-        }
-    };
-
-    if let Some(mcp) = mcp.as_mut() {
-        let _ = mcp.notify("initialized", json!({}));
-        let _ = mcp.request("initialize", json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "qwen-agent", "version": "0.1.0"}
-        }));
-    }
-
     let mut last_id: u64 = 0;
 
     loop {
@@ -272,14 +188,12 @@ fn main() {
                 }
             });
 
-            // Создать объект, если просили.
+            // Создать объект, если просили — через единый HTTP API.
             if wants_create_object(&m.text) {
-                if let Some(mcp) = mcp.as_mut() {
-                    let name = format!("Qwen-{}", m.text.split_whitespace().next().unwrap_or("объект"));
-                    match mcp.add_object(&name) {
-                        Ok(_) => eprintln!("qwen: объект «{name}» создан через MCP"),
-                        Err(e) => eprintln!("qwen: ошибка создания объекта через MCP: {e}"),
-                    }
+                let name = format!("Qwen-{}", m.text.split_whitespace().next().unwrap_or("объект"));
+                match create_object_via_http(&client, &name) {
+                    Ok(_) => eprintln!("qwen: объект «{name}» создан через HTTP API"),
+                    Err(e) => eprintln!("qwen: ошибка создания объекта: {e}"),
                 }
             }
 

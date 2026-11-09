@@ -149,19 +149,28 @@ impl ConnectionState {
     }
 
     pub fn mcp_process_running(&mut self) -> bool {
-        match &mut self.mcp_process {
-            Some(child) => match child.try_wait() {
-                Ok(None) => true,
+        // Дочерний процесс, запущенный из GUI.
+        if let Some(child) = &mut self.mcp_process {
+            match child.try_wait() {
+                Ok(None) => return true,
                 Ok(Some(_)) => {
                     self.mcp_process = None;
-                    false
                 }
                 Err(_) => {
                     self.mcp_process = None;
-                    false
                 }
-            },
-            None => false,
+            }
+        }
+        // Любой polygram-mcp.exe, запущенный извне (например, вручную или другим агентом).
+        match std::process::Command::new("tasklist")
+            .args(["/FI", "IMAGENAME eq polygram-mcp.exe", "/FO", "CSV", "/NH"])
+            .output()
+        {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                stdout.lines().any(|line| line.to_lowercase().contains("polygram-mcp.exe"))
+            }
+            Err(_) => false,
         }
     }
 
