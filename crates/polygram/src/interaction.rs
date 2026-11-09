@@ -1079,20 +1079,29 @@ pub fn handle_add_metric_dialog(
 
         if let Some(md) = &existing_md {
             // Используем существующий показатель — создаём только запись на объекте.
+            // Для запроса вводимое значение — необходимое (required), для выхода — значение (value).
+            let (entry_value, entry_required) = match dir {
+                Direction::Request => (0.0, value),
+                Direction::Output => (value, 0.0),
+            };
             app.apply_batch(vec![Command::AddMetricEntry {
                 object: object_id,
                 dir,
                 id: Some(name.clone()),
                 metric_def: md.name.clone(),
                 name,
-                value,
-                required: 0.0,
+                value: entry_value,
+                required: entry_required,
                 max: None,
                 fact: 0.0,
             }]);
         } else {
             let kind = app.dialogs.add_metric_kind;
             let unit = app.dialogs.add_metric_unit.trim().to_owned();
+            let (entry_value, entry_required) = match dir {
+                Direction::Request => (0.0, value),
+                Direction::Output => (value, 0.0),
+            };
 
             app.apply_batch(vec![
                 Command::AddMetricDef {
@@ -1108,8 +1117,8 @@ pub fn handle_add_metric_dialog(
                     id: Some(name.clone()),
                     metric_def: name.clone(),
                     name,
-                    value,
-                    required: 0.0,
+                    value: entry_value,
+                    required: entry_required,
                     max: None,
                     fact: 0.0,
                 },
