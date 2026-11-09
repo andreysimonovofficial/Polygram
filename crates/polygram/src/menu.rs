@@ -39,16 +39,10 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
 
             ui.separator();
 
-            // Показать/скрыть боковую панель (подключение к API).
-            let sidebar_label = if app.show_sidebar {
-                "Скрыть сайдбар"
-            } else {
-                "Показать сайдбар"
-            };
-            if ui.button(sidebar_label).clicked() {
-                app.show_sidebar = !app.show_sidebar;
-                ui.close_menu();
-            }
+            // Показать/скрыть боковые панели.
+            ui.checkbox(&mut app.show_sidebar, "Боковая панель API");
+            ui.checkbox(&mut app.show_command_log_panel, "Лог команд");
+            ui.checkbox(&mut app.show_chat_panel, "Чат");
 
             ui.separator();
             if ui.button("Команды (Ctrl+P)").clicked() {

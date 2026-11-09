@@ -33,6 +33,8 @@ pub struct PolygramApp {
     pub right_click: Option<(egui::Pos2, Option<String>)>,
     pub show_mcp_panel: bool,
     pub show_sidebar: bool,
+    pub show_command_log_panel: bool,
+    pub show_chat_panel: bool,
     pub last_status: String,
     pub chat: ChatState,
 }
@@ -56,6 +58,8 @@ impl PolygramApp {
             right_click: None,
             show_mcp_panel: false,
             show_sidebar: true,
+            show_command_log_panel: true,
+            show_chat_panel: true,
             last_status: "API сервер не подключён".to_owned(),
             chat,
         }

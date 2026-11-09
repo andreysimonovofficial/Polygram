@@ -238,11 +238,15 @@ impl eframe::App for PolygramApp {
             status::status_bar(self, ui);
         });
 
-        panels::command_log_panel(self, ctx);
+        if self.show_command_log_panel {
+            panels::command_log_panel(self, ctx);
+        }
 
         panels::connection_panel(self, ctx);
 
-        panels::chat_panel(self, ctx);
+        if self.show_chat_panel {
+            panels::chat_panel(self, ctx);
+        }
 
         if self.connection.warmup_frames > 0 {
             self.connection.warmup_frames -= 1;
