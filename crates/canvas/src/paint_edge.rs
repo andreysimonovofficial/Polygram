@@ -1,12 +1,21 @@
 use crate::theme::Theme;
-use crate::paint_process::MAX_VISIBLE_METRICS;
+use crate::paint_process::{MAX_VISIBLE_METRICS, MIN_ROW_H_PX, ROW_GAP_PX, CONNECTION_DOT_RADIUS};
 use egui::{Painter, Pos2, Shape, Stroke, Vec2};
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::{DynamicState, EdgeGeom, Geometry, StatusCode};
 
-/// Вычислить экранную позицию порта строки показателя:
-/// середина правой границы для ВЫХОДА, середина левой для ЗАПРОСА.
-fn entry_row_port_screen(
+/// cell_size без зума (константа из Canvas::new).
+const CELL_SIZE: f32 = 16.0;
+
+/// cell_size из cell_px (который уже содержит зум).
+fn cell_size_from_px(cell_px: f32, camera_zoom: f32) -> f32 {
+    (cell_px / camera_zoom.max(0.001)).max(CELL_SIZE)
+}
+
+/// Вычислить экранную позицию точки сцепления строки показателя.
+/// Логика идентична paint_process: одинаковая высота строки, зазоры между строками.
+/// Точка находится внутри тела строки: слева для ЗАПРОСА, справа для ВЫХОДА.
+fn visual_port_screen(
     object_rect: &CoreRect,
     entries: &[polygram_core::EntryGeom],
     target_ix: polygram_core::EntryIx,
@@ -17,44 +26,54 @@ fn entry_row_port_screen(
 ) -> Option<Pos2> {
     let k = entries.iter().position(|e| e.ix == target_ix.0)?;
 
-    // Объект в экранных пикселях (как в paint_process)
-    let object_min_x = object_rect.x as f32 * cell_px + camera_offset.x * camera_zoom;
-    let object_min_y = object_rect.y as f32 * cell_px + camera_offset.y * camera_zoom;
+    let cell_size = cell_size_from_px(cell_px, camera_zoom);
+
+    // Объект в экранных пикселях (как в paint_process и lib.rs)
+    let object_min_x = (object_rect.x as f32 * cell_size + camera_offset.x) * camera_zoom;
+    let object_min_y = (object_rect.y as f32 * cell_size + camera_offset.y) * camera_zoom;
     let object_w_px = object_rect.w as f32 * cell_px;
     let object_h_px = object_rect.h as f32 * cell_px;
 
     // Те же пропорции, что в paint_process
     let header_h_px = object_h_px * 0.10;
     let pad = 8.0 * camera_zoom;
+    let container_rect_top = object_min_y + header_h_px + pad;
+    let container_h = object_h_px - header_h_px - 2.0 * pad;
     let gap = pad;
-    let container_h = (object_h_px - header_h_px - 2.0 * pad - gap) * 0.5;
+    let split_h = container_h - gap;
+    let container_h_px = split_h * 0.5;
 
     let container_top = if is_output {
-        // ВЫХОД — второй контейнер
-        header_h_px + pad + container_h + gap
+        // ВЫХОД — второй контейнер (ниже)
+        container_rect_top + container_h_px + gap
     } else {
-        // ЗАПРОС — первый контейнер
-        header_h_px + pad
+        // ЗАПРОС — первый контейнер (выше)
+        container_rect_top
     };
 
-    let container_header_h = container_h * 0.20;
+    let container_header_h = container_h_px * 0.20;
     let content_top = container_top + container_header_h;
-    let content_h = container_h - container_header_h;
+    let content_h = container_h_px - container_header_h;
 
-    let visible = entries.len().min(MAX_VISIBLE_METRICS);
-    let show_add = visible < MAX_VISIBLE_METRICS;
-    let total_rows = visible + if show_add { 1 } else { 0 };
-    let row_h = if total_rows > 0 { content_h / total_rows as f32 } else { 0.0 };
+    // Одинаковая высота строки, не зависящая от числа показателей
+    let gap_total = (MAX_VISIBLE_METRICS - 1) as f32 * ROW_GAP_PX * camera_zoom;
+    let row_h = if MAX_VISIBLE_METRICS > 0 {
+        (content_h - gap_total) / MAX_VISIBLE_METRICS as f32
+    } else {
+        0.0
+    };
+    let row_h = row_h.max(MIN_ROW_H_PX * camera_zoom).floor();
+    let row_step = row_h + ROW_GAP_PX * camera_zoom;
 
-    let row_y = content_top + k as f32 * row_h;
-    let row_screen_y = object_min_y + row_y;
-    let row_center_y = row_screen_y + row_h / 2.0;
+    let row_y = content_top + k as f32 * row_step;
+    let row_center_y = row_y + row_h / 2.0;
 
+    let dot_r = CONNECTION_DOT_RADIUS * camera_zoom;
     if is_output {
         let object_max_x = object_min_x + object_w_px;
-        Some(Pos2::new(object_max_x, row_center_y))
+        Some(Pos2::new(object_max_x - dot_r, row_center_y))
     } else {
-        Some(Pos2::new(object_min_x, row_center_y))
+        Some(Pos2::new(object_min_x + dot_r, row_center_y))
     }
 }
 
@@ -100,35 +119,65 @@ pub fn paint_edge(
         _ => theme.line,
     };
 
-    // Позиции портов источника/приёмника (нужны только если маршрут ещё не посчитан).
+    // Визуальные позиции точек сцепления (источник и приёмник).
+    // Считаются той же пропорциональной логикой, что и отрисовка строк в paint_process,
+    // поэтому концы линии точно ложатся в центры точек сцепления.
     let from_port = from_obj.and_then(|fo| {
-        let r = CoreRect::new(fo.rect.x, fo.rect.y, fo.rect.w, fo.rect.h);
-        entry_row_port_screen(&r, &fo.outputs, polygram_core::EntryIx(edge.from), true, cell_px, camera_offset, camera_zoom)
+        visual_port_screen(
+            &fo.rect,
+            &fo.outputs,
+            polygram_core::EntryIx(edge.from),
+            true,
+            cell_px,
+            camera_offset,
+            camera_zoom,
+        )
     });
 
     let to_port = to_obj.and_then(|to| {
-        let r = CoreRect::new(to.rect.x, to.rect.y, to.rect.w, to.rect.h);
-        entry_row_port_screen(&r, &to.requests, polygram_core::EntryIx(edge.to), false, cell_px, camera_offset, camera_zoom)
+        visual_port_screen(
+            &to.rect,
+            &to.requests,
+            polygram_core::EntryIx(edge.to),
+            false,
+            cell_px,
+            camera_offset,
+            camera_zoom,
+        )
     });
 
-    // Построить ортогональную ломаную из точек маршрута: порт источника → промежуточные → порт приёмника.
-    // Первая и последняя точки маршрута уже являются портами источника и приёмника, поэтому не
-    // пересчитываем их отдельно — иначе расхождение между сеточной и визуальной моделью строк
-    // порождает диагональные отрезки на концах линии.
+    // Промежуточные точки маршрута из edge.points (кванты → экран).
+    // Исправлен подсчёт зума: cell_px уже содержит camera_zoom, поэтому
+    // используется cell_size (без зума), а зум применяется один раз в конце.
+    let cell_size = cell_size_from_px(cell_px, camera_zoom);
+    let mut route_pts: Vec<Pos2> = Vec::new();
+    for p in &edge.points {
+        route_pts.push(Pos2::new(
+            (p.x as f32 / polygram_core::layout::Q as f32 * cell_size + camera_offset.x) * camera_zoom,
+            (p.y as f32 / polygram_core::layout::Q as f32 * cell_size + camera_offset.y) * camera_zoom,
+        ));
+    }
+
+    // Построить ортогональную ломаную:
+    // визуальный источник → локоть(ы) → визуальный приёмник.
+    // Первая и последняя точки заменяются на визуальные точки сцепления,
+    // а у соседних локтей выравнивается Y по соответствующему концу —
+    // тогда первый и последний отрезки строго горизонтальные, без диагоналей.
     let mut pts: Vec<Pos2> = Vec::new();
-    if edge.points.is_empty() {
-        // Фоллбэк: маршрут ещё не посчитан — прямая линия между портами.
-        if let (Some(fp), Some(tp)) = (from_port, to_port) {
-            pts.push(fp);
-            pts.push(tp);
+    if let (Some(fp), Some(tp)) = (from_port, to_port) {
+        pts.push(fp);
+        for (i, rp) in route_pts.iter().enumerate() {
+            if i == 0 {
+                // Первый локоть: горизонталь от источника
+                pts.push(Pos2::new(rp.x, fp.y));
+            } else if i == route_pts.len() - 1 {
+                // Последний локоть: горизонталь к приёмнику
+                pts.push(Pos2::new(rp.x, tp.y));
+            } else {
+                pts.push(*rp);
+            }
         }
-    } else {
-        for p in &edge.points {
-            pts.push(Pos2::new(
-                (p.x as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.x) * camera_zoom,
-                (p.y as f32 / polygram_core::layout::Q as f32 * cell_px + camera_offset.y) * camera_zoom,
-            ));
-        }
+        pts.push(tp);
     }
 
     if pts.len() < 2 {

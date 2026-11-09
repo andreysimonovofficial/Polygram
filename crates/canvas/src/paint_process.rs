@@ -330,7 +330,12 @@ pub fn paint_process(
     let visible_req = req_count.min(MAX_VISIBLE_METRICS);
     let show_add_req = visible_req < MAX_VISIBLE_METRICS;
     let total_rows_req = visible_req + if show_add_req { 1 } else { 0 };
-    let mut row_h_req = if total_rows_req > 0 { content_h / total_rows_req as f32 } else { 0.0 };
+    let gap_total_req = (MAX_VISIBLE_METRICS - 1) as f32 * ROW_GAP_PX * zoom;
+    let mut row_h_req = if MAX_VISIBLE_METRICS > 0 {
+        (content_h - gap_total_req) / MAX_VISIBLE_METRICS as f32
+    } else {
+        0.0
+    };
     row_h_req = row_h_req.max(MIN_ROW_H_PX * zoom).floor();
     let row_step_req = row_h_req + ROW_GAP_PX * zoom;
 
@@ -387,7 +392,12 @@ pub fn paint_process(
     let visible_out = out_count.min(MAX_VISIBLE_METRICS);
     let show_add_out = visible_out < MAX_VISIBLE_METRICS;
     let total_rows_out = visible_out + if show_add_out { 1 } else { 0 };
-    let mut row_h_out = if total_rows_out > 0 { content_h_out / total_rows_out as f32 } else { 0.0 };
+    let gap_total_out = (MAX_VISIBLE_METRICS - 1) as f32 * ROW_GAP_PX * zoom;
+    let mut row_h_out = if MAX_VISIBLE_METRICS > 0 {
+        (content_h_out - gap_total_out) / MAX_VISIBLE_METRICS as f32
+    } else {
+        0.0
+    };
     row_h_out = row_h_out.max(MIN_ROW_H_PX * zoom).floor();
     let row_step_out = row_h_out + ROW_GAP_PX * zoom;
 
