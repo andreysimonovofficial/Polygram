@@ -282,12 +282,8 @@ pub fn handle_canvas_interaction(
                             let world_x = (cursor.x / old_zoom - app.canvas.camera.offset.x) / cell_size;
                             let world_y = (cursor.y / old_zoom - app.canvas.camera.offset.y) / cell_size;
                             // Новое смещение, чтобы та же мировая точка осталась под курсором.
-                            // Округляем до кратных cell_size, чтобы объекты лежали на линиях сетки.
-                            let cell_size = app.canvas.cell_size;
-                            app.canvas.camera.offset.x =
-                                ((cursor.x / new_zoom - world_x * cell_size) / cell_size).round() * cell_size;
-                            app.canvas.camera.offset.y =
-                                ((cursor.y / new_zoom - world_y * cell_size) / cell_size).round() * cell_size;
+                            app.canvas.camera.offset.x = cursor.x / new_zoom - world_x * cell_size;
+                            app.canvas.camera.offset.y = cursor.y / new_zoom - world_y * cell_size;
                         }
                         app.canvas.camera.zoom = new_zoom;
                         ctx.request_repaint();
