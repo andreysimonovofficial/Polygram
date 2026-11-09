@@ -254,6 +254,11 @@ impl eframe::App for PolygramApp {
             self.connection.warmup_frames -= 1;
             ctx.request_repaint_after(Duration::ZERO);
         }
+
+        // Перерисовываем, пока активна метка калибровки зума.
+        if self.canvas.zoom_target_screen.is_some() {
+            ctx.request_repaint();
+        }
     }
 }
 
