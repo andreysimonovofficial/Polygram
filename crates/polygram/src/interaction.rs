@@ -243,12 +243,16 @@ pub fn handle_canvas_interaction(
         egui::Sense::click_and_drag(),
     );
 
+    // Геометрия с учётом неотправленных на сервер предсказаний позиций (drag).
+    // Используется для hit-testing (object_at), чтобы клик по визуальной позиции
+    // объекта попадал в тот же объект, даже если позиция ещё не подтверждена сервером.
+    let geometry = app.geometry_with_predictions(published);
+
     // Двойной клик по объекту — инлайн-редактирование названия прямо на холсте.
     if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
-            if let Some(object_id) = app.canvas.object_at(&published.geometry, pos) {
-                let obj_name = published
-                    .geometry
+            if let Some(object_id) = app.canvas.object_at(&geometry, pos) {
+                let obj_name = geometry
                     .objects
                     .iter()
                     .find(|o| o.id == object_id)
@@ -309,7 +313,7 @@ pub fn handle_canvas_interaction(
         {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
                 let object_id = object_at(
-                    &published.geometry,
+                    &geometry,
                     pos,
                     app.canvas.camera.offset,
                     app.canvas.camera.zoom,
@@ -354,14 +358,13 @@ pub fn handle_canvas_interaction(
                         Some((object_id.clone(), *dir, metric_name.clone()));
                     app.drag.drag_metric_start_screen = Some(pos);
                 } else if let Some(object_id) = object_at(
-                    &published.geometry,
+                    &geometry,
                     pos,
                     app.canvas.camera.offset,
                     app.canvas.camera.zoom,
                     app.canvas.cell_size,
                 ) {
-                    let object = published
-                        .geometry
+                    let object = geometry
                         .objects
                         .iter()
                         .find(|o| o.id == *object_id);
@@ -408,7 +411,7 @@ pub fn handle_canvas_interaction(
                     // Подсвечиваем целевой объект под курсором (процесс, не источник).
                     if let Some(target_id) = app
                         .canvas
-                        .object_at(&published.geometry, cur)
+                        .object_at(&geometry, cur)
                         .filter(|id| *id != *source_object)
                     {
                         if let Some(target) = published
@@ -500,12 +503,11 @@ pub fn handle_canvas_interaction(
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if let Some(target_id) = app
                         .canvas
-                        .object_at(&published.geometry, pos)
+                        .object_at(&geometry, pos)
                         .map(|s| s.to_owned())
                     {
                     if target_id != source_object {
-                        if let Some(target) = published
-                            .geometry
+                        if let Some(target) = geometry
                             .objects
                             .iter()
                             .find(|o| o.id == target_id)
@@ -582,7 +584,7 @@ pub fn handle_canvas_interaction(
                     let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
                     let ctrl = ctx.input(|i| i.modifiers.ctrl);
                     let mut newly_selected: Vec<String> = Vec::new();
-                    for object in &published.geometry.objects {
+                    for object in &geometry.objects {
                         let r = polygram_core::layout::Rect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
                         let rect_px = Rect::from_min_size(
                             app.canvas.camera.world_to_screen(Pos2::new(r.x as f32, r.y as f32), app.canvas.cell_size),
@@ -609,7 +611,7 @@ pub fn handle_canvas_interaction(
         // Контекстное меню по правой кнопке (только клик, не перетаскивание).
         if canvas_response.secondary_clicked() {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
-                let object_id = app.canvas.object_at(&published.geometry, pos);
+                let object_id = app.canvas.object_at(&geometry, pos);
                 app.right_click = Some((pos, object_id.map(|s| s.to_owned())));
             }
         }
@@ -618,7 +620,7 @@ pub fn handle_canvas_interaction(
     // Ховер над объектом для подсветки рамки и текста.
     let hovered_object = if canvas_response.hovered() {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
-            app.canvas.object_at(&published.geometry, pos)
+            app.canvas.object_at(&geometry, pos)
         } else {
             None
         }
@@ -906,7 +908,8 @@ pub fn inline_rename_editor(
     let Some(target) = &app.dialogs.edit_target else {
         return;
     };
-    let Some(object) = published.geometry.objects.iter().find(|o| o.id == target.as_str()) else {
+    let geometry = app.geometry_with_predictions(published);
+    let Some(object) = geometry.objects.iter().find(|o| o.id == target.as_str()) else {
         app.dialogs.edit_target = None;
         return;
     };
