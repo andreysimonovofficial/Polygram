@@ -40,7 +40,7 @@ pub struct ObjectView {
 }
 
 /// Глобальный показатель для вывода.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MetricDefView {
     pub id: String,
     pub name: String,

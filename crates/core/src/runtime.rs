@@ -13,6 +13,7 @@ use crate::{
     geometry::Geometry,
     types::Scope,
     values::DynamicState,
+    views::MetricDefView,
 };
 use std::{
     sync::{mpsc, Arc, RwLock},
@@ -25,6 +26,7 @@ pub struct Published {
     pub rev: u64,
     pub dynamic: DynamicState,
     pub geometry: Geometry,
+    pub metric_defs: Vec<MetricDefView>,
 }
 
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
@@ -70,10 +72,12 @@ fn publish(
         } else {
             prev.geometry.clone()
         };
+    let metric_defs = engine.metric_def_views();
     let next = Arc::new(Published {
         rev: engine.rev(),
         dynamic: engine.dynamic_state(),
         geometry,
+        metric_defs,
     });
     *slot.write().expect("замок публикации") = next.clone();
     next
@@ -86,6 +90,7 @@ impl EngineRuntime {
             rev: engine.rev(),
             dynamic: engine.dynamic_state(),
             geometry: engine.geometry(),
+            metric_defs: engine.metric_def_views(),
         });
         let published = Arc::new(RwLock::new(first.clone()));
         let slot = published.clone();

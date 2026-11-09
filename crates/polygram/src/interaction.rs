@@ -1,7 +1,7 @@
 use crate::app::PolygramApp;
 use polygram_canvas::object_at;
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, NodeKind};
-use polygram_core::{Command, MetricKind};
+use polygram_core::{Command, MetricKind, Published};
 use egui::{Color32, Key, Pos2, Rect, Stroke, Vec2};
 
 pub fn context_menu(
@@ -525,7 +525,7 @@ pub fn handle_canvas_interaction(
         }
     }
 
-    handle_add_metric_dialog(app, ctx);
+    handle_add_metric_dialog(app, ctx, &published);
 
     // Открыть диалог редактирования списка показателей контейнера по клику на ≡.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -830,7 +830,11 @@ pub fn inline_rename_editor(
 }
 
 /// Модальное диалоговое окно добавления показателя.
-pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
+pub fn handle_add_metric_dialog(
+    app: &mut PolygramApp,
+    ctx: &egui::Context,
+    published: &Published,
+) {
     let Some((object_id, dir)) = &app.dialogs.add_metric_target else {
         return;
     };
@@ -845,6 +849,13 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
     let mut done = false;
     let mut cancelled = false;
 
+    // Ищем существующий показатель по введённому имени (для подстановки данных).
+    let existing_md = published
+        .metric_defs
+        .iter()
+        .find(|md| md.name == app.dialogs.add_metric_name.trim())
+        .cloned();
+
     egui::Window::new(format!("Добавить показатель — {label}"))
         .default_size([320.0, 240.0])
         .resizable(false)
@@ -853,32 +864,41 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.label("Имя показателя:");
             ui.text_edit_singleline(&mut app.dialogs.add_metric_name);
 
-            ui.separator();
-            ui.label("Тип:");
-            egui::ComboBox::new("add_metric_kind", "")
-                .selected_text(format!("{:?}", app.dialogs.add_metric_kind))
-                .show_ui(ui, |ui| {
-                    for kind in [
-                        MetricKind::Number,
-                        MetricKind::Time,
-                        MetricKind::Percentage,
-                        MetricKind::Binary,
-                        MetricKind::Duration,
-                        MetricKind::Formula,
-                    ] {
-                        if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
-                            app.dialogs.add_metric_kind = kind;
+            if let Some(md) = &existing_md {
+                ui.label(format!("Найден существующий показатель: {}", md.name));
+                ui.label(format!("Тип: {:?}", md.kind));
+                ui.label(format!("Единица: {}", md.unit));
+                ui.separator();
+                ui.label("Значение:");
+                ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+            } else {
+                ui.separator();
+                ui.label("Тип:");
+                egui::ComboBox::new("add_metric_kind", "")
+                    .selected_text(format!("{:?}", app.dialogs.add_metric_kind))
+                    .show_ui(ui, |ui| {
+                        for kind in [
+                            MetricKind::Number,
+                            MetricKind::Time,
+                            MetricKind::Percentage,
+                            MetricKind::Binary,
+                            MetricKind::Duration,
+                            MetricKind::Formula,
+                        ] {
+                            if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
+                                app.dialogs.add_metric_kind = kind;
+                            }
                         }
-                    }
-                });
+                    });
 
-            ui.separator();
-            ui.label("Значение:");
-            ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+                ui.separator();
+                ui.label("Значение:");
+                ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
 
-            ui.separator();
-            ui.label("Единица измерения:");
-            ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
+                ui.separator();
+                ui.label("Единица измерения:");
+                ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
+            }
 
             ui.separator();
             ui.horizontal(|ui| {
@@ -909,30 +929,46 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
             return;
         }
 
-        let kind = app.dialogs.add_metric_kind;
-        let unit = app.dialogs.add_metric_unit.trim().to_owned();
         let value: f64 = app.dialogs.add_metric_value.trim().parse().unwrap_or(0.0);
 
-        app.apply_batch(vec![
-            Command::AddMetricDef {
-                id: Some(name.clone()),
-                name: name.clone(),
-                kind,
-                unit,
-                api: None,
-            },
-            Command::AddMetricEntry {
+        if let Some(md) = &existing_md {
+            // Используем существующий показатель — создаём только запись на объекте.
+            app.apply_batch(vec![Command::AddMetricEntry {
                 object: object_id,
                 dir,
                 id: Some(name.clone()),
-                metric_def: name.clone(),
+                metric_def: md.name.clone(),
                 name,
                 value,
                 required: 0.0,
                 max: None,
                 fact: 0.0,
-            },
-        ]);
+            }]);
+        } else {
+            let kind = app.dialogs.add_metric_kind;
+            let unit = app.dialogs.add_metric_unit.trim().to_owned();
+
+            app.apply_batch(vec![
+                Command::AddMetricDef {
+                    id: Some(name.clone()),
+                    name: name.clone(),
+                    kind,
+                    unit,
+                    api: None,
+                },
+                Command::AddMetricEntry {
+                    object: object_id,
+                    dir,
+                    id: Some(name.clone()),
+                    metric_def: name.clone(),
+                    name,
+                    value,
+                    required: 0.0,
+                    max: None,
+                    fact: 0.0,
+                },
+            ]);
+        }
 
         app.dialogs.add_metric_target = None;
         app.dialogs.add_metric_name.clear();

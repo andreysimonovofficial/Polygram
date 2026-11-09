@@ -34,6 +34,14 @@ impl crate::engine::Engine {
             .collect()
     }
 
+    pub fn metric_def_views(&self) -> Vec<MetricDefView> {
+        self.hier
+            .live_metric_defs()
+            .map(|m| self.metric_def_view(&self.hier.metric_def(m).ext_id))
+            .filter_map(|o| o)
+            .collect()
+    }
+
     pub fn metric_view(&self, e: EntryIx) -> MetricView {
         let om = self.hier.object_metric(e);
         let md = self.hier.metric_def(om.metric_def);

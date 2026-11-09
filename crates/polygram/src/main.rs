@@ -212,6 +212,7 @@ impl eframe::App for PolygramApp {
                 rev: 0,
                 dynamic: DynamicState::default(),
                 geometry: Geometry::default(),
+                metric_defs: vec![],
             })
         });
 
