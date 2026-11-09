@@ -14,15 +14,20 @@ async fn main() {
         match ApiService::load_from_file(&auto_save_path) {
             Ok(api) => {
                 eprintln!("Загружено автосохранение: {}", auto_save_path.display());
+                api.set_auto_save_path(auto_save_path.clone());
                 api
             }
             Err(e) => {
                 eprintln!("Не удалось загрузить автосохранение: {e}, создаём новый граф");
-                ApiService::default()
+                let api = ApiService::default();
+                api.set_auto_save_path(auto_save_path.clone());
+                api
             }
         }
     } else {
-        ApiService::default()
+        let api = ApiService::default();
+        api.set_auto_save_path(auto_save_path.clone());
+        api
     };
     let api = Arc::new(api);
 
