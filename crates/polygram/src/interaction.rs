@@ -991,6 +991,10 @@ pub fn handle_add_metric_dialog(
         Direction::Request => "ЗАПРОС",
         Direction::Output => "ВЫХОД",
     };
+    let value_label = match dir {
+        Direction::Request => "Необходимое (required):",
+        Direction::Output => "Значение (value):",
+    };
 
     let mut done = false;
     let mut cancelled = false;
@@ -1015,7 +1019,7 @@ pub fn handle_add_metric_dialog(
                 ui.label(format!("Тип: {:?}", md.kind));
                 ui.label(format!("Единица: {}", md.unit));
                 ui.separator();
-                ui.label("Значение:");
+                ui.label(value_label);
                 ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
             } else {
                 ui.separator();
@@ -1038,7 +1042,7 @@ pub fn handle_add_metric_dialog(
                     });
 
                 ui.separator();
-                ui.label("Значение:");
+                ui.label(value_label);
                 ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
 
                 ui.separator();
