@@ -215,7 +215,7 @@ impl Values {
             rev,
             value: self.value.clone(),
             required: self.required.clone(),
-            max: self.max.clone(),
+            max: self.max.iter().map(|&x| if x.is_nan() { None } else { Some(x) }).collect(),
             fact: self.fact.clone(),
             status: self.status.clone(),
         }
@@ -227,7 +227,7 @@ pub struct DynamicState {
     pub rev: u64,
     pub value: Vec<f64>,
     pub required: Vec<f64>,
-    pub max: Vec<f64>,
+    pub max: Vec<Option<f64>>,
     pub fact: Vec<f64>,
     pub status: Vec<StatusCode>,
 }
@@ -250,7 +250,11 @@ impl PartialEq for DynamicState {
                 .max
                 .iter()
                 .zip(other.max.iter())
-                .all(|(a, b)| (a.is_nan() && b.is_nan()) || (a - b).abs() < 1e-9)
+                .all(|(a, b)| match (a, b) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => (a - b).abs() < 1e-9,
+                    _ => false,
+                })
             && self
                 .fact
                 .iter()
