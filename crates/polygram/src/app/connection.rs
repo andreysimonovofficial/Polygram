@@ -178,10 +178,14 @@ impl ConnectionState {
         if self.mcp_process_running() {
             return Err("уже запущен".to_owned());
         }
-        match std::process::Command::new("polygram-mcp.exe").spawn() {
+        // Прокси в запущенный HTTP API (единое ядро), не своё.
+        match std::process::Command::new("polygram-mcp.exe")
+            .args(["--http", "http://127.0.0.1:8080"])
+            .spawn()
+        {
             Ok(child) => {
                 self.mcp_process = Some(child);
-                Ok("polygram-mcp запущен".to_owned())
+                Ok("polygram-mcp запущен (прокси в API)".to_owned())
             }
             Err(e) => {
                 let msg = format!("Не удалось запустить polygram-mcp: {e}");
