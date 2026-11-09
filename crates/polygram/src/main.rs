@@ -242,6 +242,8 @@ impl eframe::App for PolygramApp {
 
         panels::connection_panel(self, ctx);
 
+        panels::chat_panel(self, ctx);
+
         if self.connection.warmup_frames > 0 {
             self.connection.warmup_frames -= 1;
             ctx.request_repaint_after(Duration::ZERO);

@@ -260,11 +260,16 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                             ui.monospace(cmd);
                         }
                     });
-
-                ui.separator();
-
-                // Общий чат всех участников.
-                crate::app::chat::render(app, ui);
             });
+        });
+}
+
+/// Отдельный сайдбар с общим чатом всех участников (user / claude / qwen / http).
+pub fn chat_panel(app: &mut PolygramApp, ctx: &egui::Context) {
+    egui::SidePanel::right("chat_panel")
+        .default_width(300.0)
+        .resizable(true)
+        .show(ctx, |ui| {
+            crate::app::chat::render(app, ui);
         });
 }
