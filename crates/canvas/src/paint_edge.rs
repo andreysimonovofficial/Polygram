@@ -70,10 +70,11 @@ fn visual_port_screen(
 
     let dot_r = CONNECTION_DOT_RADIUS * camera_zoom;
     if is_output {
-        let object_max_x = object_min_x + object_w_px;
+        let object_max_x = object_min_x + object_w_px - pad;
         Some(Pos2::new(object_max_x - dot_r, row_center_y))
     } else {
-        Some(Pos2::new(object_min_x + dot_r, row_center_y))
+        let object_min_x_adj = object_min_x + pad;
+        Some(Pos2::new(object_min_x_adj + dot_r, row_center_y))
     }
 }
 
