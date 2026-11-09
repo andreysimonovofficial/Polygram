@@ -32,6 +32,8 @@ pub struct Canvas {
     pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
     pub container_menu_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны строк показателей для перетаскивания (id объекта, направление, имя показателя, экранный rect строки).
+    pub drag_metric_hotspots: Vec<(String, Direction, String, Rect)>,
 }
 
 impl Default for Canvas {
@@ -48,6 +50,7 @@ impl Canvas {
             cell_size: 16.0,
             add_metric_hotspots: Vec::new(),
             container_menu_hotspots: Vec::new(),
+            drag_metric_hotspots: Vec::new(),
         }
     }
 
@@ -70,6 +73,7 @@ impl Canvas {
         let cell_px = self.cell_px();
         self.add_metric_hotspots.clear();
         self.container_menu_hotspots.clear();
+        self.drag_metric_hotspots.clear();
 
         // Сначала линии (под карточками и отделами)
         for edge in &geometry.edges {
@@ -125,7 +129,7 @@ impl Canvas {
                 continue;
             }
             if object.kind == NodeKind::Process {
-                let (add_hotspots, menu_hotspots) = paint_process(
+                let (add_hotspots, menu_hotspots, drag_hotspots) = paint_process(
                     painter,
                     object,
                     dynamic,
@@ -138,6 +142,7 @@ impl Canvas {
                 );
                 self.add_metric_hotspots.extend(add_hotspots);
                 self.container_menu_hotspots.extend(menu_hotspots);
+                self.drag_metric_hotspots.extend(drag_hotspots);
             } else {
                 paint_object(
                     painter,

@@ -196,7 +196,7 @@ fn paint_container_header(
 
 /// Высокопроизводительный процедурный рендер объекта "Процесс".
 /// Рисует: внешняя рамка → заголовок объекта → контейнер Запрос → контейнер Выход.
-/// Возвращает (горячие зоны добавления показателя, горячие зоны меню контейнеров).
+/// Возвращает (горячие зоны добавления показателя, горячие зоны меню контейнеров, горячие зоны перетаскивания показателей).
 pub fn paint_process(
     painter: &Painter,
     object: &ObjectGeom,
@@ -207,9 +207,14 @@ pub fn paint_process(
     zoom: f32,
     is_hovered: bool,
     _edit_target: Option<&str>,
-) -> (Vec<(String, Direction, Rect)>, Vec<(String, Direction, Rect)>) {
+) -> (
+    Vec<(String, Direction, Rect)>,
+    Vec<(String, Direction, Rect)>,
+    Vec<(String, Direction, String, Rect)>,
+) {
     let mut add_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut menu_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
+    let mut drag_hotspots: Vec<(String, Direction, String, Rect)> = Vec::new();
 
     // --- Геометрия: фиксированные пропорции тела объекта ---
     let req_count = object.requests.len();
@@ -305,6 +310,12 @@ pub fn paint_process(
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
         paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
+        drag_hotspots.push((
+            object.id.clone(),
+            Direction::Request,
+            entry.name.clone(),
+            row_rect,
+        ));
     }
     if show_add_req {
         let add_rect = Rect::from_min_size(
@@ -354,6 +365,12 @@ pub fn paint_process(
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
         paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
+        drag_hotspots.push((
+            object.id.clone(),
+            Direction::Output,
+            entry.name.clone(),
+            row_rect,
+        ));
     }
     if show_add_out {
         let add_rect = Rect::from_min_size(
@@ -364,5 +381,5 @@ pub fn paint_process(
         add_hotspots.push((object.id.clone(), Direction::Output, add_rect));
     }
 
-    (add_hotspots, menu_hotspots)
+    (add_hotspots, menu_hotspots, drag_hotspots)
 }

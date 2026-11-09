@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use polygram_core::types::Direction;
+
 pub struct DragState {
     pub drag_object: Option<String>,
     pub drag_start_screen: Option<egui::Pos2>,
@@ -8,6 +10,9 @@ pub struct DragState {
     pub pending_move: Option<(String, u64)>,
     /// Начало выделения рамкой (Selection Box) в экранных координатах.
     pub selection_box_start: Option<egui::Pos2>,
+    /// Перетаскивание показателя: (id объекта-источника, направление, имя показателя).
+    pub drag_metric: Option<(String, Direction, String)>,
+    pub drag_metric_start_screen: Option<egui::Pos2>,
 }
 
 impl DragState {
@@ -19,6 +24,8 @@ impl DragState {
             predicted_positions: HashMap::new(),
             pending_move: None,
             selection_box_start: None,
+            drag_metric: None,
+            drag_metric_start_screen: None,
         }
     }
 
@@ -45,6 +52,6 @@ impl DragState {
     }
 
     pub fn is_dragging(&self) -> bool {
-        self.drag_object.is_some()
+        self.drag_object.is_some() || self.drag_metric.is_some()
     }
 }

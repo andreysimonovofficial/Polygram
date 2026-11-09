@@ -304,6 +304,7 @@ pub fn handle_canvas_interaction(
         // Выделение объектов по клику (только если не перетаскивание и не selection box).
         if canvas_response.clicked()
             && app.drag.drag_object.is_none()
+            && app.drag.drag_metric.is_none()
             && app.drag.selection_box_start.is_none()
         {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -337,9 +338,22 @@ pub fn handle_canvas_interaction(
         }
 
         // Перемещение объекта за шапку: зажать левую кнопку на шапке и тащить.
-        if canvas_response.drag_started_by(egui::PointerButton::Primary) {
+        // Перетаскивание показателя: зажать левую кнопку на строке показателя и тащить в другой объект.
+        if canvas_response.drag_started_by(egui::PointerButton::Primary)
+            && app.drag.drag_metric.is_none()
+        {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
-                if let Some(object_id) = object_at(
+                // Проверяем, начато ли перетаскивание из строки показателя.
+                let metric_drag = app
+                    .canvas
+                    .drag_metric_hotspots
+                    .iter()
+                    .find(|(_, _, _, rect)| rect.contains(pos));
+                if let Some((object_id, dir, metric_name, _)) = metric_drag {
+                    app.drag.drag_metric =
+                        Some((object_id.clone(), *dir, metric_name.clone()));
+                    app.drag.drag_metric_start_screen = Some(pos);
+                } else if let Some(object_id) = object_at(
                     &published.geometry,
                     pos,
                     app.canvas.camera.offset,
@@ -377,6 +391,56 @@ pub fn handle_canvas_interaction(
                     let target = [start_x + dx, start_y + dy];
                     // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
                     app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
+                }
+            }
+        } else if let Some((source_object, source_dir, metric_name)) = &app.drag.drag_metric {
+            // Предварительный просмотр перетаскивания показателя: подпись у курсора и подсветка целевого объекта.
+            if canvas_response.dragged_by(egui::PointerButton::Primary) {
+                if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    let painter = ui.painter();
+                    painter.text(
+                        cur + Vec2::new(14.0, 14.0),
+                        egui::Align2::LEFT_TOP,
+                        format!("⇨ {}", metric_name),
+                        egui::FontId::new(16.0, egui::FontFamily::Proportional),
+                        Color32::from_rgb(0, 217, 255),
+                    );
+                    // Подсвечиваем целевой объект под курсором (процесс, не источник).
+                    if let Some(target_id) = app
+                        .canvas
+                        .object_at(&published.geometry, cur)
+                        .filter(|id| *id != *source_object)
+                    {
+                        if let Some(target) = published
+                            .geometry
+                            .objects
+                            .iter()
+                            .find(|o| o.id == target_id)
+                        {
+                            if target.kind == NodeKind::Process {
+                                let r = polygram_core::layout::Rect::new(
+                                    target.rect.x,
+                                    target.rect.y,
+                                    target.rect.w,
+                                    target.rect.h,
+                                );
+                                let rect_px = Rect::from_min_size(
+                                    app.canvas
+                                        .camera
+                                        .world_to_screen(Pos2::new(r.x as f32, r.y as f32), app.canvas.cell_size),
+                                    Vec2::new(r.w as f32 * app.canvas.cell_px(), r.h as f32 * app.canvas.cell_px()),
+                                );
+                                painter.rect_stroke(
+                                    rect_px.expand(2.0),
+                                    2.0,
+                                    Stroke::new(
+                                        2.0_f32 * app.canvas.camera.zoom,
+                                        Color32::from_rgb(0, 217, 255),
+                                    ),
+                                );
+                            }
+                        }
+                    }
                 }
             }
         } else if let Some(start) = app.drag.selection_box_start {
@@ -422,6 +486,85 @@ pub fn handle_canvas_interaction(
                 }
                 // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
                 // иначе будет виден скачок на старую позицию.
+            }
+        }
+
+        // Завершение перетаскивания показателя: копируем показатель в целевой объект (в противоположном направлении)
+        // и строим связь между записями Выход → Запрос.
+        if app.drag.drag_metric.is_some()
+            && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
+        {
+            let (source_object, source_dir, metric_name) =
+                app.drag.drag_metric.take().expect("drag_metric is Some");
+            app.drag.drag_metric_start_screen = None;
+                if let Some(pos) = canvas_response.interact_pointer_pos() {
+                    if let Some(target_id) = app
+                        .canvas
+                        .object_at(&published.geometry, pos)
+                        .map(|s| s.to_owned())
+                    {
+                    if target_id != source_object {
+                        if let Some(target) = published
+                            .geometry
+                            .objects
+                            .iter()
+                            .find(|o| o.id == target_id)
+                        {
+                            if target.kind == NodeKind::Process {
+                                // Целевое направление — противоположно источнику.
+                                let target_dir = match source_dir {
+                                    Direction::Request => Direction::Output,
+                                    Direction::Output => Direction::Request,
+                                };
+                                let entries = match target_dir {
+                                    Direction::Request => &target.requests,
+                                    Direction::Output => &target.outputs,
+                                };
+                                let already_has =
+                                    entries.iter().any(|e| e.name == metric_name);
+                                let mut cmds: Vec<Command> = Vec::new();
+                                if !already_has {
+                                    // Добавляем тот же показатель в целевой объект (значение по умолчанию 0).
+                                    cmds.push(Command::AddMetricEntry {
+                                        object: target_id.clone(),
+                                        dir: target_dir,
+                                        id: Some(metric_name.clone()),
+                                        metric_def: metric_name.clone(),
+                                        name: metric_name.clone(),
+                                        value: 0.0,
+                                        required: 0.0,
+                                        max: None,
+                                        fact: 0.0,
+                                    });
+                                }
+                                // Связь всегда Выход → Запрос.
+                                let (from_object, from_entry, to_object, to_entry) =
+                                    match source_dir {
+                                        Direction::Output => (
+                                            source_object.clone(),
+                                            metric_name.clone(),
+                                            target_id.clone(),
+                                            metric_name.clone(),
+                                        ),
+                                        Direction::Request => (
+                                            target_id.clone(),
+                                            metric_name.clone(),
+                                            source_object.clone(),
+                                            metric_name.clone(),
+                                        ),
+                                    };
+                                cmds.push(Command::Connect {
+                                    from_object,
+                                    from_entry,
+                                    to_object,
+                                    to_entry,
+                                    throughput: 100.0,
+                                });
+                                app.apply_batch(cmds);
+                            }
+                        }
+                    }
+                }
             }
         }
 
