@@ -12,7 +12,10 @@ fn rect_to_screen(
     let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
     egui::Rect::from_min_size(
         world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_size, camera_offset, camera_zoom),
-        egui::Vec2::new(r.w as f32 * cell_size, r.h as f32 * cell_size),
+        egui::Vec2::new(
+            r.w as f32 * cell_size * camera_zoom,
+            r.h as f32 * cell_size * camera_zoom,
+        ),
     )
 }
 
