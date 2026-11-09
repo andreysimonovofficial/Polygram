@@ -16,6 +16,18 @@ use polygram_core::{DynamicState, ObjectGeom, StatusCode};
 /// Максимум видимых показателей на сторону (лимит UI, не ядра).
 pub const MAX_VISIBLE_METRICS: usize = 4;
 
+/// Контур строки показателя.
+pub const ROW_BORDER_WIDTH: f32 = 1.0;
+
+/// Зазор между соседними строками показателя.
+pub const ROW_GAP_PX: f32 = 4.0;
+
+/// Радиус точки сцепления строки показателя (круг, не символ).
+pub const CONNECTION_DOT_RADIUS: f32 = 4.0;
+
+/// Минимальная высота строки показателя (пиксели при zoom = 1).
+pub const MIN_ROW_H_PX: f32 = 27.0;
+
 /// Ранг статуса (чем выше — тем хуже).
 fn status_rank(s: StatusCode) -> u8 {
     match s {
@@ -46,7 +58,7 @@ fn worst_status(entries: &[polygram_core::EntryGeom], dynamic: &DynamicState) ->
     }
 }
 
-/// Рисовать одну строку показателя: точка статуса слева, имя, значение справа.
+/// Рисовать одну строку показателя: точка сцепления слева и справа, имя, значение справа.
 /// Для запроса показывается required, для выхода — value.
 fn paint_metric_row(
     painter: &Painter,
@@ -63,10 +75,23 @@ fn paint_metric_row(
     let dot_radius = theme.port_radius.max(2.0) * zoom;
     let cy = rect.center().y;
 
-    // Точка статуса
+    // Контур всей строки
+    painter.rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(ROW_BORDER_WIDTH * zoom, theme.card_border),
+    );
+
+    // Точки сцепления слева и справа внутри тела строки (круг, не символ), цвет статуса
+    let dot_r = CONNECTION_DOT_RADIUS * zoom;
     painter.circle_filled(
-        Pos2::new(rect.min.x + 8.0 * zoom, cy),
-        dot_radius,
+        Pos2::new(rect.min.x + dot_r, cy),
+        dot_r,
+        dot_color,
+    );
+    painter.circle_filled(
+        Pos2::new(rect.max.x - dot_r, cy),
+        dot_r,
         dot_color,
     );
 
@@ -305,11 +330,13 @@ pub fn paint_process(
     let visible_req = req_count.min(MAX_VISIBLE_METRICS);
     let show_add_req = visible_req < MAX_VISIBLE_METRICS;
     let total_rows_req = visible_req + if show_add_req { 1 } else { 0 };
-    let row_h_req = if total_rows_req > 0 { content_h / total_rows_req as f32 } else { 0.0 };
+    let mut row_h_req = if total_rows_req > 0 { content_h / total_rows_req as f32 } else { 0.0 };
+    row_h_req = row_h_req.max(MIN_ROW_H_PX * zoom).floor();
+    let row_step_req = row_h_req + ROW_GAP_PX * zoom;
 
     for (i, entry) in object.requests.iter().enumerate().take(MAX_VISIBLE_METRICS) {
         let row_rect = Rect::from_min_size(
-            Pos2::new(req_rect.min.x, content_top + i as f32 * row_h_req),
+            Pos2::new(req_rect.min.x, content_top + i as f32 * row_step_req),
             Vec2::new(req_rect.width(), row_h_req),
         );
         if is_hovered {
@@ -325,7 +352,7 @@ pub fn paint_process(
     }
     if show_add_req {
         let add_rect = Rect::from_min_size(
-            Pos2::new(req_rect.min.x, content_top + visible_req as f32 * row_h_req),
+            Pos2::new(req_rect.min.x, content_top + visible_req as f32 * row_step_req),
             Vec2::new(req_rect.width(), row_h_req),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
@@ -360,11 +387,13 @@ pub fn paint_process(
     let visible_out = out_count.min(MAX_VISIBLE_METRICS);
     let show_add_out = visible_out < MAX_VISIBLE_METRICS;
     let total_rows_out = visible_out + if show_add_out { 1 } else { 0 };
-    let row_h_out = if total_rows_out > 0 { content_h_out / total_rows_out as f32 } else { 0.0 };
+    let mut row_h_out = if total_rows_out > 0 { content_h_out / total_rows_out as f32 } else { 0.0 };
+    row_h_out = row_h_out.max(MIN_ROW_H_PX * zoom).floor();
+    let row_step_out = row_h_out + ROW_GAP_PX * zoom;
 
     for (i, entry) in object.outputs.iter().enumerate().take(MAX_VISIBLE_METRICS) {
         let row_rect = Rect::from_min_size(
-            Pos2::new(out_rect.min.x, content_top_out + i as f32 * row_h_out),
+            Pos2::new(out_rect.min.x, content_top_out + i as f32 * row_step_out),
             Vec2::new(out_rect.width(), row_h_out),
         );
         if is_hovered {
@@ -380,7 +409,7 @@ pub fn paint_process(
     }
     if show_add_out {
         let add_rect = Rect::from_min_size(
-            Pos2::new(out_rect.min.x, content_top_out + visible_out as f32 * row_h_out),
+            Pos2::new(out_rect.min.x, content_top_out + visible_out as f32 * row_step_out),
             Vec2::new(out_rect.width(), row_h_out),
         );
         paint_add_row(painter, add_rect, zoom, theme, is_hovered);
