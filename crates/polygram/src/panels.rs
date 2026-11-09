@@ -86,27 +86,27 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 ui.separator();
 
                 // Управление процессом polygram-api.
-                ui.heading("Сервер API (polygram-api)");
-                ui.separator();
-                let api_running = app.api_process_running();
-                let api_alive = app.connection.api_connected || api_running;
-                ui.horizontal(|ui| {
-                    if api_alive {
-                        ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
-                    } else {
-                        ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
-                    }
-                });
-                ui.horizontal(|ui| {
-                    if !api_running && ui.button("Запустить API").clicked() {
-                        app.start_api_process();
-                    }
-                    if api_running && ui.button("Остановить API").clicked() {
-                        app.stop_api_process();
-                    }
-                    if api_running && ui.button("Перезапустить API").clicked() {
-                        app.restart_api_process();
-                    }
+                egui::CollapsingHeader::new("API").show(ui, |ui| {
+                    let api_running = app.api_process_running();
+                    let api_alive = app.connection.api_connected || api_running;
+                    ui.horizontal(|ui| {
+                        if api_alive {
+                            ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
+                        } else {
+                            ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        if !api_running && ui.button("Запустить API").clicked() {
+                            app.start_api_process();
+                        }
+                        if api_running && ui.button("Остановить API").clicked() {
+                            app.stop_api_process();
+                        }
+                        if api_running && ui.button("Перезапустить API").clicked() {
+                            app.restart_api_process();
+                        }
+                    });
                 });
 
                 ui.separator();
@@ -178,26 +178,26 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 let mcp_exe_json = mcp_exe_str.replace('\\', "\\\\");
 
                 // Управление процессом polygram-mcp.
-                ui.heading("MCP-сервер (polygram-mcp)");
-                ui.separator();
-                let mcp_running = app.mcp_process_running();
-                ui.horizontal(|ui| {
-                    if mcp_running {
-                        ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
-                    } else {
-                        ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
-                    }
-                });
-                ui.horizontal(|ui| {
-                    if !mcp_running && ui.button("Запустить MCP").clicked() {
-                        app.start_mcp_process();
-                    }
-                    if mcp_running && ui.button("Остановить MCP").clicked() {
-                        app.stop_mcp_process();
-                    }
-                    if mcp_running && ui.button("Перезапустить MCP").clicked() {
-                        app.restart_mcp_process();
-                    }
+                egui::CollapsingHeader::new("MCP").show(ui, |ui| {
+                    let mcp_running = app.mcp_process_running();
+                    ui.horizontal(|ui| {
+                        if mcp_running {
+                            ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
+                        } else {
+                            ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        if !mcp_running && ui.button("Запустить MCP").clicked() {
+                            app.start_mcp_process();
+                        }
+                        if mcp_running && ui.button("Остановить MCP").clicked() {
+                            app.stop_mcp_process();
+                        }
+                        if mcp_running && ui.button("Перезапустить MCP").clicked() {
+                            app.restart_mcp_process();
+                        }
+                    });
                 });
 
                 ui.separator();
