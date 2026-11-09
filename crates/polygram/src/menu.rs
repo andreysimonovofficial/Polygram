@@ -52,7 +52,7 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
 
             ui.separator();
             if ui.button("Команды (Ctrl+P)").clicked() {
-                app.show_command_palette = true;
+                app.commands.show_command_palette = true;
             }
         });
     });

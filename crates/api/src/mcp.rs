@@ -3,11 +3,28 @@
 use polygram_core::Command;
 use polygram_core::types::{MetricKind, NodeKind};
 use serde_json::{json, Value};
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 use super::ApiService;
+
+/// HTTP-прокси команды в запущенный polygram.exe.
+fn proxy_post_command(base: &str, cmd_json: &str) -> Result<String, Box<dyn std::error::Error>> {
+    serde_json::from_str::<Value>(cmd_json)
+        .map_err(|e| format!("неверный JSON команды: {e}"))?;
+    let resp = ureq::post(&format!("{base}/api/commands"))
+        .set("Content-Type", "application/json")
+        .send_bytes(cmd_json.as_bytes())?;
+    Ok(resp.into_string()?.trim().to_owned())
+}
+
+/// GET из HTTP API polygram.exe.
+fn proxy_get(base: &str, path: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    let resp = ureq::get(&format!("{base}{path}")).call()?;
+    let body: Value = serde_json::from_str(&resp.into_string()?)?;
+    Ok(body)
+}
 
 /// Событие о выполненной MCP-команде — пересылается в GUI для лога.
 #[derive(Clone, Debug)]
@@ -19,15 +36,22 @@ pub struct McpEvent {
 pub struct McpServer {
     api: ApiService,
     mcp_tx: Option<mpsc::Sender<McpEvent>>,
+    http_base: Option<String>,
 }
 
 impl McpServer {
     pub fn new(api: ApiService) -> Self {
-        Self { api, mcp_tx: None }
+        Self { api, mcp_tx: None, http_base: None }
     }
 
     pub fn with_events(mut self, tx: mpsc::Sender<McpEvent>) -> Self {
         self.mcp_tx = Some(tx);
+        self
+    }
+
+    /// Прокси-режим: команды пересылаются в HTTP API запущенного polygram.exe.
+    pub fn with_http(mut self, base_url: String) -> Self {
+        self.http_base = Some(base_url);
         self
     }
 
@@ -312,58 +336,103 @@ impl McpServer {
                     Some(s) => s,
                     None => return mcp_tool_error("Для execute_command требуется поле command (JSON-команда). Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def и другие. См. get_commands."),
                 };
-                let cmd: Command = match serde_json::from_str(cmd_json) {
-                    Ok(c) => c,
-                    Err(e) => return mcp_tool_error(&format!("Не удалось распарсить JSON-команду: {e}. Пример: {{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}}. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def. См. get_commands.")),
-                };
-                let cmd_str = serde_json::to_string(&cmd).unwrap_or_else(|_| cmd_json.to_owned());
-                match self.api.apply(cmd) {
-                    Ok(applied) => {
-                        if let Some(tx) = &self.mcp_tx {
-                            let _ = tx.send(McpEvent { cmd: cmd_str, result: format!("OK ревизия {}", applied.rev) });
+                if let Some(base) = &self.http_base {
+                    match proxy_post_command(base, cmd_json) {
+                        Ok(body) => {
+                            let cmd_str = cmd_json.to_owned();
+                            if let Some(tx) = &self.mcp_tx {
+                                let _ = tx.send(McpEvent { cmd: cmd_str, result: body.clone() });
+                            }
+                            mcp_tool_result(&body)
                         }
-                        mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
-                    }
-                    Err(e) => {
-                        let err_str = format!("{e:?}");
-                        if let Some(tx) = &self.mcp_tx {
-                            let _ = tx.send(McpEvent { cmd: cmd_str, result: err_str.clone() });
+                        Err(e) => {
+                            let err_str = format!("прокси HTTP: {e}");
+                            if let Some(tx) = &self.mcp_tx {
+                                let _ = tx.send(McpEvent { cmd: cmd_json.to_owned(), result: err_str.clone() });
+                            }
+                            mcp_tool_error(&err_str)
                         }
-                        mcp_tool_error(&err_str)
                     }
+                } else {
+                    let cmd: Command = match serde_json::from_str(cmd_json) {
+                        Ok(c) => c,
+                        Err(e) => return mcp_tool_error(&format!("Не удалось распарсить JSON-команду: {e}. Пример: {{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}}. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def. См. get_commands.")),
+                    };
+                    self.apply_command(cmd, &args)
                 }
             }
             "get_snapshot" => {
-                let pub_ = self.api.snapshot();
-                mcp_tool_result(&serde_json::to_string(&json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.clone(), "geometry": pub_.geometry.clone() })).unwrap())
+                if let Some(base) = &self.http_base {
+                    match proxy_get(base, "/api/snapshot") {
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
+                        Err(e) => mcp_tool_error(&format!("{e}"))
+                    }
+                } else {
+                    let pub_ = self.api.snapshot();
+                    mcp_tool_result(&serde_json::to_string(&json!({ "rev": pub_.rev, "dynamic": pub_.dynamic.clone(), "geometry": pub_.geometry.clone() })).unwrap())
+                }
             }
             "get_objects" => {
-                let objects = self.api.objects();
-                mcp_tool_result(&serde_json::to_string(&json!({ "objects": objects })).unwrap())
+                if let Some(base) = &self.http_base {
+                    match proxy_get(base, "/api/objects") {
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
+                        Err(e) => mcp_tool_error(&format!("{e}"))
+                    }
+                } else {
+                    let objects = self.api.objects();
+                    mcp_tool_result(&serde_json::to_string(&json!({ "objects": objects })).unwrap())
+                }
             }
             "get_stats" => {
-                let stats = self.api.stats();
-                mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
+                if let Some(base) = &self.http_base {
+                    match proxy_get(base, "/api/stats") {
+                        Ok(v) => mcp_tool_result(&serde_json::to_string(&v).unwrap()),
+                        Err(e) => mcp_tool_error(&format!("{e}"))
+                    }
+                } else {
+                    let stats = self.api.stats();
+                    mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
+                }
             }
             _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, get_snapshot, get_objects, get_stats, execute_command.")),
         }
     }
 
     fn apply_command(&self, cmd: Command, _args: &Value) -> Value {
-        let cmd_str = serde_json::to_string(&cmd).unwrap();
-        match self.api.apply(cmd) {
-            Ok(applied) => {
-                if let Some(tx) = &self.mcp_tx {
-                    let _ = tx.send(McpEvent { cmd: cmd_str, result: format!("OK ревизия {}", applied.rev) });
+        if let Some(base) = &self.http_base {
+            let cmd_json = serde_json::to_string(&cmd).unwrap();
+            match proxy_post_command(base, &cmd_json) {
+                Ok(body) => {
+                    let cmd_str = cmd_json;
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: body.clone() });
+                    }
+                    mcp_tool_result(&body)
                 }
-                mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
+                Err(e) => {
+                    let err_str = format!("прокси HTTP: {e}");
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_json, result: err_str.clone() });
+                    }
+                    mcp_tool_error(&err_str)
+                }
             }
-            Err(e) => {
-                let err_str = format!("{e:?}");
-                if let Some(tx) = &self.mcp_tx {
-                    let _ = tx.send(McpEvent { cmd: cmd_str, result: err_str.clone() });
+        } else {
+            let cmd_str = serde_json::to_string(&cmd).unwrap();
+            match self.api.apply(cmd) {
+                Ok(applied) => {
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: format!("OK ревизия {}", applied.rev) });
+                    }
+                    mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "rev": applied.rev})).unwrap())
                 }
-                mcp_tool_error(&err_str)
+                Err(e) => {
+                    let err_str = format!("{e:?}");
+                    if let Some(tx) = &self.mcp_tx {
+                        let _ = tx.send(McpEvent { cmd: cmd_str, result: err_str.clone() });
+                    }
+                    mcp_tool_error(&err_str)
+                }
             }
         }
     }

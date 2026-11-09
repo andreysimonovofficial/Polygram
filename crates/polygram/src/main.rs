@@ -196,15 +196,15 @@ impl eframe::App for PolygramApp {
         self.poll_snapshot();
 
         // Периодическая попытка переподключения, если API недоступен (раз в ~50 кадров ≈ 1 сек).
-        if !self.api_connected {
-            self.reconnect_tick = self.reconnect_tick.saturating_sub(1);
-            if self.reconnect_tick == 0 {
-                self.reconnect_tick = 150;
+        if !self.connection.api_connected {
+            self.connection.reconnect_tick = self.connection.reconnect_tick.saturating_sub(1);
+            if self.connection.reconnect_tick == 0 {
+                self.connection.reconnect_tick = 150;
                 self.try_connect_once();
             }
         }
 
-        let published = self.snapshot.clone().unwrap_or_else(|| {
+        let published = self.connection.snapshot.clone().unwrap_or_else(|| {
             Arc::new(Published {
                 rev: 0,
                 dynamic: DynamicState::default(),
@@ -239,8 +239,8 @@ impl eframe::App for PolygramApp {
 
         panels::connection_panel(self, ctx);
 
-        if self.warmup_frames > 0 {
-            self.warmup_frames -= 1;
+        if self.connection.warmup_frames > 0 {
+            self.connection.warmup_frames -= 1;
             ctx.request_repaint_after(Duration::ZERO);
         }
     }
@@ -254,7 +254,7 @@ fn main() -> eframe::Result {
     let api_base = "http://127.0.0.1:8080".to_owned();
 
     // Фоновый опрос снимка состояния из API-сервера.
-    let (snapshot_tx, snapshot_rx) = mpsc::channel();
+    let (snapshot_tx, _snapshot_rx) = mpsc::channel();
     PolygramApp::start_snapshot_polling(api_client.clone(), api_base.clone(), snapshot_tx);
 
     let options = eframe::NativeOptions {
@@ -270,10 +270,6 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
             let mut app = PolygramApp::new();
-            app.api_client = api_client;
-            app.api_base = api_base;
-            app.snapshot_rx = snapshot_rx;
-            // Первая попытка подключения к API.
             app.try_connect_once();
             Ok(Box::new(app))
         }),

@@ -119,8 +119,8 @@ pub fn context_menu(
                             .find(|n| n.id == *object_id)
                             .map(|n| n.name.clone())
                             .unwrap_or_else(|| object_id.to_string());
-                        app.rename_target = Some(object_id.clone());
-                        app.rename_input = obj_name;
+                        app.dialogs.rename_target = Some(object_id.clone());
+                        app.dialogs.rename_input = obj_name;
                         *close_menu = true;
                     }
                 }
@@ -196,11 +196,11 @@ pub fn handle_canvas_interaction(
                     .find(|o| o.id == object_id)
                     .map(|o| o.name.clone())
                     .unwrap_or_else(|| object_id.to_string());
-                app.drag_object = None;
-                app.drag_start_screen = None;
-                app.drag_start_cell = None;
-                app.edit_target = Some(object_id.to_owned());
-                app.edit_input = obj_name;
+                app.drag.drag_object = None;
+                app.drag.drag_start_screen = None;
+                app.drag.drag_start_cell = None;
+                app.dialogs.edit_target = Some(object_id.to_owned());
+                app.dialogs.edit_input = obj_name;
             }
         }
     }
@@ -266,9 +266,9 @@ pub fn handle_canvas_interaction(
                         .iter()
                         .find(|o| o.id == *object_id);
                     if let Some(o) = object {
-                        app.drag_object = Some(object_id.to_owned());
-                        app.drag_start_screen = Some(pos);
-                        app.drag_start_cell = Some((o.rect.x, o.rect.y));
+                        app.drag.drag_object = Some(object_id.to_owned());
+                        app.drag.drag_start_screen = Some(pos);
+                        app.drag.drag_start_cell = Some((o.rect.x, o.rect.y));
                     }
                 }
             }
@@ -277,7 +277,7 @@ pub fn handle_canvas_interaction(
         // Перетаскивание: предсказываем позицию мгновенно (client-side prediction),
         // команду на сервер отправляем только при отпускании мыши.
         if let (Some(ref object_id), Some(start_screen), Some((start_x, start_y))) =
-            (&app.drag_object, app.drag_start_screen, app.drag_start_cell)
+            (&app.drag.drag_object, app.drag.drag_start_screen, app.drag.drag_start_cell)
         {
             if canvas_response.dragged_by(egui::PointerButton::Primary) {
                 if let Some(cur) = canvas_response.interact_pointer_pos() {
@@ -287,23 +287,23 @@ pub fn handle_canvas_interaction(
                     let dy = (delta.y / cell_px).round() as i32;
                     let target = [start_x + dx, start_y + dy];
                     // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
-                    app.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
+                    app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
                 }
             }
         }
 
         // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
-        if app.drag_object.is_some()
+        if app.drag.drag_object.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
         {
-            let drag_object = app.drag_object.take();
-            let drag_start_cell = app.drag_start_cell.take();
-            app.drag_start_screen = None;
+            let drag_object = app.drag.drag_object.take();
+            let drag_start_cell = app.drag.drag_start_cell.take();
+            app.drag.drag_start_screen = None;
             if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
-                let target = app.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
+                let target = app.drag.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
                 // Отправляем на сервер только если позиция реально изменилась относительно начала перетаскивания.
                 if (target.0, target.1) != (start_x, start_y) {
-                    app.pending_move = Some((object_id.clone(), app.last_rev));
+                    app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
                     app.apply_cmd(Command::MoveObject {
                         object: object_id,
                         at: [target.0, target.1],
@@ -334,7 +334,7 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.edit_target.as_deref());
+    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref());
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -360,17 +360,17 @@ pub fn handle_canvas_interaction(
                 if n >= MAX_UI_METRICS_PER_SIDE {
                     continue;
                 }
-                app.add_metric_target = Some((object_id.clone(), *dir));
-                app.add_metric_name = match dir {
+                app.dialogs.add_metric_target = Some((object_id.clone(), *dir));
+                app.dialogs.add_metric_name = match dir {
                     Direction::Request => format!("request{}", n + 1),
                     Direction::Output => format!("out{}", n + 1),
                 };
-                app.add_metric_kind = MetricKind::Number;
-                app.add_metric_value = "0".to_owned();
-                app.add_metric_unit = String::new();
-                app.drag_object = None;
-                app.drag_start_screen = None;
-                app.drag_start_cell = None;
+                app.dialogs.add_metric_kind = MetricKind::Number;
+                app.dialogs.add_metric_value = "0".to_owned();
+                app.dialogs.add_metric_unit = String::new();
+                app.drag.drag_object = None;
+                app.drag.drag_start_screen = None;
+                app.drag.drag_start_cell = None;
                 break;
             }
         }
@@ -383,10 +383,10 @@ pub fn handle_canvas_interaction(
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         for (object_id, dir, rect) in &app.canvas.container_menu_hotspots {
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
-                app.container_menu_target = Some((object_id.clone(), *dir));
-                app.drag_object = None;
-                app.drag_start_screen = None;
-                app.drag_start_cell = None;
+                app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                app.drag.drag_object = None;
+                app.drag.drag_start_screen = None;
+                app.drag.drag_start_cell = None;
                 break;
             }
         }
@@ -400,7 +400,7 @@ pub fn handle_container_menu_dialog(
     ctx: &egui::Context,
     published: &polygram_core::Published,
 ) {
-    let Some((object_id, dir)) = &app.container_menu_target else {
+    let Some((object_id, dir)) = &app.dialogs.container_menu_target else {
         return;
     };
     let object_id = object_id.clone();
@@ -419,7 +419,7 @@ pub fn handle_container_menu_dialog(
     {
         Some(o) => o,
         None => {
-            app.container_menu_target = None;
+            app.dialogs.container_menu_target = None;
             return;
         }
     };
@@ -430,9 +430,9 @@ pub fn handle_container_menu_dialog(
     };
 
     // Инициализировать буферы редактирования (имя, значение, единица).
-    if app.container_menu_edits.is_empty() {
+    if app.dialogs.container_menu_edits.is_empty() {
         for entry in &entries {
-            app.container_menu_edits.push((
+            app.dialogs.container_menu_edits.push((
                 entry.name.clone(),
                 format!("{:.0}", entry.value),
                 entry.unit.clone(),
@@ -441,15 +441,15 @@ pub fn handle_container_menu_dialog(
     } else {
         let entry_names: std::collections::HashSet<&str> =
             entries.iter().map(|e| e.name.as_str()).collect();
-        app.container_menu_edits
+        app.dialogs.container_menu_edits
             .retain(|(n, _, _)| entry_names.contains(n.as_str()));
         for entry in &entries {
             if !app
-                .container_menu_edits
+                .dialogs.container_menu_edits
                 .iter()
                 .any(|(n, _, _)| *n == entry.name)
             {
-                app.container_menu_edits.push((
+                app.dialogs.container_menu_edits.push((
                     entry.name.clone(),
                     format!("{:.0}", entry.value),
                     entry.unit.clone(),
@@ -478,23 +478,23 @@ pub fn handle_container_menu_dialog(
                         ui.label("значение:");
 
                         let buf_idx = app
-                            .container_menu_edits
+                            .dialogs.container_menu_edits
                             .iter()
                             .position(|(n, _, _)| *n == entry.name);
                         if buf_idx.is_none() {
-                            app.container_menu_edits.push((
+                            app.dialogs.container_menu_edits.push((
                                 entry.name.clone(),
                                 format!("{:.0}", entry.value),
                                 entry.unit.clone(),
                             ));
                         }
                         let buf_idx = app
-                            .container_menu_edits
+                            .dialogs.container_menu_edits
                             .iter()
                             .position(|(n, _, _)| *n == entry.name)
                             .unwrap();
                         let (value_buf, unit_buf) = {
-                            let e = &mut app.container_menu_edits[buf_idx];
+                            let e = &mut app.dialogs.container_menu_edits[buf_idx];
                             (&mut e.1, &mut e.2)
                         };
 
@@ -523,7 +523,7 @@ pub fn handle_container_menu_dialog(
     // Применить изменения значений и единиц измерения.
     if apply_edits {
         let value_cmds: Vec<(String, f64)> = app
-            .container_menu_edits
+            .dialogs.container_menu_edits
             .iter()
             .filter_map(|(entry_name, value_str, _)| {
                 let value: f64 = value_str.trim().parse().unwrap_or(0.0);
@@ -531,7 +531,7 @@ pub fn handle_container_menu_dialog(
             })
             .collect();
         let unit_cmds: Vec<(String, String)> = app
-            .container_menu_edits
+            .dialogs.container_menu_edits
             .iter()
             .filter_map(|(entry_name, _, unit_str)| {
                 let unit = unit_str.trim().to_owned();
@@ -542,7 +542,7 @@ pub fn handle_container_menu_dialog(
                 }
             })
             .collect();
-        app.container_menu_edits.clear();
+        app.dialogs.container_menu_edits.clear();
         for (entry_name, value) in value_cmds {
             app.apply_cmd(polygram_core::Command::SetValue {
                 object: object_id.clone(),
@@ -567,13 +567,13 @@ pub fn handle_container_menu_dialog(
     }
 
     if close_dialog {
-        app.container_menu_target = None;
-        app.container_menu_edits.clear();
+        app.dialogs.container_menu_target = None;
+        app.dialogs.container_menu_edits.clear();
     }
 }
 
 pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
-    let rename_target = app.rename_target.clone();
+    let rename_target = app.dialogs.rename_target.clone();
     let mut do_rename = false;
     if let Some(target) = &rename_target {
         egui::Window::new("Переименовать объект")
@@ -582,25 +582,25 @@ pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.label(format!("Объект: {target}"));
-                ui.text_edit_singleline(&mut app.rename_input);
+                ui.text_edit_singleline(&mut app.dialogs.rename_input);
                 ui.horizontal(|ui| {
                     if ui.button("OK").clicked() {
                         do_rename = true;
                     }
                     if ui.button("Отмена").clicked() {
-                        app.rename_target = None;
-                        app.rename_input.clear();
+                        app.dialogs.rename_target = None;
+                        app.dialogs.rename_input.clear();
                     }
                 });
             });
     }
-    if do_rename && !app.rename_input.is_empty() {
+    if do_rename && !app.dialogs.rename_input.is_empty() {
         app.apply_cmd(polygram_core::Command::RenameObject {
             object: rename_target.unwrap(),
-            name: app.rename_input.clone(),
+            name: app.dialogs.rename_input.clone(),
         });
-        app.rename_target = None;
-        app.rename_input.clear();
+        app.dialogs.rename_target = None;
+        app.dialogs.rename_input.clear();
     }
 }
 
@@ -611,11 +611,11 @@ pub fn inline_rename_editor(
     ctx: &egui::Context,
     published: &polygram_core::Published,
 ) {
-    let Some(target) = &app.edit_target else {
+    let Some(target) = &app.dialogs.edit_target else {
         return;
     };
     let Some(object) = published.geometry.objects.iter().find(|o| o.id == target.as_str()) else {
-        app.edit_target = None;
+        app.dialogs.edit_target = None;
         return;
     };
 
@@ -648,7 +648,7 @@ pub fn inline_rename_editor(
             ui.set_min_width(edit_rect.width().max(40.0));
             ui.set_min_height(edit_rect.height().max(16.0));
             egui::Frame::none().show(ui, |ui| {
-                let response = ui.text_edit_singleline(&mut app.edit_input);
+                let response = ui.text_edit_singleline(&mut app.dialogs.edit_input);
                 response.request_focus();
 
                 if response.has_focus() {
@@ -666,23 +666,23 @@ pub fn inline_rename_editor(
         });
 
     if commit {
-        if !app.edit_input.is_empty() {
+        if !app.dialogs.edit_input.is_empty() {
             app.apply_cmd(polygram_core::Command::RenameObject {
                 object: target.clone(),
-                name: app.edit_input.clone(),
+                name: app.dialogs.edit_input.clone(),
             });
         }
-        app.edit_target = None;
-        app.edit_input.clear();
+        app.dialogs.edit_target = None;
+        app.dialogs.edit_input.clear();
     } else if cancel {
-        app.edit_target = None;
-        app.edit_input.clear();
+        app.dialogs.edit_target = None;
+        app.dialogs.edit_input.clear();
     }
 }
 
 /// Модальное диалоговое окно добавления показателя.
 pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
-    let Some((object_id, dir)) = &app.add_metric_target else {
+    let Some((object_id, dir)) = &app.dialogs.add_metric_target else {
         return;
     };
     let object_id = object_id.clone();
@@ -702,12 +702,12 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         .collapsible(false)
         .show(ctx, |ui| {
             ui.label("Имя показателя:");
-            ui.text_edit_singleline(&mut app.add_metric_name);
+            ui.text_edit_singleline(&mut app.dialogs.add_metric_name);
 
             ui.separator();
             ui.label("Тип:");
             egui::ComboBox::new("add_metric_kind", "")
-                .selected_text(format!("{:?}", app.add_metric_kind))
+                .selected_text(format!("{:?}", app.dialogs.add_metric_kind))
                 .show_ui(ui, |ui| {
                     for kind in [
                         MetricKind::Number,
@@ -717,19 +717,19 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
                         MetricKind::Duration,
                         MetricKind::Formula,
                     ] {
-                        if ui.selectable_label(app.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
-                            app.add_metric_kind = kind;
+                        if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
+                            app.dialogs.add_metric_kind = kind;
                         }
                     }
                 });
 
             ui.separator();
             ui.label("Значение:");
-            ui.text_edit_singleline(&mut app.add_metric_value);
+            ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
 
             ui.separator();
             ui.label("Единица измерения:");
-            ui.text_edit_singleline(&mut app.add_metric_unit);
+            ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
 
             ui.separator();
             ui.horizontal(|ui| {
@@ -743,26 +743,26 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
         });
 
     if cancelled {
-        app.add_metric_target = None;
-        app.add_metric_name.clear();
-        app.add_metric_value.clear();
-        app.add_metric_unit.clear();
+        app.dialogs.add_metric_target = None;
+        app.dialogs.add_metric_name.clear();
+        app.dialogs.add_metric_value.clear();
+        app.dialogs.add_metric_unit.clear();
         return;
     }
 
     if done {
-        let name = app.add_metric_name.trim().to_owned();
+        let name = app.dialogs.add_metric_name.trim().to_owned();
         if name.is_empty() {
-            app.add_metric_target = None;
-            app.add_metric_name.clear();
-            app.add_metric_value.clear();
-            app.add_metric_unit.clear();
+            app.dialogs.add_metric_target = None;
+            app.dialogs.add_metric_name.clear();
+            app.dialogs.add_metric_value.clear();
+            app.dialogs.add_metric_unit.clear();
             return;
         }
 
-        let kind = app.add_metric_kind;
-        let unit = app.add_metric_unit.trim().to_owned();
-        let value: f64 = app.add_metric_value.trim().parse().unwrap_or(0.0);
+        let kind = app.dialogs.add_metric_kind;
+        let unit = app.dialogs.add_metric_unit.trim().to_owned();
+        let value: f64 = app.dialogs.add_metric_value.trim().parse().unwrap_or(0.0);
 
         app.apply_cmd(Command::AddMetricDef {
             id: Some(name.clone()),
@@ -784,10 +784,10 @@ pub fn handle_add_metric_dialog(app: &mut PolygramApp, ctx: &egui::Context) {
             fact: 0.0,
         });
 
-        app.add_metric_target = None;
-        app.add_metric_name.clear();
-        app.add_metric_kind = MetricKind::Number;
-        app.add_metric_value.clear();
-        app.add_metric_unit.clear();
+        app.dialogs.add_metric_target = None;
+        app.dialogs.add_metric_name.clear();
+        app.dialogs.add_metric_kind = MetricKind::Number;
+        app.dialogs.add_metric_value.clear();
+        app.dialogs.add_metric_unit.clear();
     }
 }
