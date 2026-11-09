@@ -3,7 +3,7 @@
 //! автосохранение последнего проекта и двусторонний редактор кода для Агента.
 
 use crate::design_format::*;
-use crate::free_canvas_input::ResizeMode;
+use crate::input::ResizeMode;
 use eframe::egui;
 use egui::{Key, Pos2, Vec2};
 use std::collections::HashSet;

@@ -59,6 +59,7 @@ pub fn design_to_theme(doc: &DesignDocument, style: &ObjectStyle) -> Theme {
         object_header_height_cells: style.header_height_cells,
         container_header_height_cells: style.header_height_cells * 0.5,
         port_radius: style.port_radius,
+        text_size: 14.0,
         edge_width: style.border_width,
         shadow_offset: shadow.map_or([4.0, 4.0], |s| s.offset),
         shadow_blur: shadow.map_or(8.0, |s| s.blur),

@@ -7,7 +7,7 @@ mod design_app;
 mod design_format;
 mod exporter;
 mod free_canvas;
-mod free_canvas_input;
+mod input;
 mod free_canvas_paint;
 mod free_canvas_properties;
 mod free_canvas_state;
