@@ -13,6 +13,7 @@ pub fn handle_add_object(
     kind: NodeKind,
     at: Option<[i32; 2]>,
     parent: Option<String>,
+    _author: Option<String>,
 ) -> Result<Applied> {
     let (w, h) = if kind == NodeKind::Department {
         (100, 100)

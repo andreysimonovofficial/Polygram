@@ -224,6 +224,7 @@ impl Engine {
                 kind: o.kind,
                 at: Some(o.at),
                 parent: None,
+                author: None,
             });
             for (dir, list) in [
                 (Direction::Request, &o.requests),

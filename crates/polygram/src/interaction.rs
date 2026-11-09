@@ -90,6 +90,7 @@ pub fn context_menu(
                                 kind: NodeKind::Process,
                                 at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                                 parent: Some(object_id.clone()),
+                                author: None,
                             };
                             app.apply_cmd(cmd);
                             *close_menu = true;
@@ -105,6 +106,7 @@ pub fn context_menu(
                                 kind: NodeKind::Department,
                                 at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                                 parent: Some(object_id.clone()),
+                                author: None,
                             };
                             app.apply_cmd(cmd);
                             *close_menu = true;
@@ -144,6 +146,7 @@ pub fn context_menu(
                             kind: NodeKind::Process,
                             at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
                             parent: None,
+                            author: None,
                         };
                         app.apply_cmd(cmd);
                         *close_menu = true;
@@ -159,6 +162,7 @@ pub fn context_menu(
                             kind: NodeKind::Department,
                             at: Some([world_pos.x as i32, world_pos.y as i32]),
                             parent: None,
+                            author: None,
                         };
                         app.apply_cmd(cmd);
                         *close_menu = true;

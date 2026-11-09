@@ -11,6 +11,7 @@ use serde_json::json;
 use std::sync::Arc;
 
 use super::ApiService;
+use super::chat::CreateChatMessage;
 
 #[derive(Deserialize)]
 pub struct CreateObject {
@@ -23,6 +24,9 @@ pub struct CreateObject {
     pub at: Option<[i32; 2]>,
     #[serde(default)]
     pub parent: Option<String>,
+    /// Автор создания объекта для ленты чата (опционально).
+    #[serde(default)]
+    pub author: Option<String>,
 }
 
 pub fn router(api: Arc<ApiService>) -> Router {
@@ -33,6 +37,7 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/objects/:id", get(get_object))
         .route("/api/commands", post(post_command))
         .route("/api/commands/batch", post(post_batch))
+        .route("/api/chat/messages", get(get_chat_messages).post(post_chat_message))
         .with_state(api)
 }
 
@@ -69,11 +74,31 @@ async fn post_object(State(api): State<Arc<ApiService>>, Json(req): Json<CreateO
         kind: req.kind,
         at: req.at,
         parent: req.parent,
+        author: req.author,
     };
     match api.apply(cmd) {
         Ok(applied) => Json(json!({"ok": true, "rev": applied.rev, "created": applied.created, "at": applied.at})),
         Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
     }
+}
+
+/// GET /api/chat/messages — вся лента чата.
+async fn get_chat_messages(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let messages = api.chat().messages();
+    Json(serde_json::to_value(&messages).unwrap_or_default())
+}
+
+/// POST /api/chat/messages — pubblicatoть сообщение в общую ленту.
+/// Тело: { author, text, reply_to? }
+async fn post_chat_message(
+    State(api): State<Arc<ApiService>>,
+    Json(req): Json<CreateChatMessage>,
+) -> Json<serde_json::Value> {
+    if req.text.trim().is_empty() {
+        return Json(json!({"ok": false, "error": "пустое сообщение"}));
+    }
+    let message = api.chat().post_text(req.author, req.text, req.reply_to);
+    Json(json!({"ok": true, "message": message}))
 }
 
 async fn post_command(State(api): State<Arc<ApiService>>, body: String) -> Json<serde_json::Value> {

@@ -73,6 +73,7 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
             kind: NodeKind::Process,
             at: None,
             parent: None,
+            author: None,
         });
         for k in 1..=2 {
             cmds.push(metric(

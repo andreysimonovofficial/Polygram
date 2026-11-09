@@ -195,6 +195,9 @@ impl eframe::App for PolygramApp {
         // Опрос снимка состояния из API-сервера.
         self.poll_snapshot();
 
+        // Опрос ленты чата.
+        self.poll_chat();
+
         // Периодическая попытка переподключения, если API недоступен (раз в ~50 кадров ≈ 1 сек).
         if !self.connection.api_connected {
             self.connection.reconnect_tick = self.connection.reconnect_tick.saturating_sub(1);

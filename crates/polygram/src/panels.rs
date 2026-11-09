@@ -260,6 +260,11 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                             ui.monospace(cmd);
                         }
                     });
+
+                ui.separator();
+
+                // Общий чат всех участников.
+                crate::app::chat::render(app, ui);
             });
         });
 }

@@ -10,6 +10,7 @@ pub fn object(e: &mut Engine, id: &str) {
             kind: NodeKind::Process,
             at: None,
             parent: None,
+            author: None,
         },
     )
     .unwrap();
@@ -24,6 +25,7 @@ pub fn object_at(e: &mut Engine, id: &str, at: [i32; 2]) -> Result<Applied> {
             kind: NodeKind::Process,
             at: Some(at),
             parent: None,
+            author: None,
         },
     )
 }

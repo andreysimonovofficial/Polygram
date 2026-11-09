@@ -9,6 +9,7 @@ fn add(id: String) -> Command {
         kind: NodeKind::Process,
         at: None,
         parent: None,
+        author: None,
     }
 }
 

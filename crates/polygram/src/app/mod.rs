@@ -7,12 +7,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub mod connection;
+pub mod chat;
 pub mod dialogs;
 pub mod drag;
 pub mod commands;
 
 use connection::ConnectionState;
 use connection::ConnectionResult;
+use chat::ChatState;
 use dialogs::DialogState;
 use drag::DragState;
 use commands::CommandState;
@@ -32,6 +34,7 @@ pub struct PolygramApp {
     pub show_mcp_panel: bool,
     pub show_sidebar: bool,
     pub last_status: String,
+    pub chat: ChatState,
 }
 
 impl PolygramApp {
@@ -42,6 +45,8 @@ impl PolygramApp {
             .build()
             .unwrap();
         let api_base = "http://127.0.0.1:8080".to_owned();
+        let mut chat = ChatState::default();
+        chat.chat_rx = ChatState::start_polling(api_client.clone(), api_base.clone());
         Self {
             canvas,
             connection: ConnectionState::new(api_client, api_base, snapshot_rx),
@@ -52,7 +57,12 @@ impl PolygramApp {
             show_mcp_panel: false,
             show_sidebar: true,
             last_status: "API сервер не подключён".to_owned(),
+            chat,
         }
+    }
+
+    pub fn poll_chat(&mut self) {
+        self.chat.poll();
     }
 
     pub fn add_connection_log(&mut self, ok: bool, message: &str) {

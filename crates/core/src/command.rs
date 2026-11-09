@@ -20,6 +20,9 @@ pub enum Command {
         name: String,
         #[serde(default)]
         kind: NodeKind,
+        /// Автор создания объекта для ленты чата (user / claude / qwen / ...).
+        #[serde(default)]
+        author: Option<String>,
         /// Клетка левого верхнего угла. Если не задано — ставится автоматически.
         #[serde(default)]
         at: Option<[i32; 2]>,

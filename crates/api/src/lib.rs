@@ -3,6 +3,7 @@
 
 pub mod http;
 pub mod mcp;
+pub mod chat;
 
 use polygram_core::{
     document::Document, error::EngineError, runtime::EngineRuntime, Command, Event, ObjectView,
@@ -11,6 +12,8 @@ use polygram_core::{
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
+
+use crate::chat::ChatService;
 
 /// Главный сервис API. Оборачивает EngineRuntime и предоставляет
 /// срезы состояния и выполнение команд.
@@ -21,6 +24,8 @@ pub struct ApiService {
 
 struct ApiServiceInner {
     runtime: EngineRuntime,
+    /// Лента чата (общая для всех участников).
+    pub chat: ChatService,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
     /// Флаги управления жизненным циклом сервера.
@@ -35,12 +40,18 @@ impl ApiService {
         Self {
             inner: Arc::new(ApiServiceInner {
                 runtime,
+                chat: ChatService::new(),
                 auto_save_path: Mutex::new(None),
                 restart_flag: Arc::new(AtomicBool::new(false)),
                 shutdown_flag: Arc::new(AtomicBool::new(false)),
                 port_cell: Arc::new(AtomicU16::new(8080)),
             }),
         }
+    }
+
+    /// Лента чата.
+    pub fn chat(&self) -> ChatService {
+        self.inner.chat.clone()
     }
 
     /// Флаг перезапуска сервера.
@@ -128,9 +139,34 @@ impl ApiService {
             _ => {}
         }
 
+        // Информация о создании объекта для ленты чата извлекается до перемещения команды.
+        let object_note = match &cmd {
+            Command::AddObject {
+                author,
+                name,
+                kind,
+                at,
+                ..
+            } => author.as_ref().map(|author| {
+                (
+                    author.clone(),
+                    name.clone(),
+                    *kind,
+                    at.unwrap_or([0, 0]),
+                )
+            }),
+            _ => None,
+        };
+
         let result = self.inner.runtime.handle().apply(cmd);
-        if result.is_ok() {
+        if let Ok(applied) = &result {
             let _ = self.maybe_save();
+            if let Some((author, name, kind, at)) = object_note {
+                let object_id = applied.created.as_deref().unwrap_or(&name).to_owned();
+                self.inner
+                    .chat
+                    .note_object_created(author, name, object_id, kind, at);
+            }
         }
         result
     }

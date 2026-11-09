@@ -11,6 +11,7 @@ fn dept(e: &mut Engine, id: &str, name: &str, parent: Option<&str>) {
             kind: NodeKind::Department,
             at: None,
             parent: parent.map(|p| p.into()),
+            author: None,
         },
     )
     .unwrap();
@@ -25,6 +26,7 @@ fn proc(e: &mut Engine, id: &str, parent: Option<&str>) {
             kind: NodeKind::Process,
             at: None,
             parent: parent.map(|p| p.into()),
+            author: None,
         },
     )
     .unwrap();
@@ -159,6 +161,7 @@ fn object_placed_inside_department_at_explicit_coords() {
             kind: NodeKind::Process,
             at: Some([d_rect.x + 2, d_rect.y + 3]),
             parent: Some("d1".into()),
+            author: None,
         },
     )
     .unwrap();
@@ -183,6 +186,7 @@ fn object_placed_near_when_cell_occupied_inside_department() {
             kind: NodeKind::Process,
             at: Some([x, y]),
             parent: Some("d1".into()),
+            author: None,
         },
     )
     .unwrap();
@@ -195,6 +199,7 @@ fn object_placed_near_when_cell_occupied_inside_department() {
             kind: NodeKind::Process,
             at: Some([x, y]),
             parent: Some("d1".into()),
+            author: None,
         },
     )
     .unwrap();
@@ -220,6 +225,7 @@ fn object_outside_parent_not_allowed_to_overflow_silently() {
             kind: NodeKind::Process,
             at: Some([100, 100]),
             parent: None,
+            author: None,
         },
     )
     .unwrap();

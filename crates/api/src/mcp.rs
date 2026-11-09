@@ -253,6 +253,7 @@ impl McpServer {
                     None => return mcp_tool_error("Для add_object требуется поле name (имя объекта). Пример: {\"name\":\"Claude\",\"kind\":\"process\"}"),
                 };
                 let kind = args.get("kind").and_then(|v| v.as_str()).unwrap_or("process");
+                let author = args.get("author").and_then(|v| v.as_str()).map(|s| s.to_owned());
                 let cmd = Command::AddObject {
                     id: args.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()),
                     name,
@@ -265,6 +266,7 @@ impl McpServer {
                         arr.iter().filter_map(|v| v.as_i64()).map(|v| v as i32).collect::<Vec<_>>().try_into().unwrap_or([0, 0])
                     }),
                     parent: args.get("parent").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                    author,
                 };
                 self.apply_command(cmd, &args)
             }

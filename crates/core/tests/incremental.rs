@@ -123,6 +123,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
                             kind: NodeKind::Process,
                             at: None,
                             parent: None,
+                            author: None,
                         })
                     }
                 }
