@@ -228,6 +228,8 @@ impl eframe::App for PolygramApp {
 
         interaction::context_menu(self, ctx, &published, &mut close_menu);
 
+        interaction::handle_delete_confirm(self, ctx);
+
         interaction::inline_rename_editor(self, ctx, &published);
 
         interaction::handle_rename_dialog(self, ctx);

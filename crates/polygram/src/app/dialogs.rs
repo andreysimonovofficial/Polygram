@@ -13,6 +13,8 @@ pub struct DialogState {
     pub add_metric_unit: String,
     pub container_menu_target: Option<(String, Direction)>,
     pub container_menu_edits: Vec<(String, String, String)>,
+    /// Объекты, ожидающие подтверждения удаления ("Удалить?").
+    pub delete_confirm: Option<Vec<String>>,
 }
 
 impl DialogState {
@@ -29,6 +31,7 @@ impl DialogState {
             add_metric_unit: String::new(),
             container_menu_target: None,
             container_menu_edits: Vec::new(),
+            delete_confirm: None,
         }
     }
 }
