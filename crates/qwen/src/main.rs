@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const API_BASE: &str = "http://127.0.0.1:8080";
 const OLLAMA_BASE: &str = "http://localhost:11434";
-const OLLAMA_MODEL: &str = "qwen2.5";
+const OLLAMA_MODEL: &str = "qwen2.5:3b-instruct";
 const AGENT_AUTHOR: &str = "qwen";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -209,7 +209,7 @@ fn wants_create_object(text: &str) -> bool {
 
 fn main() {
     let client = Client::builder()
-        .timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(120))
         .build()
         .expect("не удалось создать HTTP-клиент");
     eprintln!("qwen-агент запущен (автор {AGENT_AUTHOR}), API {API_BASE}");
