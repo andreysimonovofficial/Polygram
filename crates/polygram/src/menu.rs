@@ -40,9 +40,19 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.separator();
 
             // Показать/скрыть боковые панели.
-            ui.checkbox(&mut app.show_sidebar, "Боковая панель API");
-            ui.checkbox(&mut app.show_command_log_panel, "Лог команд");
-            ui.checkbox(&mut app.show_chat_panel, "Чат");
+            let mut changed = false;
+            if ui.checkbox(&mut app.show_sidebar, "Боковая панель API").changed() {
+                changed = true;
+            }
+            if ui.checkbox(&mut app.show_command_log_panel, "Лог команд").changed() {
+                changed = true;
+            }
+            if ui.checkbox(&mut app.show_chat_panel, "Чат").changed() {
+                changed = true;
+            }
+            if changed {
+                app.ui_config_save();
+            }
 
             ui.separator();
             if ui.button("Команды (Ctrl+P)").clicked() {

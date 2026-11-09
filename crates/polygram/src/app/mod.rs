@@ -1,7 +1,9 @@
 use polygram_canvas::Canvas;
 use polygram_core::{Command, Published};
 use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,6 +24,38 @@ use commands::CommandState;
 pub struct CommandLogEntry {
     pub cmd: String,
     pub result: String,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+pub struct UiConfig {
+    pub show_sidebar: bool,
+    pub show_command_log_panel: bool,
+    pub show_chat_panel: bool,
+}
+
+impl UiConfig {
+    pub fn path() -> PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+            .join("polygram_ui_config.json")
+    }
+
+    pub fn load() -> Self {
+        let path = Self::path();
+        match std::fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+            Err(_) => Self::default(),
+        }
+    }
+
+    pub fn save(&self) {
+        let path = Self::path();
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            let _ = std::fs::write(&path, json);
+        }
+    }
 }
 
 pub struct PolygramApp {
@@ -49,6 +83,7 @@ impl PolygramApp {
         let api_base = "http://127.0.0.1:8080".to_owned();
         let mut chat = ChatState::default();
         chat.chat_rx = ChatState::start_polling(api_client.clone(), api_base.clone());
+        let ui_config = UiConfig::load();
         Self {
             canvas,
             connection: ConnectionState::new(api_client, api_base, snapshot_rx),
@@ -57,12 +92,21 @@ impl PolygramApp {
             drag: DragState::new(),
             right_click: None,
             show_mcp_panel: false,
-            show_sidebar: true,
-            show_command_log_panel: true,
-            show_chat_panel: true,
+            show_sidebar: ui_config.show_sidebar,
+            show_command_log_panel: ui_config.show_command_log_panel,
+            show_chat_panel: ui_config.show_chat_panel,
             last_status: "API сервер не подключён".to_owned(),
             chat,
         }
+    }
+
+    pub fn ui_config_save(&self) {
+        UiConfig {
+            show_sidebar: self.show_sidebar,
+            show_command_log_panel: self.show_command_log_panel,
+            show_chat_panel: self.show_chat_panel,
+        }
+        .save();
     }
 
     pub fn poll_chat(&mut self) {
