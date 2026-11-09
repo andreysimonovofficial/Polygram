@@ -47,6 +47,7 @@ fn worst_status(entries: &[polygram_core::EntryGeom], dynamic: &DynamicState) ->
 }
 
 /// Рисовать одну строку показателя: точка статуса слева, имя, значение справа.
+/// Для запроса показывается required, для выхода — value.
 fn paint_metric_row(
     painter: &Painter,
     rect: Rect,
@@ -55,6 +56,7 @@ fn paint_metric_row(
     zoom: f32,
     theme: &Theme,
     is_hovered: bool,
+    dir: Direction,
 ) {
     let status = dynamic.status[entry.ix as usize];
     let dot_color = super::status_dot_color(status, theme);
@@ -78,13 +80,17 @@ fn paint_metric_row(
         name_color,
     );
 
-    // Значение (справа)
+    // Значение (справа): для запроса — required, для выхода — value.
     let unit = if entry.unit.is_empty() {
         String::new()
     } else {
         format!(" {}", entry.unit)
     };
-    let value_text = format!("{:.0}{}", entry.value, unit);
+    let displayed_value = match dir {
+        Direction::Request => dynamic.required[entry.ix as usize],
+        Direction::Output => entry.value,
+    };
+    let value_text = format!("{:.0}{}", displayed_value, unit);
     painter.text(
         Pos2::new(rect.max.x - 8.0 * zoom, cy),
         egui::Align2::RIGHT_CENTER,
@@ -309,7 +315,7 @@ pub fn paint_process(
         if is_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Request);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Request,
@@ -364,7 +370,7 @@ pub fn paint_process(
         if is_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Output);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Output,

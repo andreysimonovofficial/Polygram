@@ -724,11 +724,19 @@ pub fn handle_container_menu_dialog(
     };
 
     // Инициализировать буферы редактирования (имя, значение, единица).
+    // Для запроса редактируем required, для выхода — value.
     if app.dialogs.container_menu_edits.is_empty() {
         for entry in &entries {
+            let buf_value = match dir {
+                Direction::Request => format!(
+                    "{:.0}",
+                    published.dynamic.required[entry.ix as usize]
+                ),
+                Direction::Output => format!("{:.0}", entry.value),
+            };
             app.dialogs.container_menu_edits.push((
                 entry.name.clone(),
-                format!("{:.0}", entry.value),
+                buf_value,
                 entry.unit.clone(),
             ));
         }
@@ -743,9 +751,16 @@ pub fn handle_container_menu_dialog(
                 .iter()
                 .any(|(n, _, _)| *n == entry.name)
             {
+                let buf_value = match dir {
+                    Direction::Request => format!(
+                        "{:.0}",
+                        published.dynamic.required[entry.ix as usize]
+                    ),
+                    Direction::Output => format!("{:.0}", entry.value),
+                };
                 app.dialogs.container_menu_edits.push((
                     entry.name.clone(),
-                    format!("{:.0}", entry.value),
+                    buf_value,
                     entry.unit.clone(),
                 ));
             }
@@ -769,7 +784,11 @@ pub fn handle_container_menu_dialog(
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.label(&entry.name);
-                        ui.label("значение:");
+                        let field_label = match dir {
+                            Direction::Request => "необходимое (required):",
+                            Direction::Output => "значение (value):",
+                        };
+                        ui.label(field_label);
 
                         let buf_idx = app
                             .dialogs.container_menu_edits
@@ -778,7 +797,13 @@ pub fn handle_container_menu_dialog(
                         if buf_idx.is_none() {
                             app.dialogs.container_menu_edits.push((
                                 entry.name.clone(),
-                                format!("{:.0}", entry.value),
+                                match dir {
+                                    Direction::Request => format!(
+                                        "{:.0}",
+                                        published.dynamic.required[entry.ix as usize]
+                                    ),
+                                    Direction::Output => format!("{:.0}", entry.value),
+                                },
                                 entry.unit.clone(),
                             ));
                         }
@@ -838,11 +863,18 @@ pub fn handle_container_menu_dialog(
             .collect();
         app.dialogs.container_menu_edits.clear();
         for (entry_name, value) in value_cmds {
-            app.apply_cmd(polygram_core::Command::SetValue {
-                object: object_id.clone(),
-                entry: entry_name,
-                value,
-            });
+            match dir {
+                Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
+                    object: object_id.clone(),
+                    entry: entry_name,
+                    required: value,
+                }),
+                Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
+                    object: object_id.clone(),
+                    entry: entry_name,
+                    value,
+                }),
+            }
         }
         for (metric_def, unit) in unit_cmds {
             app.apply_cmd(polygram_core::Command::SetMetricDefUnit {
