@@ -187,7 +187,7 @@ pub fn handle_canvas_interaction(
             }
         }
 
-    // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
+        // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
         if app.drag.drag_object.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
         {
@@ -196,8 +196,47 @@ pub fn handle_canvas_interaction(
             app.drag.drag_start_screen = None;
             if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
                 let target = app.drag.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
-                // Отправляем на сервер только если позиция реально изменилась относительно начала перетаскивания.
-                if (target.0, target.1) != (start_x, start_y) {
+                let pos_changed = (target.0, target.1) != (start_x, start_y);
+                // Если над целью находится отдел — перемещаем объект в отдел (SetObjectParent),
+                // иначе — просто перемещаем (MoveObject).
+                let dropped_on_dept = if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    if let Some(target_id) = object_at(
+                        &geometry,
+                        cur,
+                        app.canvas.camera.offset,
+                        app.canvas.camera.zoom,
+                        app.canvas.cell_size,
+                    ) {
+                        let target_kind = geometry
+                            .objects
+                            .iter()
+                            .find(|o| o.id == target_id)
+                            .map(|o| o.kind);
+                        target_id != object_id
+                            && target_kind == Some(polygram_core::types::NodeKind::Department)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if dropped_on_dept {
+                    if let Some(cur) = canvas_response.interact_pointer_pos() {
+                        if let Some(target_id) = object_at(
+                            &geometry,
+                            cur,
+                            app.canvas.camera.offset,
+                            app.canvas.camera.zoom,
+                            app.canvas.cell_size,
+                        ) {
+                        app.apply_cmd(Command::SetObjectParent {
+                            object: object_id.clone(),
+                            parent: Some(target_id.to_owned()),
+                        });
+                        app.selected_objects = vec![object_id.clone()];
+                        }
+                    }
+                } else if pos_changed {
                     app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
                     app.apply_cmd(Command::MoveObject {
                         object: object_id,

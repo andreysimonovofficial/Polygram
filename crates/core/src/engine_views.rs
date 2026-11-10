@@ -180,7 +180,7 @@ impl crate::engine::Engine {
     }
 
     /// Все объекты в поддереве отдела (включая сам отдел).
-    fn subtree_objects(&self, dept: ObjectIx) -> Vec<ObjectIx> {
+    pub(crate) fn subtree_objects(&self, dept: ObjectIx) -> Vec<ObjectIx> {
         let mut out = Vec::new();
         let mut stack = vec![dept];
         while let Some(cur) = stack.pop() {

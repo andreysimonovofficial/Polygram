@@ -64,6 +64,12 @@ pub fn handle_add_object(
         }
     };
     engine.layout.place(ix, Rect::new(gx, gy, w, h));
+    // Если добавляется отдел под родительским отделом — растягиваем родителя под нового ребёнка.
+    if kind == NodeKind::Department {
+        if let Some(p) = parent_ix {
+            engine.expand_department_to_fit(p);
+        }
+    }
     engine
         .pending
         .push(crate::event::EventKind::ObjectAdded { object: ix.0 });
@@ -81,6 +87,7 @@ pub fn handle_add_object(
 
 pub fn handle_remove_object(engine: &mut Engine, object: &str) -> Result<Applied> {
     let ix = engine.find_object(object)?;
+    let parent_ix = engine.hier.object(ix).parent;
     let edges: Vec<crate::types::EdgeIx> = engine.hier.edges_of_object(ix);
     for edge in edges {
         engine.remove_edge_internal(edge);
@@ -98,6 +105,10 @@ pub fn handle_remove_object(engine: &mut Engine, object: &str) -> Result<Applied
     }
     engine.layout.unplace(ix);
     engine.hier.remove_object_slot(ix);
+    // Если удалялся объект из отдела — пытаемся сжать родительский отдел.
+    if let Some(p) = parent_ix {
+        engine.shrink_department_to_fit(p);
+    }
     engine
         .pending
         .push(crate::event::EventKind::ObjectRemoved { object: ix.0 });

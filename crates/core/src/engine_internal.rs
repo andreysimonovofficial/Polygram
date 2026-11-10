@@ -101,13 +101,16 @@ impl crate::engine::Engine {
         }
     }
 
-    /// Растянуть отдел под всех своих детей (с отступом на шапку 2 клетки сверху).
-    /// Возвращает новый rect отдела, если он изменился.
+    /// Растянуть отдел под всех своих детей (с отступом в одну клетку сетки с каждой стороны,
+    /// заголовок в верхней клетке, дети начинаются на строке parent.y + 2).
+    /// Рекурсивно растягивает всех родительских отделов.
     pub(crate) fn expand_department_to_fit(&mut self, parent: ObjectIx) -> Option<crate::layout::Rect> {
         let children: Vec<ObjectIx> = self.hier.children_of(parent);
         if children.is_empty() {
             return None;
         }
+        // Собираем всех потомков (включая вложенные отделы) для игнорирования при проверке наложения.
+        let subtree: std::collections::HashSet<ObjectIx> = self.subtree_objects(parent).into_iter().collect();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;
@@ -120,23 +123,24 @@ impl crate::engine::Engine {
             max_y = max_y.max(r.y + r.h);
         }
         let old = self.layout.rect_of(parent);
-        // Шапка отдела занимает 2 клетки сверху, дети начинаются с parent.y + 2.
+        // Заголовок — верхняя клетка, затем 1-клетковый отступ, затем дети.
+        // 1-клетковый отступ по бокам и снизу.
         let new_y = (min_y - 2).max(0);
-        let new_x = min_x;
-        let new_w = max_x - new_x;
-        let new_h = (max_y - new_y).max(old.h);
+        let new_x = (min_x - 1).max(0);
+        let new_w = (max_x + 1) - new_x;
+        let new_h = (max_y + 1) - new_y;
         let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
         if new_rect == old {
             return None;
         }
-        // Ручная проверка наложения на посторонние объекты (кроме самого отдела и его детей).
+        // Проверка наложения на посторонние объекты (вне поддерева этого отдела).
         let mut overlap = false;
         for (i, r) in self.layout.rect.iter().enumerate() {
             if !self.layout.placed[i] {
                 continue;
             }
             let ix = ObjectIx(i as u32);
-            if ix == parent || children.contains(&ix) {
+            if subtree.contains(&ix) {
                 continue;
             }
             if new_rect.overlaps_with_buffer(r, 2) {
@@ -145,7 +149,6 @@ impl crate::engine::Engine {
             }
         }
         if overlap {
-            // Пробуем подальше от текущей позиции.
             if let Some((x, y)) = self.layout.find_free_near(new_w, new_h, old.x, old.y, None, 512) {
                 let adjusted = crate::layout::Rect::new(x, y, new_w, new_h);
                 self.layout.replace(parent, adjusted);
@@ -154,6 +157,10 @@ impl crate::engine::Engine {
                     gx: x,
                     gy: y,
                 });
+                // Попробуем растянуть родителя отдела.
+                if let Some(gp) = self.hier.parent_of(parent) {
+                    self.expand_department_to_fit(gp);
+                }
                 return Some(adjusted);
             }
             return None;
@@ -164,6 +171,10 @@ impl crate::engine::Engine {
             gx: new_x,
             gy: new_y,
         });
+        // Рекурсивно растягиваем родительский отдел.
+        if let Some(gp) = self.hier.parent_of(parent) {
+            self.expand_department_to_fit(gp);
+        }
         Some(new_rect)
     }
 
@@ -172,9 +183,9 @@ impl crate::engine::Engine {
         let children: Vec<ObjectIx> = self.hier.children_of(parent);
         let old = self.layout.rect_of(parent);
         if children.is_empty() {
-            // Никаких детей — оставить минимальный размер.
             return None;
         }
+        let subtree: std::collections::HashSet<ObjectIx> = self.subtree_objects(parent).into_iter().collect();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;
@@ -187,22 +198,20 @@ impl crate::engine::Engine {
             max_y = max_y.max(r.y + r.h);
         }
         let new_y = (min_y - 2).max(0);
-        let new_x = min_x;
-        let new_w = max_x - new_x;
-        let new_h = (max_y - new_y).max(4); // минимум шапка + строка
+        let new_x = (min_x - 1).max(0);
+        let new_w = (max_x + 1) - new_x;
+        let new_h = (max_y + 1) - new_y;
         let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
         if new_rect == old {
             return None;
         }
-        let mut ignore: Vec<ObjectIx> = vec![parent];
-        ignore.extend(children);
         let mut overlap = false;
         for (i, r) in self.layout.rect.iter().enumerate() {
             if !self.layout.placed[i] {
                 continue;
             }
             let ix = ObjectIx(i as u32);
-            if ix == parent || ignore.contains(&ix) {
+            if subtree.contains(&ix) {
                 continue;
             }
             if new_rect.overlaps_with_buffer(r, 2) {
@@ -219,6 +228,9 @@ impl crate::engine::Engine {
             gx: new_x,
             gy: new_y,
         });
+        if let Some(gp) = self.hier.parent_of(parent) {
+            self.shrink_department_to_fit(gp);
+        }
         Some(new_rect)
     }
 }
