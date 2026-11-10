@@ -207,6 +207,13 @@ impl eframe::App for PolygramApp {
             }
         }
 
+        // Обновление статусов API-привязок (раз в ~100 кадров ≈ 2 сек).
+        self.api_bindings_tick = self.api_bindings_tick.saturating_sub(1);
+        if self.api_bindings_tick == 0 {
+            self.api_bindings_tick = 100;
+            self.refresh_api_bindings();
+        }
+
         let published = self.connection.snapshot.clone().unwrap_or_else(|| {
             Arc::new(Published {
                 rev: 0,

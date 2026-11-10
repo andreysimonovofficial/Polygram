@@ -4,6 +4,7 @@
 pub mod http;
 pub mod mcp;
 pub mod chat;
+pub mod sync;
 
 use polygram_core::{
     document::Document, error::EngineError, runtime::EngineRuntime, Command, Event, ObjectView,
@@ -26,6 +27,8 @@ struct ApiServiceInner {
     runtime: EngineRuntime,
     /// Лента чата (общая для всех участников).
     pub chat: ChatService,
+    /// Сервис синхронизации показателей с внешними API.
+    pub sync: sync::SyncService,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
     /// Флаги управления жизненным циклом сервера.
@@ -37,10 +40,13 @@ struct ApiServiceInner {
 impl ApiService {
     pub fn new(engine: polygram_core::Engine) -> Self {
         let runtime = EngineRuntime::spawn(engine);
+        let handle = runtime.handle();
+        let sync = sync::SyncService::new(handle);
         Self {
             inner: Arc::new(ApiServiceInner {
                 runtime,
                 chat: ChatService::new(),
+                sync,
                 auto_save_path: Mutex::new(None),
                 restart_flag: Arc::new(AtomicBool::new(false)),
                 shutdown_flag: Arc::new(AtomicBool::new(false)),
@@ -71,6 +77,11 @@ impl ApiService {
 
     pub fn handle(&self) -> polygram_core::runtime::EngineHandle {
         self.inner.runtime.handle()
+    }
+
+    /// Сервис синхронизации.
+    pub fn sync(&self) -> &sync::SyncService {
+        &self.inner.sync
     }
 
     pub fn snapshot(&self) -> Arc<polygram_core::runtime::Published> {

@@ -11,8 +11,14 @@ pub struct DialogState {
     pub add_metric_kind: MetricKind,
     pub add_metric_value: String,
     pub add_metric_unit: String,
+    pub add_metric_api_connector: String,
+    pub add_metric_api_cell: String,
     pub container_menu_target: Option<(String, Direction)>,
     pub container_menu_edits: Vec<(String, String, String)>,
+    /// API-привязка для текущей записи в меню контейнера (коннектор, ячейка, интервал).
+    pub container_menu_api_connector: String,
+    pub container_menu_api_cell: String,
+    pub container_menu_api_interval: u64,
     /// Объекты, ожидающие подтверждения удаления ("Удалить?").
     pub delete_confirm: Option<Vec<String>>,
 }
@@ -29,8 +35,13 @@ impl DialogState {
             add_metric_kind: MetricKind::Number,
             add_metric_value: String::new(),
             add_metric_unit: String::new(),
+            add_metric_api_connector: String::new(),
+            add_metric_api_cell: String::new(),
             container_menu_target: None,
             container_menu_edits: Vec::new(),
+            container_menu_api_connector: String::new(),
+            container_menu_api_cell: String::new(),
+            container_menu_api_interval: 30,
             delete_confirm: None,
         }
     }
@@ -52,12 +63,17 @@ impl DialogState {
         self.add_metric_name.clear();
         self.add_metric_value.clear();
         self.add_metric_unit.clear();
+        self.add_metric_api_connector.clear();
+        self.add_metric_api_cell.clear();
         self.add_metric_kind = MetricKind::Number;
     }
 
     pub fn reset_container_menu(&mut self) {
         self.container_menu_target = None;
         self.container_menu_edits.clear();
+        self.container_menu_api_connector.clear();
+        self.container_menu_api_cell.clear();
+        self.container_menu_api_interval = 30;
     }
 
     pub fn can_add_metric(&self, object_id: &str, dir: Direction, published: &polygram_core::Published) -> bool {

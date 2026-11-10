@@ -3,6 +3,7 @@ use polygram_core::{Command, Published};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -67,8 +68,12 @@ pub struct PolygramApp {
     pub dialogs: DialogState,
     pub drag: DragState,
     pub right_click: Option<(egui::Pos2, Option<String>)>,
-    /// Выделенные объекты (ID) — групповое выделение через Selection Box и Ctrl+клик.
+    /// Выделенные объекты (ID) — grupповое выделение через Selection Box и Ctrl+клик.
     pub selected_objects: Vec<String>,
+    /// Статусы API-привязок (ключ: "{object_id}:{entry_id}").
+    pub api_bindings: HashMap<String, BindingStatusInfo>,
+    /// Тикер для периодического обновления статусов привязок (каждые ~100 кадров ≈ 2 сек).
+    pub api_bindings_tick: u32,
     pub show_mcp_panel: bool,
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
@@ -77,6 +82,17 @@ pub struct PolygramApp {
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
+}
+
+/// Информация о статусе одной API-привязки для отображения в UI.
+#[derive(Clone, Debug, Default)]
+pub struct BindingStatusInfo {
+    pub ok: bool,
+    pub connector: String,
+    pub cell: String,
+    pub last_value: Option<f64>,
+    pub last_updated: Option<String>,
+    pub error: Option<String>,
 }
 
 impl PolygramApp {
@@ -98,6 +114,8 @@ impl PolygramApp {
             drag: DragState::new(),
             right_click: None,
             selected_objects: Vec::new(),
+            api_bindings: HashMap::new(),
+            api_bindings_tick: 0,
             show_mcp_panel: false,
             show_sidebar: ui_config.show_sidebar,
             show_command_log_panel: ui_config.show_command_log_panel,
@@ -340,5 +358,138 @@ impl PolygramApp {
     pub fn restart_mcp_process(&mut self) {
         self.stop_mcp_process();
         self.start_mcp_process();
+    }
+
+    // ----- API-привязки показателей -----
+
+    pub fn post_binding(&mut self, object_id: String, entry_id: String, connector: String, cell: String, interval_secs: u64) {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        std::thread::spawn(move || {
+            let result = client
+                .post(format!("{api_base}/api/bindings"))
+                .json(&serde_json::json!({
+                    "object_id": object_id,
+                    "entry_id": entry_id,
+                    "connector": connector,
+                    "cell": cell,
+                    "interval_secs": interval_secs,
+                }))
+                .send();
+            match result {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        eprintln!("API-привязка создана: {object_id}:{entry_id} -> {connector}:{cell}");
+                    } else {
+                        eprintln!("Ошибка создания API-привязки: HTTP {}", resp.status());
+                    }
+                }
+                Err(e) => eprintln!("Не удалось создать API-привязку: {e}"),
+            }
+        });
+    }
+
+    pub fn delete_binding(&mut self, object_id: String, entry_id: String) {
+        let id = format!("{object_id}:{entry_id}");
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        std::thread::spawn(move || {
+            let result = client.delete(format!("{api_base}/api/bindings/{id}")).send();
+            match result {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        eprintln!("API-привязка удалена: {id}");
+                    } else {
+                        eprintln!("Ошибка удаления API-привязки: HTTP {}", resp.status());
+                    }
+                }
+                Err(e) => eprintln!("Не удалось удалить API-привязку: {e}"),
+            }
+        });
+    }
+
+    pub fn get_connectors(&self) -> Vec<String> {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        match client.get(format!("{api_base}/api/connectors")).send() {
+            Ok(resp) => {
+                let body: serde_json::Value = resp.json().unwrap_or_default();
+                body.get("connectors")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|c| c.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            Err(_) => Vec::new(),
+        }
+    }
+
+    pub fn get_binding_statuses(&self) -> serde_json::Value {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        match client.get(format!("{api_base}/api/bindings/status")).send() {
+            Ok(resp) => resp.json().unwrap_or_default(),
+            Err(_) => serde_json::json!({}),
+        }
+    }
+
+    /// Обновить кэш статусов API-привязок из сервера.
+    pub fn refresh_api_bindings(&mut self) {
+        let statuses = self.get_binding_statuses();
+        let statuses_map = statuses.get("statuses").and_then(|v| v.as_object());
+        if let Some(map) = statuses_map {
+            for (id, status) in map {
+                let ok = status.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+                let last_value = status.get("last_value").and_then(|v| v.as_f64());
+                let last_updated = status.get("last_updated").and_then(|v| v.as_str()).map(|s| s.to_owned());
+                let error = status.get("error").and_then(|v| v.as_str()).map(|s| s.to_owned());
+                // connector/cell не приходят в статусе, оставим пустые
+                self.api_bindings.insert(id.clone(), BindingStatusInfo {
+                    ok,
+                    connector: String::new(),
+                    cell: String::new(),
+                    last_value,
+                    last_updated,
+                    error,
+                });
+            }
+        }
+    }
+
+    /// Нарисовать иконки API-привязок на строках показателей холста.
+    pub fn paint_api_binding_icons(
+        &self,
+        painter: &egui::Painter,
+    ) {
+        if self.api_bindings.is_empty() {
+            return;
+        }
+        for (hotspot, _dir, entry_name, rect) in &self.canvas.drag_metric_hotspots {
+            let binding_id = format!("{hotspot}:{entry_name}");
+            let info = self.api_bindings.get(&binding_id);
+            if info.is_none() {
+                continue;
+            }
+            let info = info.unwrap();
+            // Рисуем маленькую иконку справа от строки показателя.
+            let icon_x = rect.max.x - 14.0;
+            let icon_y = rect.center().y;
+            let icon_color = if info.ok {
+                egui::Color32::from_rgb(0, 200, 80)
+            } else {
+                egui::Color32::from_rgb(240, 80, 80)
+            };
+            let icon_text = if info.ok { "🔗" } else { "⚠" };
+            painter.text(
+                egui::Pos2::new(icon_x, icon_y),
+                egui::Align2::CENTER_CENTER,
+                icon_text,
+                egui::FontId::new(12.0, egui::FontFamily::Proportional),
+                icon_color,
+            );
+        }
     }
 }

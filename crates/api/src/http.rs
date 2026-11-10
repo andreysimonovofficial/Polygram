@@ -2,7 +2,7 @@
 
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use polygram_core::{Command, types::NodeKind};
@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
+use super::sync::{ApiBinding, ConnectorConfig};
 use super::ApiService;
 use super::chat::CreateChatMessage;
 
@@ -29,6 +30,16 @@ pub struct CreateObject {
     pub author: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct CreateBinding {
+    pub object_id: String,
+    pub entry_id: String,
+    pub connector: String,
+    pub cell: String,
+    #[serde(default)]
+    pub interval_secs: u64,
+}
+
 pub fn router(api: Arc<ApiService>) -> Router {
     Router::new()
         .route("/api/snapshot", get(get_snapshot))
@@ -38,6 +49,12 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/commands", post(post_command))
         .route("/api/commands/batch", post(post_batch))
         .route("/api/chat/messages", get(get_chat_messages).post(post_chat_message))
+        // Коннекторы и привязки API.
+        .route("/api/connectors", get(get_connectors))
+        .route("/api/connectors/:id/config", post(post_connector_config))
+        .route("/api/bindings", get(get_bindings).post(post_binding))
+        .route("/api/bindings/:id", delete(delete_binding))
+        .route("/api/bindings/status", get(get_binding_statuses))
         .with_state(api)
 }
 
@@ -123,4 +140,57 @@ async fn post_batch(State(api): State<Arc<ApiService>>, Json(cmds): Json<Vec<Com
         Ok(results) => Json(json!({"ok": true, "results": results})),
         Err((i, e)) => Json(json!({"ok": false, "error": e.to_string(), "failed_at": i})),
     }
+}
+
+// ----- Коннекторы -----
+
+async fn get_connectors(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let connectors = api.sync().list_connectors();
+    Json(json!({"ok": true, "connectors": connectors}))
+}
+
+async fn post_connector_config(
+    State(api): State<Arc<ApiService>>,
+    Path(id): Path<String>,
+    Json(config): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    api.sync().set_connector_config(ConnectorConfig { id, config });
+    Json(json!({"ok": true}))
+}
+
+// ----- Привязки -----
+
+async fn get_bindings(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let bindings = api.sync().list_bindings();
+    Json(json!({"ok": true, "bindings": bindings}))
+}
+
+async fn post_binding(
+    State(api): State<Arc<ApiService>>,
+    Json(req): Json<CreateBinding>,
+) -> Json<serde_json::Value> {
+    let id = format!("{}:{}", req.object_id, req.entry_id);
+    let binding = ApiBinding {
+        id,
+        object_id: req.object_id,
+        entry_id: req.entry_id,
+        connector: req.connector,
+        cell: req.cell,
+        interval_secs: req.interval_secs,
+    };
+    api.sync().add_binding(binding);
+    Json(json!({"ok": true}))
+}
+
+async fn delete_binding(
+    State(api): State<Arc<ApiService>>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    api.sync().remove_binding(&id);
+    Json(json!({"ok": true}))
+}
+
+async fn get_binding_statuses(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let statuses = api.sync().list_statuses();
+    Json(json!({"ok": true, "statuses": statuses}))
 }

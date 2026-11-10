@@ -630,6 +630,9 @@ pub fn handle_canvas_interaction(
 
     app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid);
 
+    // Иконки API-привязок на строках показателей.
+    app.paint_api_binding_icons(ui.painter());
+
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
@@ -769,10 +772,11 @@ pub fn handle_container_menu_dialog(
 
     let mut delete_entry: Option<String> = None;
     let mut apply_edits = false;
+    let mut apply_api_binding = false;
     let mut close_dialog = false;
 
     egui::Window::new(format!("Показатели — {label} ({object_id})"))
-        .default_size([500.0, 400.0])
+        .default_size([500.0, 450.0])
         .resizable(true)
         .collapsible(false)
         .show(ctx, |ui| {
@@ -826,12 +830,71 @@ pub fn handle_container_menu_dialog(
                         }
                     });
                 }
+
+                ui.separator();
+                ui.heading("Синхронизация с API");
+                ui.separator();
+
+                let direction_text = match dir {
+                    Direction::Request => "запись в: необходимое (required)",
+                    Direction::Output => "запись в: значение (value)",
+                };
+                ui.label(direction_text);
+
+                let connectors = app.get_connectors();
+                let current_connector = &mut app.dialogs.container_menu_api_connector;
+                egui::ComboBox::new("api_connector", "")
+                    .selected_text(if current_connector.is_empty() {
+                        "коннектор".to_owned()
+                    } else {
+                        current_connector.clone()
+                    })
+                    .show_ui(ui, |ui| {
+                        if connectors.is_empty() {
+                            ui.disable();
+                            ui.label("нет коннекторов (API недоступен)");
+                        } else {
+                            for c in &connectors {
+                                if ui.selectable_label(current_connector == c, c).clicked() {
+                                    *current_connector = c.clone();
+                                }
+                            }
+                        }
+                    });
+
+                ui.label("ячейка / метрика:");
+                ui.text_edit_singleline(&mut app.dialogs.container_menu_api_cell);
+
+                ui.label("интервал опроса (сек):");
+                let mut interval_str = app.dialogs.container_menu_api_interval.to_string();
+                if ui.text_edit_singleline(&mut interval_str).lost_focus() {
+                    if let Ok(interval) = interval_str.trim().parse::<u64>() {
+                        app.dialogs.container_menu_api_interval = interval.max(1);
+                    }
+                }
+
+                if !app.dialogs.container_menu_api_connector.is_empty()
+                    && !app.dialogs.container_menu_api_cell.is_empty()
+                {
+                    ui.label(format!(
+                        "привязка: {} → {}",
+                        app.dialogs.container_menu_api_connector,
+                        app.dialogs.container_menu_api_cell
+                    ));
+                }
             });
 
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Применить").clicked() {
                     apply_edits = true;
+                }
+                if !app.dialogs.container_menu_api_connector.is_empty()
+                    && !app.dialogs.container_menu_api_cell.is_empty()
+                {
+                    if ui.button("Привязать к API").clicked() {
+                        apply_api_binding = true;
+                    }
                 }
                 if ui.button("Закрыть").clicked() {
                     close_dialog = true;
@@ -884,6 +947,26 @@ pub fn handle_container_menu_dialog(
         }
     }
 
+    // Применить API-привязку.
+    if apply_api_binding {
+        let connector = app.dialogs.container_menu_api_connector.clone();
+        let cell = app.dialogs.container_menu_api_cell.clone();
+        let interval = app.dialogs.container_menu_api_interval;
+        // Привязываем к первой записи в списке (пользователь может повторить для остальных).
+        if let Some(first_entry) = entries.first() {
+            app.post_binding(
+                object_id.clone(),
+                first_entry.name.clone(),
+                connector,
+                cell,
+                interval,
+            );
+        }
+        app.dialogs.container_menu_api_connector.clear();
+        app.dialogs.container_menu_api_cell.clear();
+        app.dialogs.container_menu_api_interval = 30;
+    }
+
     // Удалить показатель.
     if let Some(entry_name) = delete_entry {
         app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
@@ -895,6 +978,9 @@ pub fn handle_container_menu_dialog(
     if close_dialog {
         app.dialogs.container_menu_target = None;
         app.dialogs.container_menu_edits.clear();
+        app.dialogs.container_menu_api_connector.clear();
+        app.dialogs.container_menu_api_cell.clear();
+        app.dialogs.container_menu_api_interval = 30;
     }
 }
 
@@ -1083,6 +1169,31 @@ pub fn handle_add_metric_dialog(
             }
 
             ui.separator();
+            ui.heading("Синхронизация с API (необязательно)");
+            let connectors = app.get_connectors();
+            let current_connector = &mut app.dialogs.add_metric_api_connector;
+            egui::ComboBox::new("add_api_connector", "")
+                .selected_text(if current_connector.is_empty() {
+                    "коннектор".to_owned()
+                } else {
+                    current_connector.clone()
+                })
+                .show_ui(ui, |ui| {
+                    if connectors.is_empty() {
+                        ui.disable();
+                        ui.label("нет коннекторов (API недоступен)");
+                    } else {
+                        for c in &connectors {
+                            if ui.selectable_label(current_connector == c, c).clicked() {
+                                *current_connector = c.clone();
+                            }
+                        }
+                    }
+                });
+            ui.label("ячейка / метрика:");
+            ui.text_edit_singleline(&mut app.dialogs.add_metric_api_cell);
+
+            ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("OK").clicked() {
                     done = true;
@@ -1098,6 +1209,8 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_name.clear();
         app.dialogs.add_metric_value.clear();
         app.dialogs.add_metric_unit.clear();
+        app.dialogs.add_metric_api_connector.clear();
+        app.dialogs.add_metric_api_cell.clear();
         return;
     }
 
@@ -1112,6 +1225,8 @@ pub fn handle_add_metric_dialog(
         }
 
         let value: f64 = app.dialogs.add_metric_value.trim().parse().unwrap_or(0.0);
+        let object_id_for_cmd = object_id.clone();
+        let name_for_cmd = name.clone();
 
         if let Some(md) = &existing_md {
             // Используем существующий показатель — создаём только запись на объекте.
@@ -1121,11 +1236,11 @@ pub fn handle_add_metric_dialog(
                 Direction::Output => (value, 0.0),
             };
             app.apply_batch(vec![Command::AddMetricEntry {
-                object: object_id,
+                object: object_id_for_cmd.clone(),
                 dir,
-                id: Some(name.clone()),
+                id: Some(name_for_cmd.clone()),
                 metric_def: md.name.clone(),
-                name,
+                name: name_for_cmd.clone(),
                 value: entry_value,
                 required: entry_required,
                 max: None,
@@ -1141,24 +1256,50 @@ pub fn handle_add_metric_dialog(
 
             app.apply_batch(vec![
                 Command::AddMetricDef {
-                    id: Some(name.clone()),
-                    name: name.clone(),
+                    id: Some(name_for_cmd.clone()),
+                    name: name_for_cmd.clone(),
                     kind,
                     unit,
                     api: None,
                 },
                 Command::AddMetricEntry {
-                    object: object_id,
+                    object: object_id_for_cmd.clone(),
                     dir,
-                    id: Some(name.clone()),
-                    metric_def: name.clone(),
-                    name,
+                    id: Some(name_for_cmd.clone()),
+                    metric_def: name_for_cmd.clone(),
+                    name: name_for_cmd.clone(),
                     value: entry_value,
                     required: entry_required,
                     max: None,
                     fact: 0.0,
                 },
             ]);
+
+            // API-привязка нового показателя.
+            if !app.dialogs.add_metric_api_connector.is_empty()
+                && !app.dialogs.add_metric_api_cell.is_empty()
+            {
+                app.post_binding(
+                    object_id_for_cmd.clone(),
+                    name_for_cmd.clone(),
+                    app.dialogs.add_metric_api_connector.clone(),
+                    app.dialogs.add_metric_api_cell.clone(),
+                    30,
+                );
+            }
+        }
+
+        // API-привязка к существующему показателю.
+        if !app.dialogs.add_metric_api_connector.is_empty()
+            && !app.dialogs.add_metric_api_cell.is_empty()
+        {
+            app.post_binding(
+                object_id_for_cmd.clone(),
+                name_for_cmd.clone(),
+                app.dialogs.add_metric_api_connector.clone(),
+                app.dialogs.add_metric_api_cell.clone(),
+                30,
+            );
         }
 
         app.dialogs.add_metric_target = None;
@@ -1166,5 +1307,7 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_kind = MetricKind::Number;
         app.dialogs.add_metric_value.clear();
         app.dialogs.add_metric_unit.clear();
+        app.dialogs.add_metric_api_connector.clear();
+        app.dialogs.add_metric_api_cell.clear();
     }
 }
