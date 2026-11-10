@@ -93,7 +93,6 @@ impl SyncService {
 
     pub fn add_binding(&self, binding: ApiBinding) {
         if let Ok(mut b) = self.bindings.lock() {
-            // Удалить старую привязку на тот же объект+запись, если есть.
             b.retain(|ex| ex.object_id != binding.object_id || ex.entry_id != binding.entry_id);
             b.push(binding.clone());
         }
@@ -120,7 +119,7 @@ impl SyncService {
             ConnectorInfo {
                 id: "google-sheets".to_owned(),
                 name: "Google Таблицы".to_owned(),
-                placeholder: "https://script.google.com/... или Sheet1!A1".to_owned(),
+                placeholder: "https://docs.google.com/spreadsheets/d/... или Sheet1!A1".to_owned(),
             },
             ConnectorInfo {
                 id: "google-analytics".to_owned(),
@@ -330,54 +329,130 @@ fn fetch_value(
     }
 }
 
-/// Google Таблицы: GET на URL Apps Script с параметром cell.
-/// Ответ ожидается в формате: {"value": 123.5} или просто число.
+/// Извлечь ID таблицы из URL Google Таблиц.
+/// Пример: https://docs.google.com/spreadsheets/d/1abc2def3ghi4jkl5mno6pqr7stu8vwx9yz/edit?gid=0
+/// → 1abc2def3ghi4jkl5mno6pqr7stu8vwx9yz
+fn extract_spreadsheet_id(url: &str) -> Option<String> {
+    let parts: Vec<&str> = url.split("/d/").collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let rest = parts[1];
+    let id = rest.split('/').next()?.split('?').next()?;
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_owned())
+    }
+}
+
+/// Путь к бинарнику gws.exe.
+fn gws_binary_path() -> String {
+    // Пробуем найти в PATH, затем по известному ubicación.
+    if std::process::Command::new("gws.exe").arg("--help").output().is_ok() {
+        return "gws.exe".to_owned();
+    }
+    r"C:\Users\andre\AppData\Roaming\npm\node_modules\@googleworkspace\cli\bin\gws.exe"
+        .to_owned()
+}
+
+/// Google Таблицы: читаем значение ячейки через gws CLI (OAuth уже настроен в gws).
 fn fetch_google_sheets(cell: &str, config: Option<&serde_json::Value>) -> Result<f64, String> {
-    let url = config
+    // Извлекаем ID таблицы из URL в конфиге коннектора.
+    let spreadsheet_id = config
         .and_then(|c| c.get("url").and_then(|v| v.as_str()))
-        .unwrap_or(cell);
+        .and_then(extract_spreadsheet_id)
+        .ok_or_else(|| {
+            "не задан URL Google Таблицы в конфиге коннектора google-sheets. Укажите URL таблицы в сайдбаре «Коннекторы» → Google Таблицы".to_owned()
+        })?;
 
-    if url.is_empty() || !url.starts_with("http") {
-        return Err("укажите URL Google Apps Script в конфиге коннектора google-sheets".to_owned());
+    let gws_path = gws_binary_path();
+
+    // Параметры запроса к Google Sheets API.
+    let params = serde_json::json!({
+        "spreadsheetId": spreadsheet_id,
+        "ranges": cell,
+        "fields": "sheets(data(rowData(values(formattedValue,userEnteredValue))))"
+    });
+
+    let output = std::process::Command::new("cmd")
+        .args([
+            "/c",
+            &gws_path,
+            "sheets", "spreadsheets", "get",
+            "--params", &params.to_string(),
+            "--format", "json"
+        ])
+        .output()
+        .map_err(|e| format!("не удалось запустить gws.exe ({gws_path}): {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("gws.exe завершился с ошибкой: stdout={stdout} stderr={stderr}"));
     }
 
-    let client = ureq::AgentBuilder::new()
-        .timeout_read(Duration::from_secs(8))
-        .timeout_write(Duration::from_secs(8))
-        .build();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Отладочный вывод в stderr сервера для диагностики.
+    eprintln!("[gws debug] stdout={stdout}");
+    // Извлекаем JSON-объект из вывода gws (пропуская служебную строку "Using keyring backend").
+    // gws.exe может выводить pretty-printed JSON, поэтому ищем первый { и соответствующий }.
+    let first_brace = stdout.find('{').ok_or_else(|| {
+        format!("не найден JSON в ответе gws.exe. stdout={stdout}")
+    })?;
+    let last_brace = stdout.rfind('}').ok_or_else(|| {
+        format!("не найден закрывающий скобку JSON в ответе gws.exe. stdout={stdout}")
+    })?;
+    let json_str = &stdout[first_brace..=last_brace];
 
-    let response = client.get(url).query("cell", cell).call();
-    let response = response.map_err(|e| format!("ошибка запроса к Google Таблицам: {e}"))?;
+    let resp: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| format!("KILO_DEBUG_MARKER не удалось распарсить ответ gws: {e}"))?;
 
-    let body: String = response
-        .into_string()
-        .map_err(|e| format!("ошибка чтения ответа Google Таблиц: {e}"))?;
+    // Извлекаем значение ячейки из ответа Google Sheets API.
+    let value = resp
+        .get("sheets")
+        .and_then(|s| s.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|s| s.get("data"))
+        .and_then(|d| d.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|d| d.get("rowData"))
+        .and_then(|rd| rd.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|rd| rd.get("values"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.get("userEnteredValue"))
+        .and_then(|uev| uev.get("numberValue"))
+        .and_then(|n| n.as_f64())
+        .or_else(|| {
+            // Fallback на formattedValue.
+            resp.get("sheets")
+                .and_then(|s| s.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|s| s.get("data"))
+                .and_then(|d| d.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|d| d.get("rowData"))
+                .and_then(|rd| rd.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|rd| rd.get("values"))
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|v| v.get("formattedValue"))
+                .and_then(|fv| fv.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+        })
+        .ok_or_else(|| {
+            format!(
+                "ячейка {cell} в таблице {spreadsheet_id} пуста или не содержит числовое значение"
+            )
+        })?;
 
-    // Пробуем распарсить как JSON {"value": ...}
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-        if let Some(v) = json.get("value").and_then(|v| v.as_f64()) {
-            return Ok(v);
-        }
-        if let Some(v) = json.as_f64() {
-            return Ok(v);
-        }
-        if let Some(v) = json.as_bool() {
-            return Ok(if v { 1.0 } else { 0.0 });
-        }
-        if let Some(s) = json.as_str() {
-            return s
-                .parse::<f64>()
-                .map_err(|_| format!("нечисловое значение из Google Таблиц: {s}"));
-        }
-    }
-
-    body.trim()
-        .parse::<f64>()
-        .map_err(|_| format!("не удалось разобрать ответ Google Таблиц: {body}"))
+    Ok(value)
 }
 
 /// Google Analytics: заглушка (OAuth требует отдельной настройки).
-/// Возвращает детерминированное значение на основе хеша cell.
 fn fetch_google_analytics(cell: &str, _config: Option<&serde_json::Value>) -> Result<f64, String> {
     if cell.is_empty() {
         return Err("укажите метрику Google Analytics (например ga4:ga:sessions)".to_owned());
