@@ -51,7 +51,7 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/chat/messages", get(get_chat_messages).post(post_chat_message))
         // Коннекторы и привязки API.
         .route("/api/connectors", get(get_connectors))
-        .route("/api/connectors/:id/config", post(post_connector_config))
+        .route("/api/connectors/:id/config", get(get_connector_config).post(post_connector_config))
         .route("/api/bindings", get(get_bindings).post(post_binding))
         .route("/api/bindings/:id", delete(delete_binding))
         .route("/api/bindings/status", get(get_binding_statuses))
@@ -156,6 +156,17 @@ async fn post_connector_config(
 ) -> Json<serde_json::Value> {
     api.sync().set_connector_config(ConnectorConfig { id, config });
     Json(json!({"ok": true}))
+}
+
+async fn get_connector_config(
+    State(api): State<Arc<ApiService>>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    let config = api
+        .sync()
+        .get_connector_config(&id)
+        .unwrap_or(serde_json::json!({}));
+    Json(json!({"ok": true, "id": id, "config": config}))
 }
 
 // ----- Привязки -----

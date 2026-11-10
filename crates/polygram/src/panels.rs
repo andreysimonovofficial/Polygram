@@ -70,6 +70,18 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                             }
                         });
 
+                        // Показать/скрыть сайдбар Коннекторы.
+                        ui.horizontal(|ui| {
+                            let label = if app.show_connectors_panel {
+                                "Скрыть коннекторы"
+                            } else {
+                                "Показать коннекторы"
+                            };
+                            if ui.button(label).clicked() {
+                                app.show_connectors_panel = !app.show_connectors_panel;
+                            }
+                        });
+
                         ui.separator();
 
                         // Подключение к API.
@@ -267,4 +279,221 @@ pub fn chat_panel(app: &mut PolygramApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             crate::app::chat::render(app, ui);
         });
+}
+
+/// Скрываемый сайдбар «Коннекторы»: настройка каждого источника данных.
+pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
+    if !app.show_connectors_panel {
+        return;
+    }
+
+    egui::SidePanel::right("connectors_panel")
+        .default_width(420.0)
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.heading("Коннекторы");
+            ui.separator();
+
+            let connectors = app.get_connectors();
+            if connectors.is_empty() {
+                ui.label("Коннекторы не найдены (проверьте подключение к API).");
+                return;
+            }
+
+            egui::ScrollArea::vertical()
+                .id_source("connectors_scroll")
+                .show(ui, |ui| {
+                    for connector_id in &connectors {
+                        let config = app.get_connector_config(connector_id);
+                        let config_value = config
+                            .as_ref()
+                            .and_then(|c| c.as_object())
+                            .cloned()
+                            .unwrap_or_default();
+
+                        egui::CollapsingHeader::new(format!("{}", connector_id))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                ui.separator();
+
+                                match connector_id.as_str() {
+                                    "google-sheets" => {
+                                        render_google_sheets_config(ui, app, &config_value);
+                                    }
+                                    "google-analytics" => {
+                                        render_google_analytics_config(ui, app, &config_value);
+                                    }
+                                    "static" => {
+                                        render_static_config(ui, &config_value);
+                                    }
+                                    _ => {
+                                        ui.label("Настройки не определены для этого коннектора.");
+                                    }
+                                }
+                            });
+                    }
+                });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Закрыть").clicked() {
+                    app.show_connectors_panel = false;
+                }
+            });
+        });
+}
+
+/// Конфигурация Google Таблиц: URL Apps Script + инструкция.
+fn render_google_sheets_config(ui: &mut egui::Ui, app: &PolygramApp, config: &serde_json::Map<String, serde_json::Value>) {
+    let mut url = config
+        .get("url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_owned();
+    let mut interval = config
+        .get("intervalSecs")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30);
+
+    ui.label("URL Apps Script:");
+    let url_response = ui.text_edit_singleline(&mut url);
+    if url_response.lost_focus() {
+        let mut new_config = serde_json::Map::new();
+        new_config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
+        new_config.insert(
+            "intervalSecs".to_owned(),
+            serde_json::Value::Number(interval.into()),
+        );
+        app.set_connector_config("google-sheets", serde_json::Value::Object(new_config));
+    }
+
+    ui.horizontal(|ui| {
+        ui.label("Интервал опроса (сек):");
+        let mut interval_str = interval.to_string();
+        if ui.text_edit_singleline(&mut interval_str).lost_focus() {
+            if let Ok(v) = interval_str.trim().parse::<u64>() {
+                interval = v.max(1);
+                let mut new_config = serde_json::Map::new();
+                new_config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
+                new_config.insert(
+                    "intervalSecs".to_owned(),
+                    serde_json::Value::Number(interval.into()),
+                );
+                app.set_connector_config("google-sheets", serde_json::Value::Object(new_config));
+            }
+        }
+    });
+
+    ui.separator();
+    ui.heading("App Script для Google Таблиц");
+    ui.label("Скопируйте код ниже в редактор Apps Script (https://script.google.com):");
+
+    const APPS_SCRIPT: &str = r#"function doGet(e) {
+  var cell = e.parameter.cell;
+  if (!cell) return ContentService.createTextOutput("no cell");
+  var sheet = SpreadsheetApp.openByUrl(PropertiesService.getScriptProperties().getProperty("SHEET_URL"));
+  var range = sheet.getRange(cell);
+  var value = range.getValue();
+  if (typeof value === "boolean") value = value ? 1 : 0;
+  return ContentService.createTextOutput(JSON.stringify({value: value}));
+}"#;
+
+    ui.add(
+        egui::TextEdit::multiline(&mut APPS_SCRIPT.to_owned())
+            .code_editor()
+            .desired_rows(12)
+            .interactive(false),
+    );
+
+    if ui.button("Копировать App Script").clicked() {
+        ui.ctx().copy_text(APPS_SCRIPT.to_owned());
+    }
+
+    ui.separator();
+    ui.heading("Инструкция");
+    ui.label(
+        "1. Откройте https://script.google.com и создайте новый проект.\n\
+         2. Вставьте код App Script выше.\n\
+         3. Добавьте свойство скрипта SHEET_URL со ссылкой на вашу Google Таблицу.\n\
+         4. Разверните как Веб-приложение (Deploy → New deployment → Web app).\n\
+         5. Скопируйте URL веб-приложения в поле «URL Apps Script» выше.\n\
+         6. В привязке показателя укажите ячейку, например: Sheet1!A1",
+    );
+}
+
+/// Конфигурация Google Analytics: список метрик с копированием.
+fn render_google_analytics_config(ui: &mut egui::Ui, app: &PolygramApp, config: &serde_json::Map<String, serde_json::Value>) {
+    let mut property_id = config
+        .get("propertyId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_owned();
+    let mut channel_id = config
+        .get("channelId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("MINE")
+        .to_owned();
+    let mut interval = config
+        .get("intervalSecs")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(300);
+
+    ui.label("Property ID (GA4):");
+    let pid_response = ui.text_edit_singleline(&mut property_id);
+    if pid_response.lost_focus() {
+        let mut new_config = serde_json::Map::new();
+        new_config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
+        new_config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
+        new_config.insert(
+            "intervalSecs".to_owned(),
+            serde_json::Value::Number(interval.into()),
+        );
+        app.set_connector_config("google-analytics", serde_json::Value::Object(new_config));
+    }
+
+    ui.label("Channel ID:");
+    ui.text_edit_singleline(&mut channel_id);
+
+    ui.horizontal(|ui| {
+        ui.label("Интервал опроса (сек):");
+        let mut interval_str = interval.to_string();
+        if ui.text_edit_singleline(&mut interval_str).lost_focus() {
+            if let Ok(v) = interval_str.trim().parse::<u64>() {
+                interval = v.max(30);
+                let mut new_config = serde_json::Map::new();
+                new_config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
+                new_config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
+                new_config.insert(
+                    "intervalSecs".to_owned(),
+                    serde_json::Value::Number(interval.into()),
+                );
+                app.set_connector_config("google-analytics", serde_json::Value::Object(new_config));
+            }
+        }
+    });
+
+    ui.separator();
+    ui.heading("Доступные метрики (GA4)");
+    ui.label("Нажмите на метрику, чтобы скопировать её в буфер обмена:");
+
+    let metrics = app.get_ga_metrics();
+    egui::Grid::new("ga_metrics_grid").show(ui, |ui| {
+        for (i, metric) in metrics.iter().enumerate() {
+            if ui.button(metric).clicked() {
+                ui.ctx().copy_text(metric.clone());
+            }
+            if (i + 1) % 3 == 0 {
+                ui.end_row();
+            }
+        }
+    });
+
+    ui.separator();
+    ui.label("Формат привязки в показателе: ga4:ga:sessions|2024-01-01|today");
+}
+
+/// Конфигурация константы (для теста).
+fn render_static_config(ui: &mut egui::Ui, _config: &serde_json::Map<String, serde_json::Value>) {
+    ui.label("Константа — вводите любое число в поле «ячейка / метрика» при привязке показателя.");
+    ui.label("Пример: 42");
 }

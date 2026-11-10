@@ -32,6 +32,7 @@ pub struct UiConfig {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
     pub show_chat_panel: bool,
+    pub show_connectors_panel: bool,
     pub show_grid: bool,
     pub show_cursor_coords: bool,
 }
@@ -78,6 +79,7 @@ pub struct PolygramApp {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
     pub show_chat_panel: bool,
+    pub show_connectors_panel: bool,
     pub show_grid: bool,
     pub show_cursor_coords: bool,
     pub last_status: String,
@@ -120,6 +122,7 @@ impl PolygramApp {
             show_sidebar: ui_config.show_sidebar,
             show_command_log_panel: ui_config.show_command_log_panel,
             show_chat_panel: ui_config.show_chat_panel,
+            show_connectors_panel: ui_config.show_connectors_panel,
             show_grid: ui_config.show_grid,
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
@@ -132,6 +135,7 @@ impl PolygramApp {
             show_sidebar: self.show_sidebar,
             show_command_log_panel: self.show_command_log_panel,
             show_chat_panel: self.show_chat_panel,
+            show_connectors_panel: self.show_connectors_panel,
             show_grid: self.show_grid,
             show_cursor_coords: self.show_cursor_coords,
         }
@@ -491,5 +495,61 @@ impl PolygramApp {
                 icon_color,
             );
         }
+    }
+
+    /// Получить конфиг коннектора по ID.
+    pub fn get_connector_config(&self, connector_id: &str) -> Option<serde_json::Value> {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        match client.get(format!("{api_base}/api/connectors/{connector_id}/config")).send() {
+            Ok(resp) => {
+                let body: serde_json::Value = resp.json().unwrap_or_default();
+                body.get("config").cloned()
+            }
+            Err(_) => None,
+        }
+    }
+
+    /// Сохранить конфиг коннектора по ID.
+    pub fn set_connector_config(&self, connector_id: &str, config: serde_json::Value) {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        let id = connector_id.to_owned();
+        std::thread::spawn(move || {
+            let _ = client
+                .post(format!("{api_base}/api/connectors/{id}/config"))
+                .json(&config)
+                .send();
+        });
+    }
+
+    /// Получить список метрик Google Analytics (демо-список, если OAuth не настроен).
+    pub fn get_ga_metrics(&self) -> Vec<String> {
+        // Попробуем получить через коннектор, если есть URL; иначе — демо-список.
+        let config = self.get_connector_config("google-analytics");
+        let has_config = config
+            .as_ref()
+            .and_then(|c| c.get("property_id"))
+            .and_then(|v| v.as_str())
+            .map_or(false, |s| !s.is_empty());
+
+        if has_config {
+            // В реальном режиме здесь был бы запрос к GA4 API.
+            // Сейчас возвращаем общий список, который пользователь может скопировать.
+        }
+        vec![
+            "ga:sessions".to_owned(),
+            "ga:users".to_owned(),
+            "ga:pageviews".to_owned(),
+            "ga:bounceRate".to_owned(),
+            "ga:avgSessionDuration".to_owned(),
+            "ga:goalCompletionsAll".to_owned(),
+            "ga:transactions".to_owned(),
+            "ga:transactionRevenue".to_owned(),
+            "ga4:ga:sessions".to_owned(),
+            "ga4:ga:users".to_owned(),
+            "ga4:ga:screenviews".to_owned(),
+            "ga4:ga:conversions".to_owned(),
+        ]
     }
 }

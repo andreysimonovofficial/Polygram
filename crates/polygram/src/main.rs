@@ -254,6 +254,10 @@ impl eframe::App for PolygramApp {
 
         panels::connection_panel(self, ctx);
 
+        if self.show_connectors_panel {
+            panels::connectors_panel(self, ctx);
+        }
+
         if self.show_chat_panel {
             panels::chat_panel(self, ctx);
         }
