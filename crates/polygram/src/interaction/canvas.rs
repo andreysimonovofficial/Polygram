@@ -201,7 +201,8 @@ pub fn handle_canvas_interaction(
             let drag_object = app.drag.drag_object.take();
             let drag_start_cell = app.drag.drag_start_cell.take();
             app.drag.drag_start_screen = None;
-            app.drag.drag_department = None;
+            // drag_department не сбрасываем здесь: если объект отпущен внутри отдела,
+            // оставим его, чтобы отдел продолжал растягиваться под объект до подтверждения сервера.
             if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
                 let target = app.drag.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
                 let pos_changed = (target.0, target.1) != (start_x, start_y);
@@ -254,12 +255,15 @@ pub fn handle_canvas_interaction(
                             app.selected_objects = vec![object_id.clone()];
                         }
                     }
-                } else if pos_changed {
-                    app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
-                    app.apply_cmd(Command::MoveObject {
-                        object: object_id,
-                        at: [target.0, target.1],
-                    });
+                } else {
+                    app.drag.drag_department = None;
+                    if pos_changed {
+                        app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
+                        app.apply_cmd(Command::MoveObject {
+                            object: object_id,
+                            at: [target.0, target.1],
+                        });
+                    }
                 }
                 // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
                 // иначе будет виден скачок на старую позицию.

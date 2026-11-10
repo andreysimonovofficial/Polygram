@@ -280,6 +280,7 @@ impl PolygramApp {
                         self.drag.predicted_positions.remove(obj_id);
                         self.drag.pending_move = None;
                         self.drag.pending_move_age = 0;
+                        self.drag.drag_department = None;
                     }
                 }
             }
@@ -296,10 +297,8 @@ impl PolygramApp {
         }
         // Растянуть отдел (и родительские отделы по цепочке) под перетаскиваемый
         // объект «на лету», пока перетаскивание ещё не подтверждено сервером.
-        if let (Some(dragged_id), Some(dept_id)) = (&self.drag.drag_object, &self.drag.drag_department) {
-            if dragged_id != dept_id {
-                Self::stretch_department_for_drag(&mut geometry, dept_id);
-            }
+        if let Some(dept_id) = &self.drag.drag_department {
+            Self::stretch_department_for_drag(&mut geometry, dept_id);
         }
         geometry
     }
