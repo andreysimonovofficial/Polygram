@@ -165,8 +165,14 @@ pub fn handle_container_menu_dialog(
                             } else {
                                 egui::Color32::from_rgb(240, 80, 80)
                             };
-                            let icon_text = if info.ok { "🔗" } else { "⚠" };
-                            ui.colored_label(icon_color, icon_text);
+                            let icon_text = if info.ok { "🌐" } else { "⚠" };
+                            // Кнопка иконки привязки: при клике на ⚠ копируем текст ошибки.
+                            let btn = egui::Button::new(icon_text);
+                            if ui.add(btn).clicked() {
+                                if let Some(e) = &info.error {
+                                    ctx.copy_text(e.clone());
+                                }
+                            }
                             if let Some(ts) = &info.last_updated {
                                 ui.label(ts);
                             }

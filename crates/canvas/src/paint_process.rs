@@ -125,7 +125,7 @@ fn paint_metric_row(
         } else {
             egui::Color32::from_rgb(240, 80, 80)
         };
-        let icon_text = if b.ok { "🔗" } else { "⚠" };
+        let icon_text = if b.ok { "🌐" } else { "⚠" };
         let name_w_est = entry.name.len() as f32 * 7.0 * zoom;
         let icon_x = rect.min.x + 16.0 * zoom + name_w_est + 8.0 * zoom;
         painter.text(
@@ -148,8 +148,8 @@ fn paint_metric_row(
         if let Some(e) = &b.error {
             if !b.ok {
                 let icon_rect = Rect::from_min_size(
-                    Pos2::new(icon_x, cy - 10.0 * zoom),
-                    Vec2::new(20.0 * zoom, 20.0 * zoom),
+                    Pos2::new(icon_x - 2.0 * zoom, cy - 12.0 * zoom),
+                    Vec2::new(28.0 * zoom, 24.0 * zoom),
                 );
                 error_hotspots.push((icon_rect, e.clone()));
             }
