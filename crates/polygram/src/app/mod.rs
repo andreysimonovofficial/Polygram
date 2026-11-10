@@ -259,13 +259,10 @@ impl PolygramApp {
                 self.drag.pending_move = None;
                 self.drag.pending_move_age = 0;
             } else {
-                // Команда, вероятно, отклонена — увеличиваем возраст.
+                // Команда ещё не подтверждена сервером — сохраняем клиентскую
+                // позицию («на месте отпускания»), чтобы объект не перепрыгивал
+                // назад к стартовой точке, пока команда не дойдёт до сервера.
                 self.drag.pending_move_age += 1;
-                if self.drag.pending_move_age > 5 {
-                    self.drag.predicted_positions.remove(obj_id);
-                    self.drag.pending_move = None;
-                    self.drag.pending_move_age = 0;
-                }
             }
         }
 
