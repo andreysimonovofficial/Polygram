@@ -1,12 +1,38 @@
 use polygram_core::{Command, types::Direction, EngineHandle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
 use std::thread;
 use std::time::{Duration, Instant};
+
+const CONNECTORS_DIR_NAME: &str = "connectors";
+
+/// Описание коннектора из файла connectors/{id}.json.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConnectorFile {
+    pub id: String,
+    pub name: String,
+    pub placeholder: String,
+    #[serde(default)]
+    pub config: serde_json::Value,
+    #[serde(default)]
+    pub cache: serde_json::Value,
+}
+
+/// Конфигурация коннектора (хранится в файле connectors/{id}.json).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConnectorConfig {
+    pub id: String,
+    #[serde(default)]
+    pub config: serde_json::Value,
+    #[serde(default)]
+    pub cache: serde_json::Value,
+}
 
 /// Привязка показателя объекта к внешнему источнику.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -39,14 +65,6 @@ pub struct BindingStatus {
     pub error: Option<String>,
 }
 
-/// Конфигурация коннектора (хранится глобально на уровне API).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConnectorConfig {
-    pub id: String,
-    #[serde(default)]
-    pub config: serde_json::Value,
-}
-
 /// Сервис синхронизации показателей с внешними API.
 /// Ведёт фоновый поток опроса привязок и применяет значения через SetValue / SetRequired.
 pub struct SyncService {
@@ -56,18 +74,45 @@ pub struct SyncService {
     engine_handle: EngineHandle,
     stop: Arc<AtomicBool>,
     worker: Mutex<Option<thread::JoinHandle<()>>>,
+    connectors_dir: PathBuf,
 }
 
 impl SyncService {
     pub fn new(engine_handle: EngineHandle) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
+        let connectors_dir = Self::connectors_dir();
+        let _ = fs::create_dir_all(&connectors_dir);
+
+        let mut config_vec: Vec<ConnectorConfig> = Vec::new();
+        let _ = Self::ensure_default_connectors(&connectors_dir);
+        if let Ok(entries) = fs::read_dir(&connectors_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(mut cf) = serde_json::from_str::<ConnectorFile>(&content) {
+                            if cf.id.is_empty() {
+                                cf.id = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_owned();
+                            }
+                            config_vec.push(ConnectorConfig {
+                                id: cf.id.clone(),
+                                config: cf.config,
+                                cache: cf.cache,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         let svc = Self {
             bindings: Arc::new(Mutex::new(Vec::new())),
-            connector_configs: Arc::new(Mutex::new(Vec::new())),
+            connector_configs: Arc::new(Mutex::new(config_vec)),
             statuses: Arc::new(Mutex::new(HashMap::new())),
             engine_handle,
             stop: Arc::clone(&stop),
             worker: Mutex::new(None),
+            connectors_dir,
         };
 
         let bindings = Arc::clone(&svc.bindings);
@@ -75,16 +120,61 @@ impl SyncService {
         let statuses = Arc::clone(&svc.statuses);
         let handle = svc.engine_handle.clone();
         let worker_stop = Arc::clone(&stop);
+        let dir = svc.connectors_dir.clone();
 
         let worker = thread::Builder::new()
             .name("polygram-api-sync".to_owned())
             .spawn(move || {
-                run_sync_loop(bindings, configs, statuses, handle, worker_stop);
+                run_sync_loop(bindings, configs, statuses, handle, worker_stop, dir);
             })
             .expect("sync worker thread must start");
 
         svc.worker.lock().expect("worker mutex").replace(worker);
         svc
+    }
+
+    fn connectors_dir() -> PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+            .join(CONNECTORS_DIR_NAME)
+    }
+
+    /// Создаёт файлы коннекторов по умолчанию, если папка пуста.
+    fn ensure_default_connectors(dir: &PathBuf) -> std::io::Result<()> {
+        let count = fs::read_dir(dir)?.count();
+        if count > 0 {
+            return Ok(());
+        }
+        let defaults = vec![
+            ConnectorFile {
+                id: "google-sheets".to_owned(),
+                name: "Google Таблицы".to_owned(),
+                placeholder: "https://docs.google.com/spreadsheets/d/... или Sheet1!A1".to_owned(),
+                config: serde_json::json!({"url": "", "intervalSecs": 30}),
+                cache: serde_json::json!({}),
+            },
+            ConnectorFile {
+                id: "google-analytics".to_owned(),
+                name: "Google Analytics".to_owned(),
+                placeholder: "ga4:ga:sessions|2024-01-01|today".to_owned(),
+                config: serde_json::json!({"propertyId": "", "channelId": "MINE", "intervalSecs": 300}),
+                cache: serde_json::json!({}),
+            },
+            ConnectorFile {
+                id: "static".to_owned(),
+                name: "Константа (тест)".to_owned(),
+                placeholder: "42".to_owned(),
+                config: serde_json::json!({"intervalSecs": 30}),
+                cache: serde_json::json!({}),
+            },
+        ];
+        for cf in &defaults {
+            let path = dir.join(format!("{}.json", cf.id));
+            let _ = fs::write(&path, serde_json::to_string_pretty(cf).unwrap_or_default());
+        }
+        Ok(())
     }
 
     pub fn list_bindings(&self) -> Vec<ApiBinding> {
@@ -115,37 +205,113 @@ impl SyncService {
     }
 
     pub fn list_connectors(&self) -> Vec<ConnectorInfo> {
-        vec![
-            ConnectorInfo {
-                id: "google-sheets".to_owned(),
-                name: "Google Таблицы".to_owned(),
-                placeholder: "https://docs.google.com/spreadsheets/d/... или Sheet1!A1".to_owned(),
-            },
-            ConnectorInfo {
-                id: "google-analytics".to_owned(),
-                name: "Google Analytics".to_owned(),
-                placeholder: "ga4:ga:sessions|2024-01-01|today".to_owned(),
-            },
-            ConnectorInfo {
+        let mut result: Vec<ConnectorInfo> = Vec::new();
+        if let Ok(entries) = fs::read_dir(&self.connectors_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(cf) = serde_json::from_str::<ConnectorFile>(&content) {
+                            let id = if cf.id.is_empty() {
+                                path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_owned()
+                            } else {
+                                cf.id
+                            };
+                            result.push(ConnectorInfo {
+                                id,
+                                name: cf.name,
+                                placeholder: cf.placeholder,
+                            });
+                            continue;
+                        }
+                    }
+                    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_owned();
+                    result.push(ConnectorInfo {
+                        id: id.clone(),
+                        name: id.clone(),
+                        placeholder: String::new(),
+                    });
+                }
+            }
+        }
+        if result.is_empty() {
+            result.push(ConnectorInfo {
                 id: "static".to_owned(),
                 name: "Константа (тест)".to_owned(),
                 placeholder: "42".to_owned(),
-            },
-        ]
+            });
+        }
+        result
     }
 
     pub fn set_connector_config(&self, config: ConnectorConfig) {
+        // Пишем в файл connectors/{id}.json, сохраняя существующий кэш.
+        let path = self.connectors_dir.join(format!("{}.json", config.id));
+        let mut cf = if let Ok(content) = fs::read_to_string(&path) {
+            serde_json::from_str::<ConnectorFile>(&content).unwrap_or(ConnectorFile {
+                id: config.id.clone(),
+                ..Default::default()
+            })
+        } else {
+            ConnectorFile {
+                id: config.id.clone(),
+                ..Default::default()
+            }
+        };
+        cf.id = config.id.clone();
+        let config_value = config.config.clone();
+        cf.config = config_value.clone();
+        let _ = fs::write(&path, serde_json::to_string_pretty(&cf).unwrap_or_default());
+
+        // Обновляем in-memory кэш, используемый потоком синхронизации.
         if let Ok(mut cfgs) = self.connector_configs.lock() {
             cfgs.retain(|c| c.id != config.id);
-            cfgs.push(config);
+            cfgs.push(ConnectorConfig {
+                id: config.id.clone(),
+                config: config_value,
+                cache: cf.cache,
+            });
         }
     }
 
     pub fn get_connector_config(&self, id: &str) -> Option<serde_json::Value> {
-        self.connector_configs
-            .lock()
-            .ok()
-            .and_then(|cfgs| cfgs.iter().find(|c| c.id == id).map(|c| c.config.clone()))
+        // Сначала in-memory кэш потока синхронизации.
+        if let Ok(cfgs) = self.connector_configs.lock() {
+            if let Some(c) = cfgs.iter().find(|c| c.id == id) {
+                return Some(c.config.clone());
+            }
+        }
+        // Fallback: читаем файл напрямую.
+        let path = self.connectors_dir.join(format!("{}.json", id));
+        fs::read_to_string(&path).ok().and_then(|content| {
+            serde_json::from_str::<ConnectorFile>(&content).ok().map(|cf| cf.config)
+        })
+    }
+
+    /// Обновить кэш значения по ячейке в файле коннектора.
+    pub fn update_connector_cache(&self, id: &str, cell: &str, value: f64) {
+        let path = self.connectors_dir.join(format!("{}.json", id));
+        let mut cf = if let Ok(content) = fs::read_to_string(&path) {
+            serde_json::from_str::<ConnectorFile>(&content).unwrap_or(ConnectorFile {
+                id: id.to_owned(),
+                ..Default::default()
+            })
+        } else {
+            ConnectorFile {
+                id: id.to_owned(),
+                ..Default::default()
+            }
+        };
+        cf.id = id.to_owned();
+        let mut cache = cf.cache.as_object().cloned().unwrap_or_default();
+        cache.insert(cell.to_owned(), serde_json::Value::from(value));
+        cf.cache = serde_json::Value::Object(cache);
+        let _ = fs::write(&path, serde_json::to_string_pretty(&cf).unwrap_or_default());
+        if let Ok(mut cfgs) = self.connector_configs.lock() {
+            if let Some(c) = cfgs.iter_mut().find(|c| c.id == id) {
+                c.cache = cf.cache.clone();
+            }
+        }
     }
 }
 
@@ -165,6 +331,7 @@ fn run_sync_loop(
     statuses: Arc<Mutex<HashMap<String, BindingStatus>>>,
     engine_handle: EngineHandle,
     stop: Arc<AtomicBool>,
+    connectors_dir: PathBuf,
 ) {
     let mut last_poll: HashMap<String, Instant> = HashMap::new();
 
@@ -281,6 +448,28 @@ fn run_sync_loop(
                                     },
                                 );
                             });
+                            // Персистим кэш значения в файл коннектора.
+                            let cache_path = connectors_dir.join(format!("{connector}.json"));
+                            if let Ok(content) = fs::read_to_string(&cache_path) {
+                                if let Ok(mut cf) =
+                                    serde_json::from_str::<ConnectorFile>(&content)
+                                {
+                                    let mut cache = cf
+                                        .cache
+                                        .as_object()
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    cache.insert(
+                                        cell.clone(),
+                                        serde_json::Value::from(value),
+                                    );
+                                    cf.cache = serde_json::Value::Object(cache);
+                                    let _ = fs::write(
+                                        &cache_path,
+                                        serde_json::to_string_pretty(&cf).unwrap_or_default(),
+                                    );
+                                }
+                            }
                         }
                         Err(e) => {
                             let _ = statuses.lock().map(|mut s| {

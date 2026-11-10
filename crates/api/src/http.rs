@@ -154,7 +154,11 @@ async fn post_connector_config(
     Path(id): Path<String>,
     Json(config): Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
-    api.sync().set_connector_config(ConnectorConfig { id, config });
+    api.sync().set_connector_config(ConnectorConfig {
+        id,
+        config,
+        cache: serde_json::json!({}),
+    });
     Json(json!({"ok": true}))
 }
 

@@ -84,10 +84,22 @@ pub struct PolygramApp {
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
-    /// Локальный кэш конфигов коннекторов (чтобы URL не исчезал при перерисовке).
-    pub connector_configs: HashMap<String, serde_json::Value>,
+    /// Локальный кэш файлов коннекторов из папки connectors/.
+    pub connectors: HashMap<String, ConnectorFile>,
     /// Статус подключения каждого коннектора.
     pub connector_status: HashMap<String, ConnectorStatusInfo>,
+}
+
+/// Описание коннектора из файла connectors/{id}.json.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConnectorFile {
+    pub id: String,
+    pub name: String,
+    pub placeholder: String,
+    #[serde(default)]
+    pub config: serde_json::Value,
+    #[serde(default)]
+    pub cache: serde_json::Value,
 }
 
 /// Статус подключения коннектора.
@@ -139,7 +151,7 @@ impl PolygramApp {
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,
-            connector_configs: Self::load_connector_configs(),
+            connectors: Self::load_connectors(),
             connector_status: HashMap::new(),
         }
     }
@@ -427,22 +439,22 @@ impl PolygramApp {
     }
 
     pub fn get_connectors(&self) -> Vec<String> {
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        match client.get(format!("{api_base}/api/connectors")).send() {
-            Ok(resp) => {
-                let body: serde_json::Value = resp.json().unwrap_or_default();
-                body.get("connectors")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|c| c.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()))
-                            .collect()
-                    })
-                    .unwrap_or_default()
+        // Источник истины — файлы в папке connectors/. Пересканируем при каждом вызове,
+        // чтобы только что положительный файл коннектора подхватился без перезапуска.
+        let mut ids: Vec<String> = Vec::new();
+        let dir = Self::connectors_dir();
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "json") {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        ids.push(stem.to_owned());
+                    }
+                }
             }
-            Err(_) => Vec::new(),
         }
+        ids.sort();
+        ids
     }
 
     pub fn get_binding_statuses(&self) -> serde_json::Value {
@@ -527,37 +539,47 @@ impl PolygramApp {
         }
     }
 
-    /// Получить конфиг коннектора по ID (с сервера + локальный кэш).
+    /// Получить конфиг коннектора по ID (из файла + кэш + сервер).
     pub fn get_connector_config(&mut self, connector_id: &str) -> Option<serde_json::Value> {
-        // Сначала пробуем сервер.
+        // Сначала локальный кэш (загружен из файла при старте).
+        if let Some(cf) = self.connectors.get(connector_id) {
+            return Some(cf.config.clone());
+        }
+        // Затем пробуем сервер.
         let api_base = self.connection.api_base.clone();
         let client = self.connection.api_client.clone();
         let id = connector_id.to_owned();
         if let Ok(resp) = client.get(format!("{api_base}/api/connectors/{id}/config")).send() {
             if let Ok(body) = resp.json::<serde_json::Value>() {
                 if let Some(config) = body.get("config").cloned() {
-                    self.connector_configs.insert(connector_id.to_owned(), config.clone());
-                    let _ = self.save_connector_configs();
                     return Some(config);
                 }
             }
         }
-        // Fallback на локальный кэш.
-        self.connector_configs.get(connector_id).cloned()
+        None
     }
 
-    /// Обновить все конфиги коннекторов с сервера.
-    pub fn refresh_connector_configs(&mut self, connector_ids: &[String]) {
-        for id in connector_ids {
-            let _ = self.get_connector_config(id);
-        }
+    /// Обновить все конфиги коннекторов с сервера (поддержка совместимости).
+    pub fn refresh_connector_configs(&mut self, _connector_ids: &[String]) {
+        // Конфиги загружаются из файлов при старте; сервер синхронизируется при записи.
     }
 
-    /// Сохранить конфиг коннектора по ID (локально + на сервер + в файл).
+    /// Сохранить конфиг коннектора по ID (в файл + на сервер + в кэш).
     pub fn set_connector_config(&mut self, connector_id: &str, config: serde_json::Value) {
-        self.connector_configs
-            .insert(connector_id.to_owned(), config.clone());
-        let _ = self.save_connector_configs();
+        let mut cf = self
+            .connectors
+            .get(connector_id)
+            .cloned()
+            .unwrap_or(ConnectorFile {
+                id: connector_id.to_owned(),
+                ..Default::default()
+            });
+        cf.id = connector_id.to_owned();
+        cf.config = config.clone();
+        let _ = Self::save_connector_file(&cf);
+        self.connectors.insert(connector_id.to_owned(), cf);
+
+        // Синхронизируем на API-сервер (если запущен).
         let api_base = self.connection.api_base.clone();
         let client = self.connection.api_client.clone();
         let id = connector_id.to_owned();
@@ -589,8 +611,8 @@ impl PolygramApp {
 
     /// Проверить подключение к Apps Script URL (для Google Таблиц).
     pub fn check_connector_status(&mut self, connector_id: &str) {
-        let config = match self.connector_configs.get(connector_id) {
-            Some(c) => c.clone(),
+        let config = match self.connectors.get(connector_id) {
+            Some(c) => c.config.clone(),
             None => return,
         };
         let url = match connector_id {
@@ -635,27 +657,47 @@ impl PolygramApp {
         );
     }
 
-    // ----- Персистентность конфигов коннекторов -----
+    // ----- Персистентность коннекторов (папка connectors/) -----
 
-    fn connector_configs_path() -> std::path::PathBuf {
+    fn connectors_dir() -> std::path::PathBuf {
         std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-            .join("polygram_connector_configs.json")
+            .join("connectors")
     }
 
-    fn load_connector_configs() -> HashMap<String, serde_json::Value> {
-        let path = Self::connector_configs_path();
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-            Err(_) => HashMap::new(),
+    fn load_connectors() -> HashMap<String, ConnectorFile> {
+        let mut map: HashMap<String, ConnectorFile> = HashMap::new();
+        let dir = Self::connectors_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "json") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(mut cf) = serde_json::from_str::<ConnectorFile>(&content) {
+                            if cf.id.is_empty() {
+                                cf.id = path
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or_default()
+                                    .to_owned();
+                            }
+                            map.insert(cf.id.clone(), cf);
+                        }
+                    }
+                }
+            }
         }
+        map
     }
 
-    fn save_connector_configs(&self) -> std::io::Result<()> {
-        let path = Self::connector_configs_path();
-        let json = serde_json::to_string_pretty(&self.connector_configs)?;
+    fn save_connector_file(cf: &ConnectorFile) -> std::io::Result<()> {
+        let dir = Self::connectors_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join(format!("{}.json", cf.id));
+        let json = serde_json::to_string_pretty(cf)?;
         std::fs::write(path, json)
     }
 }
