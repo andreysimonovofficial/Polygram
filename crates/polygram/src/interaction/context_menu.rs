@@ -29,14 +29,6 @@ pub fn context_menu(
                             *close_menu = true;
                         }
                     }
-                    // Сгруппировать выделенные объекты в отдел.
-                    if app.selected_objects.len() > 1 {
-                        if ui.button("Сгруппировать в отдел").clicked() {
-                            app.group_selected_into_department(&published);
-                            *close_menu = true;
-                        }
-                        ui.separator();
-                    }
                     if ui.button("Добавить показатель в запрос").clicked()
                     {
                         let n_req = published
@@ -124,6 +116,25 @@ pub fn context_menu(
                             app.apply_cmd(cmd);
                             *close_menu = true;
                         }
+                        // Переместить выделенные объекты в этот отдел.
+                        if !app.selected_objects.is_empty()
+                            && !app.selected_objects.iter().any(|s| s == object_id)
+                        {
+                            if ui.button(format!("Переместить выделенные ({}) в отдел", app.selected_objects.len())).clicked() {
+                                let dept_id = object_id.clone();
+                                let selected = app.selected_objects.clone();
+                                let mut cmds: Vec<Command> = Vec::new();
+                                for obj_id in &selected {
+                                    cmds.push(Command::SetObjectParent {
+                                        object: obj_id.clone(),
+                                        parent: Some(dept_id.clone()),
+                                    });
+                                }
+                                app.apply_batch(cmds);
+                                app.selected_objects.clear();
+                                *close_menu = true;
+                            }
+                        }
                         ui.separator();
                     }
                     if ui.button("Переименовать объект").clicked() {
@@ -138,6 +149,15 @@ pub fn context_menu(
                         app.dialogs.rename_input = obj_name;
                         *close_menu = true;
                     }
+                }
+                // Сгруппировать выделенные объекты в отдел (доступно при >=2 выделенных,
+                // независимо от цели правого клика).
+                if app.selected_objects.len() > 1 {
+                    if ui.button("Сгруппировать в отдел").clicked() {
+                        app.group_selected_into_department(&published);
+                        *close_menu = true;
+                    }
+                    ui.separator();
                 }
                 if ui.button("Автораскладка").clicked() {
                     app.apply_cmd(Command::AutoLayout);

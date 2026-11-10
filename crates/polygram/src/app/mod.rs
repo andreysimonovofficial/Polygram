@@ -474,27 +474,15 @@ impl PolygramApp {
             return;
         }
         let geometry = &published.geometry;
-        let mut min_x = i32::MAX;
-        let mut min_y = i32::MAX;
-        let mut max_x = i32::MIN;
-        let mut max_y = i32::MIN;
         let mut selected_ids: Vec<String> = Vec::new();
         for id in &self.selected_objects {
-            if let Some(obj) = geometry.objects.iter().find(|o| o.id == *id) {
-                let r = polygram_core::layout::Rect::new(obj.rect.x, obj.rect.y, obj.rect.w, obj.rect.h);
-                min_x = min_x.min(r.x);
-                min_y = min_y.min(r.y);
-                max_x = max_x.max(r.x + r.w);
-                max_y = max_y.max(r.y + r.h);
+            if geometry.objects.iter().any(|o| o.id == *id) {
                 selected_ids.push(id.clone());
             }
         }
         if selected_ids.is_empty() {
             return;
         }
-        // Отдел: отступ 2 клетки сверху под шапку, padding 1 клетка по бокам.
-        let dept_x = min_x.saturating_sub(1);
-        let dept_y = (min_y - 3).max(0); // 2 для шапки + 1 padding
 
         // Предсказуемый ID отдела, чтобы сослаться на него в SetObjectParent.
         let dept_id = format!("dept_{}", std::time::SystemTime::now()
@@ -503,12 +491,14 @@ impl PolygramApp {
             .unwrap_or(0));
 
         let mut batch: Vec<Command> = Vec::new();
-        // Создаём отдел.
+        // Создаём отдел без явных координат (авторазмещение вне зоны детей),
+        // затем SetObjectParent вызовет expand_department_to_fit, который
+        // переместит отдел так, чтобы он охватывал всех детей.
         batch.push(Command::AddObject {
             id: Some(dept_id.clone()),
             name: "Отдел".to_owned(),
             kind: polygram_core::types::NodeKind::Department,
-            at: Some([dept_x, dept_y]),
+            at: None,
             parent: None,
             author: None,
         });
