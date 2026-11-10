@@ -169,22 +169,32 @@ pub fn paint_edge(
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some(fp), Some(tp)) = (from_port, to_port) {
         pts.push(fp);
+
+        // Первая точка локтя на расстоянии ≈2 кванта от порта источника (в пикселях: 2.0 * cell_px).
+        // Направление определяется по первой цели маршрута.
+        let first_target_x = match route_pts.len() {
+            0 => tp.x,
+            1 => route_pts[0].x,
+            _ => route_pts[1].x,
+        };
+        let dir = if first_target_x >= fp.x { 1.0_f32 } else { -1.0_f32 };
+        let elbow_x = fp.x + dir * 2.0 * cell_px;
+
         match route_pts.len() {
             0 | 1 => {
-                // Маршрут без точек: один угол
-                pts.push(Pos2::new(tp.x, fp.y));
+                // Маршрут без точек: первый локень на 2 кванта от порта источника
+                pts.push(Pos2::new(elbow_x, fp.y));
+                pts.push(Pos2::new(elbow_x, tp.y));
             }
             2 => {
-                // Прямой маршрут без локтей: source_grid, target_grid.
-                // Первый локоть берёт X из route_pts[0] (позиция источника в сетке),
-                // чтобы горизонтальный отрезок от порта источника был длиннее.
-                pts.push(Pos2::new(route_pts[0].x, fp.y));
-                pts.push(Pos2::new(route_pts[0].x, tp.y));
+                // Первый локень на 2 кванта от порта источника
+                pts.push(Pos2::new(elbow_x, fp.y));
+                pts.push(Pos2::new(elbow_x, tp.y));
             }
             _ => {
-                // Есть локти: source_grid, elbow1, ..., elbowN, target_grid
-                pts.push(Pos2::new(route_pts[1].x, fp.y));
-                pts.push(route_pts[1]);
+                // Есть локти: первый локень на 2 кванта, первая точка маршрута подогнана под elbow_x
+                pts.push(Pos2::new(elbow_x, fp.y));
+                pts.push(Pos2::new(elbow_x, route_pts[1].y));
                 for i in 2..route_pts.len() - 1 {
                     pts.push(route_pts[i]);
                 }
