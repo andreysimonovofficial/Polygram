@@ -1,8 +1,9 @@
 use crate::app::PolygramApp;
-use polygram_canvas::object_at;
+use polygram_canvas::{object_at, MetricBinding};
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Command, Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
+use std::collections::HashMap;
 
 /// Основное взаимодействие с холстом: зум, панорамирование, выделение,
 /// перетаскивание объектов и показателей, selection box, контекстное меню
@@ -407,10 +408,22 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid);
+    // Собрать привязки по ключу (object_id, entry_name) для отрисовки иконки + времени
+    // последнего опроса внутри строк показателя (масштабируются с zoom).
+    let mut bindings: HashMap<(String, String), MetricBinding> = HashMap::new();
+    for (id, info) in &app.api_bindings {
+        if let Some((object_id, entry_name)) = id.split_once(':') {
+            bindings.insert(
+                (object_id.to_owned(), entry_name.to_owned()),
+                MetricBinding {
+                    ok: info.ok,
+                    last_updated: info.last_updated.clone(),
+                },
+            );
+        }
+    }
 
-    // Иконки API-привязок на строках показателей.
-    app.paint_api_binding_icons(ui.painter());
+    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid, &bindings);
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {

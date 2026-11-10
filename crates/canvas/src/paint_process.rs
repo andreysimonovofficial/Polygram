@@ -8,6 +8,7 @@ use crate::theme::Theme;
 use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::types::Direction;
 use polygram_core::{DynamicState, ObjectGeom, StatusCode};
+use std::collections::HashMap;
 
 // ┌─────────────────────────────────────────────────────────────┐
 // │ КОНСТАНТЫ-КОНСТРУКТОР                                       │
@@ -27,6 +28,13 @@ pub const CONNECTION_DOT_RADIUS: f32 = 4.0;
 
 /// Минимальная высота строки показателя (пиксели при zoom = 1).
 pub const MIN_ROW_H_PX: f32 = 27.0;
+
+/// Информация о API-привязке одной строки показателя (показывается внутри строки).
+#[derive(Clone, Debug, Default)]
+pub struct MetricBinding {
+    pub ok: bool,
+    pub last_updated: Option<String>,
+}
 
 /// Ранг статуса (чем выше — тем хуже).
 fn status_rank(s: StatusCode) -> u8 {
@@ -60,6 +68,7 @@ fn worst_status(entries: &[polygram_core::EntryGeom], dynamic: &DynamicState) ->
 
 /// Рисовать одну строку показателя: точка сцепления слева и справа, имя, значение справа.
 /// Для запроса показывается required, для выхода — value.
+/// binding — опциональная API-привязка этой строки (иконка + время последнего опроса внутри строки).
 fn paint_metric_row(
     painter: &Painter,
     rect: Rect,
@@ -69,6 +78,7 @@ fn paint_metric_row(
     theme: &Theme,
     is_hovered: bool,
     dir: Direction,
+    binding: Option<&MetricBinding>,
 ) {
     let status = dynamic.status[entry.ix as usize];
     let dot_color = super::status_dot_color(status, theme);
@@ -104,6 +114,34 @@ fn paint_metric_row(
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         name_color,
     );
+
+    // Иконка привязки + время последнего опроса (внутри строки, масштабируются с zoom).
+    if let Some(b) = binding {
+        let icon_color = if b.ok {
+            egui::Color32::from_rgb(0, 200, 80)
+        } else {
+            egui::Color32::from_rgb(240, 80, 80)
+        };
+        let icon_text = if b.ok { "🔗" } else { "⚠" };
+        let name_w_est = entry.name.len() as f32 * 7.0 * zoom;
+        let icon_x = rect.min.x + 16.0 * zoom + name_w_est + 8.0 * zoom;
+        painter.text(
+            Pos2::new(icon_x, cy),
+            egui::Align2::LEFT_CENTER,
+            icon_text,
+            egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+            icon_color,
+        );
+        if let Some(ts) = &b.last_updated {
+            painter.text(
+                Pos2::new(icon_x + 14.0 * zoom, cy),
+                egui::Align2::LEFT_CENTER,
+                ts,
+                egui::FontId::new((theme.text_size * zoom * 0.7).max(8.0), egui::FontFamily::Proportional),
+                egui::Color32::from_gray(170),
+            );
+        }
+    }
 
     // Значение (справа): для запроса — required, для выхода — value.
     let unit = if entry.unit.is_empty() {
@@ -238,6 +276,7 @@ pub fn paint_process(
     zoom: f32,
     is_hovered: bool,
     _edit_target: Option<&str>,
+    bindings: &HashMap<(String, String), MetricBinding>,
 ) -> (
     Vec<(String, Direction, Rect)>,
     Vec<(String, Direction, Rect)>,
@@ -347,7 +386,9 @@ pub fn paint_process(
         if is_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Request);
+        let binding_key = (object.id.clone(), entry.name.clone());
+        let binding = bindings.get(&binding_key);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Request, binding);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Request,
@@ -409,7 +450,9 @@ pub fn paint_process(
         if is_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Output);
+        let binding_key = (object.id.clone(), entry.name.clone());
+        let binding = bindings.get(&binding_key);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Output, binding);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Output,

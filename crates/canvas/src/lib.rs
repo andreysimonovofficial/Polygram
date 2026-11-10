@@ -22,6 +22,9 @@ use egui::{Color32, Pos2, Rect, Vec2};
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::{DynamicState, Geometry, StatusCode};
+use std::collections::HashMap;
+
+pub use paint_process::MetricBinding;
 
 /// Холст.
 pub struct Canvas {
@@ -68,6 +71,7 @@ impl Canvas {
         edit_target: Option<&str>,
         selected_objects: &[String],
         show_grid: bool,
+        bindings: &HashMap<(String, String), MetricBinding>,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -157,6 +161,7 @@ impl Canvas {
                     self.camera.zoom,
                     is_hovered,
                     edit_target,
+                    bindings,
                 );
                 self.add_metric_hotspots.extend(add_hotspots);
                 self.container_menu_hotspots.extend(menu_hotspots);

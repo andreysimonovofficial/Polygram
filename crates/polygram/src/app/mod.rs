@@ -515,50 +515,6 @@ impl PolygramApp {
         }
     }
 
-    /// Нарисовать иконки API-привязок на строках показателей холста.
-    pub fn paint_api_binding_icons(
-        &self,
-        painter: &egui::Painter,
-    ) {
-        if self.api_bindings.is_empty() {
-            return;
-        }
-        for (hotspot, _dir, entry_name, rect) in &self.canvas.drag_metric_hotspots {
-            let binding_id = format!("{hotspot}:{entry_name}");
-            let info = self.api_bindings.get(&binding_id);
-            if info.is_none() {
-                continue;
-            }
-            let info = info.unwrap();
-            // Рисуем маленькую иконку справа от строки показателя.
-            let icon_x = rect.max.x - 14.0;
-            let icon_y = rect.center().y;
-            let icon_color = if info.ok {
-                egui::Color32::from_rgb(0, 200, 80)
-            } else {
-                egui::Color32::from_rgb(240, 80, 80)
-            };
-            let icon_text = if info.ok { "🔗" } else { "⚠" };
-            painter.text(
-                egui::Pos2::new(icon_x, icon_y),
-                egui::Align2::CENTER_CENTER,
-                icon_text,
-                egui::FontId::new(12.0, egui::FontFamily::Proportional),
-                icon_color,
-            );
-            // Время последнего опроса ячейки (слева от иконки).
-            if let Some(ts) = &info.last_updated {
-                painter.text(
-                    egui::Pos2::new(icon_x - 4.0, icon_y),
-                    egui::Align2::RIGHT_CENTER,
-                    ts,
-                    egui::FontId::new(9.0, egui::FontFamily::Proportional),
-                    egui::Color32::from_gray(170),
-                );
-            }
-        }
-    }
-
     /// Получить конфиг коннектора по ID (из файла + кэш + сервер).
     pub fn get_connector_config(&mut self, connector_id: &str) -> Option<serde_json::Value> {
         // Сначала локальный кэш (загружен из файла при старте).
