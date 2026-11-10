@@ -15,6 +15,9 @@ pub struct DragState {
     /// Перетаскивание показателя: (id объекта-источника, направление, копия строки показателя).
     pub drag_metric: Option<(String, Direction, EntryGeom)>,
     pub drag_metric_start_screen: Option<egui::Pos2>,
+    /// Отдел, под которым началось перетаскивание объекта. Его рамка растягивается
+    /// под перетаскиваемый объект «на лету» (до подтверждения сервером).
+    pub drag_department: Option<String>,
 }
 
 impl DragState {
@@ -29,6 +32,7 @@ impl DragState {
             selection_box_start: None,
             drag_metric: None,
             drag_metric_start_screen: None,
+            drag_department: None,
         }
     }
 
@@ -40,6 +44,7 @@ impl DragState {
 
     pub fn end_drag(&mut self) -> Option<(String, (i32, i32), Option<(i32, i32)>)> {
         let object_id = self.drag_object.take()?;
+        self.drag_department = None;
         let start_cell = self.drag_start_cell.take()?;
         self.drag_start_screen = None;
         let target = self.predicted_positions.get(&object_id).copied();

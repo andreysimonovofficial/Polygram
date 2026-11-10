@@ -1,5 +1,5 @@
 use polygram_canvas::Canvas;
-use polygram_core::{Command, Published};
+use polygram_core::{layout::Rect, types::NodeKind, Command, Published};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -297,8 +297,76 @@ impl PolygramApp {
                 obj.rect.y = *y;
             }
         }
+        // Растянуть отдел (и родительские отделы по цепочке) под перетаскиваемый
+        // объект «на лету», пока перетаскивание ещё не подтверждено сервером.
+        if let (Some(dragged_id), Some(dept_id)) = (&self.drag.drag_object, &self.drag.drag_department) {
+            if dragged_id != dept_id {
+                Self::stretch_department_for_drag(&mut geometry, dept_id);
+            }
+        }
         geometry
     }
+
+/// Растянуть рамку отдела под содержащийся в нём перетаскиваемый объект «на лету».
+/// Членство определяется пространственно: объект принадлежит отделу, если его карточка
+/// лежит внутри карточки отдела. Тянет рекурсивно родительские отделы по цепочке вверх.
+fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry, dept_id: &str) {
+    let mut visited: Vec<String> = Vec::new();
+    let mut current = dept_id.to_owned();
+    for _ in 0..8 {
+        if visited.contains(&current) {
+            break;
+        }
+        visited.push(current.clone());
+        let dept_idx = match geometry.objects.iter().position(|o| o.id == current) {
+            Some(i) => i,
+            None => break,
+        };
+        let dept = &geometry.objects[dept_idx];
+        let mut min_x = dept.rect.x;
+        let mut min_y = dept.rect.y;
+        let mut max_x = dept.rect.x + dept.rect.w;
+        let mut max_y = dept.rect.y + dept.rect.h;
+        for obj in &geometry.objects {
+            if obj.id == current {
+                continue;
+            }
+            // Перетаскиваемый объект уже имеет предсказанную позицию; остальные —
+            // позиции из последнего снимка (сервер уже держит отдел под ними).
+            if obj.rect.x >= dept.rect.x
+                && obj.rect.y >= dept.rect.y
+                && obj.rect.x + obj.rect.w <= dept.rect.x + dept.rect.w
+                && obj.rect.y + obj.rect.h <= dept.rect.y + dept.rect.h
+            {
+                min_x = min_x.min(obj.rect.x);
+                min_y = min_y.min(obj.rect.y);
+                max_x = max_x.max(obj.rect.x + obj.rect.w);
+                max_y = max_y.max(obj.rect.y + obj.rect.h);
+            }
+        }
+        let new_x = (min_x - 1).max(0);
+        let new_y = (min_y - 2).max(0);
+        let new_w = (max_x + 1) - new_x;
+        let new_h = (max_y + 1) - new_y;
+        let new_rect = Rect::new(new_x, new_y, new_w, new_h);
+        if new_rect == dept.rect {
+            break;
+        }
+        geometry.objects[dept_idx].rect = new_rect;
+        // Подняться к родительскому отделу, содержащему этот отдел.
+        current = match geometry.objects.iter().find(|o| {
+            o.kind == NodeKind::Department
+                && o.id != current
+                && o.rect.x <= new_rect.x
+                && o.rect.y <= new_rect.y
+                && o.rect.x + o.rect.w >= new_rect.x + new_rect.w
+                && o.rect.y + o.rect.h >= new_rect.y + new_rect.h
+        }) {
+            Some(parent) => parent.id.clone(),
+            None => break,
+        };
+    }
+}
 
     pub fn try_connect_once(&mut self) {
         match self.connection.try_connect_once() {

@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{object_at, MetricBinding, paint_drag_preview};
+use polygram_canvas::{department_at, object_at, MetricBinding, paint_drag_preview};
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Command, Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
@@ -40,6 +40,7 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
+                app.drag.drag_department = None;
                 app.dialogs.edit_target = Some(object_id.to_owned());
                 app.dialogs.edit_input = obj_name;
             }
@@ -161,6 +162,12 @@ pub fn handle_canvas_interaction(
                         app.drag.drag_object = Some(object_id.to_owned());
                         app.drag.drag_start_screen = Some(pos);
                         app.drag.drag_start_cell = Some((o.rect.x, o.rect.y));
+                        if o.kind != NodeKind::Department {
+                            // Отдел под курсором на старте перетаскивания — его рамку будем растягивать «на лету».
+                            app.drag.drag_department =
+                                department_at(&geometry, pos, app.canvas.camera.offset, app.canvas.camera.zoom, app.canvas.cell_size)
+                                    .map(|s| s.to_owned());
+                        }
                     }
                 } else {
                     // Selection Box: начинаем выделение рамкой из пустого места.
@@ -194,6 +201,7 @@ pub fn handle_canvas_interaction(
             let drag_object = app.drag.drag_object.take();
             let drag_start_cell = app.drag.drag_start_cell.take();
             app.drag.drag_start_screen = None;
+            app.drag.drag_department = None;
             if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
                 let target = app.drag.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
                 let pos_changed = (target.0, target.1) != (start_x, start_y);
@@ -470,6 +478,37 @@ pub fn handle_canvas_interaction(
         }
     }
 
+    // Перетаскивание объекта: подсветить отдел под курсором (как процесс подсвечивается,
+    // когда в него перетаскивают показатель).
+    if app.drag.drag_object.is_some()
+        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    {
+        if let Some(cur) = canvas_response.interact_pointer_pos() {
+            let dragged_id = app.drag.drag_object.as_deref().unwrap_or("");
+            let cell_px = app.canvas.cell_px();
+            let offset = app.canvas.camera.offset;
+            let zoom = app.canvas.camera.zoom;
+            if let Some((_dept_id, rect_px)) = geometry.objects.iter().find_map(|o| {
+                if o.kind != NodeKind::Department || o.id == dragged_id {
+                    return None;
+                }
+                let r = polygram_core::layout::Rect::new(o.rect.x, o.rect.y, o.rect.w, o.rect.h);
+                let rect_px = Rect::from_min_size(
+                    Pos2::new(r.x as f32, r.y as f32) * cell_px + offset * zoom,
+                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                );
+                rect_px.contains(cur).then_some((o.id.clone(), rect_px))
+            }) {
+                let painter = ui.painter();
+                painter.rect_stroke(
+                    rect_px.expand(2.0),
+                    2.0,
+                    Stroke::new(2.0_f32 * zoom, Color32::from_rgb(0, 217, 255)),
+                );
+            }
+        }
+    }
+
     // Selection Box: рисуем резиновый прямоугольник поверх холста.
     if app.drag.selection_box_start.is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
@@ -538,6 +577,7 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
+                app.drag.drag_department = None;
                 break;
             }
         }
@@ -554,6 +594,7 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
+                app.drag.drag_department = None;
                 break;
             }
         }

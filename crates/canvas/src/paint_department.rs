@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use egui::{Painter, Rect, Stroke, Vec2};
+use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::ObjectGeom;
 
 /// Нарисовать рамку отдела: внешняя граница + шапка с названием.
@@ -32,7 +32,7 @@ pub fn paint_department_frame(
 
     let id_text = format!("#{}", object.ix);
     painter.text(
-        rect_px.max - Vec2::new(12.0 * zoom, header_h / 2.0),
+        Pos2::new(rect_px.max.x - 8.0 * zoom, rect_px.min.y + header_h / 2.0),
         egui::Align2::RIGHT_CENTER,
         &id_text,
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),

@@ -64,6 +64,31 @@ pub fn object_at<'a>(
     })
 }
 
+/// Вернуть id самого вложенного отдела, содержащего заданную экранную позицию.
+pub fn department_at<'a>(
+    geometry: &'a Geometry,
+    screen_pos: Pos2,
+    camera_offset: egui::Vec2,
+    camera_zoom: f32,
+    cell_size: f32,
+) -> Option<&'a str> {
+    let cell_px = cell_size * camera_zoom;
+    let mut best: Option<(&'a str, f32)> = None;
+    for object in &geometry.objects {
+        if object.kind != NodeKind::Department {
+            continue;
+        }
+        let rect_px = rect_to_screen(object, cell_size, camera_offset, camera_zoom);
+        if rect_px.contains(screen_pos) {
+            let area = rect_px.area();
+            if best.map_or(true, |(_, a)| area < a) {
+                best = Some((&object.id, area));
+            }
+        }
+    }
+    best.map(|(id, _)| id)
+}
+
 /// Вернуть id объекта, если экранная позиция попадает в его шапку.
 pub fn header_at<'a>(
     geometry: &'a Geometry,
