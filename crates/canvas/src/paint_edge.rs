@@ -117,7 +117,7 @@ pub fn paint_edge(
             } else if to_status != StatusCode::Ok {
                 super::status_dot_color(to_status, polygram_core::types::Direction::Request, theme)
             } else {
-                theme.line
+                theme.status_ok
             }
         }
         _ => theme.line,
