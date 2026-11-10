@@ -162,47 +162,58 @@ pub fn paint_edge(
         ));
     }
 
-    // Построить ортогональную ломаную по правилу:
-    // от точки сцепления всегда горизонтальный отрезок первым,
-    // потом вертикальные и горизонтальные локти маршрута,
-    // в конце — горизонтальный отрезок в точку сцепления приёмника.
-    // route_pts[0] — порт источника в сетке, route_pts[last] — порт приёмника в сетке.
-    // На концах используются визуальные Y-точки точек сцепления, а X берется из сетки —
-    // тогда все сегменты строго горизонтальные или вертикальные, без диагоналей.
+    /// Привязать экранную координату к ближайшей линии сетки.
+    fn snap_to_grid(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+        let world = screen / zoom - offset;
+        let cell = (world / cell_size).round() * cell_size;
+        (cell + offset) * zoom
+    }
+
+    // Построить ортогональную ломаную:
+    // 1-й сегмент от порта источника — горизонталь на 1 клетку за границу объекта,
+    // x привязан к вертикальной линии сетки.
+    // Далее — ступеньками (вертикаль → горизонталь) через промежуточные точки и цель,
+    // углы привязаны к узлам сетки.
+    // Последний сегмент к порту приёмника — горизонталь на 1 клетку за границу цели,
+    // x привязан к вертикальной линии сетки.
+    // Все сегменты строго горизонтальные или вертикальные, без диагоналей.
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some(fp), Some(tp)) = (from_port, to_port) {
         pts.push(fp);
 
-        // Первая точка локтя на расстоянии ≈2 кванта от порта источника (в пикселях: 2.0 * cell_px).
-        // Направление определяется по первой цели маршрута.
-        let first_target_x = match route_pts.len() {
-            0 => tp.x,
-            1 => route_pts[0].x,
-            _ => route_pts[1].x,
-        };
-        let dir = if first_target_x >= fp.x { 1.0_f32 } else { -1.0_f32 };
-        let elbow_x = fp.x + dir * 2.0 * cell_px;
+        // Порт источника — всегда Выход (правая граница объекта): первый сегмент вправо.
+        let from_elbow_x = snap_to_grid(fp.x + cell_px, camera_offset.x, camera_zoom, cell_size);
+        pts.push(Pos2::new(from_elbow_x, fp.y));
 
-        match route_pts.len() {
-            0 | 1 => {
-                // Маршрут без точек: первый локень на 2 кванта от порта источника
-                pts.push(Pos2::new(elbow_x, fp.y));
-                pts.push(Pos2::new(elbow_x, tp.y));
+        // Ступеньки через промежуточные точки и до цели.
+        let mut cur = Pos2::new(from_elbow_x, fp.y);
+        let mut targets: Vec<Pos2> = route_pts.clone();
+        targets.push(tp);
+
+        for wp in targets {
+            // Вертикальный сегмент: текущий x (уже на линии сетки), y привязан к горизонтальной сетке.
+            let wp_y = snap_to_grid(wp.y, camera_offset.y, camera_zoom, cell_size);
+            if (cur.y - wp_y).abs() > 1.0 {
+                pts.push(Pos2::new(cur.x, wp_y));
             }
-            2 => {
-                // Первый локень на 2 кванта от порта источника
-                pts.push(Pos2::new(elbow_x, fp.y));
-                pts.push(Pos2::new(elbow_x, tp.y));
+            // Горизонтальный сегмент: y цели (уже на горизонтальной линии сетки),
+            // x привязан к вертикальной линии сетки.
+            let wp_x = snap_to_grid(wp.x, camera_offset.x, camera_zoom, cell_size);
+            if (cur.x - wp_x).abs() > 1.0 {
+                pts.push(Pos2::new(wp_x, wp_y));
             }
-            _ => {
-                // Есть локти: первый локень на 2 кванта, первая точка маршрута подогнана под elbow_x
-                pts.push(Pos2::new(elbow_x, fp.y));
-                pts.push(Pos2::new(elbow_x, route_pts[1].y));
-                for i in 2..route_pts.len() - 1 {
-                    pts.push(route_pts[i]);
-                }
-                pts.push(Pos2::new(route_pts[route_pts.len() - 2].x, tp.y));
-            }
+            cur = Pos2::new(wp_x, wp_y);
+        }
+
+        // Последний сегмент: порт приёмника — всегда Запрос (левая граница объекта),
+        // локоть на 1 клетку левее порта, затем горизонтально вправо к порту.
+        let tp_y_snapped = snap_to_grid(tp.y, camera_offset.y, camera_zoom, cell_size);
+        if (cur.y - tp_y_snapped).abs() > 1.0 {
+            pts.push(Pos2::new(cur.x, tp_y_snapped));
+        }
+        let to_elbow_x = snap_to_grid(tp.x - cell_px, camera_offset.x, camera_zoom, cell_size);
+        if (cur.x - to_elbow_x).abs() > 1.0 {
+            pts.push(Pos2::new(to_elbow_x, tp_y_snapped));
         }
         pts.push(tp);
     }
