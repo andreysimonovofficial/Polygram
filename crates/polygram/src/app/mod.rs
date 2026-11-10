@@ -308,11 +308,12 @@ impl PolygramApp {
     }
 
 /// Растянуть рамку отдела под содержащийся в нём перетаскиваемый объект «на лету».
-/// Членство определяется пространственно: объект принадлежит отделу, если его карточка
-/// лежит внутри карточки отдела. Тянет рекурсивно родительские отделы по цепочке вверх.
+/// Членство определяется пересечением с текущей рамкой отдела: объект, попадающий
+/// под курсор при старте перетаскивания, считается ребёнком отдела. Тянет
+/// рекурсивно родительские отделы по цепочке вверх.
 fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry, dept_id: &str) {
-    let mut visited: Vec<String> = Vec::new();
     let mut current = dept_id.to_owned();
+    let mut visited: Vec<String> = Vec::new();
     for _ in 0..8 {
         if visited.contains(&current) {
             break;
@@ -331,13 +332,12 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
             if obj.id == current {
                 continue;
             }
-            // Перетаскиваемый объект уже имеет предсказанную позицию; остальные —
-            // позиции из последнего снимка (сервер уже держит отдел под ними).
-            if obj.rect.x >= dept.rect.x
-                && obj.rect.y >= dept.rect.y
-                && obj.rect.x + obj.rect.w <= dept.rect.x + dept.rect.w
-                && obj.rect.y + obj.rect.h <= dept.rect.y + dept.rect.h
-            {
+            // Пересечение с рамкой отдела (включая край) — объект считается ребёнком.
+            let overlaps = obj.rect.x < dept.rect.x + dept.rect.w
+                && obj.rect.x + obj.rect.w > dept.rect.x
+                && obj.rect.y < dept.rect.y + dept.rect.h
+                && obj.rect.y + obj.rect.h > dept.rect.y;
+            if overlaps {
                 min_x = min_x.min(obj.rect.x);
                 min_y = min_y.min(obj.rect.y);
                 max_x = max_x.max(obj.rect.x + obj.rect.w);
@@ -353,7 +353,6 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
             break;
         }
         geometry.objects[dept_idx].rect = new_rect;
-        // Подняться к родительскому отделу, содержащему этот отдел.
         current = match geometry.objects.iter().find(|o| {
             o.kind == NodeKind::Department
                 && o.id != current

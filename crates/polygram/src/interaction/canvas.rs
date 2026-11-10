@@ -229,6 +229,8 @@ pub fn handle_canvas_interaction(
                     false
                 };
                 if dropped_on_dept {
+                    // Перемещаем объект в отдел и фиксируем его текущую (предсказанную)
+                    // позицию, чтобы при подтверждении сервера он не перепрыгнул назад.
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         if let Some(target_id) = object_at(
                             &geometry,
@@ -237,11 +239,19 @@ pub fn handle_canvas_interaction(
                             app.canvas.camera.zoom,
                             app.canvas.cell_size,
                         ) {
-                        app.apply_cmd(Command::SetObjectParent {
-                            object: object_id.clone(),
-                            parent: Some(target_id.to_owned()),
-                        });
-                        app.selected_objects = vec![object_id.clone()];
+                            app.drag.pending_move =
+                                Some((object_id.clone(), app.connection.last_rev));
+                            app.apply_batch(vec![
+                                Command::MoveObject {
+                                    object: object_id.clone(),
+                                    at: [target.0, target.1],
+                                },
+                                Command::SetObjectParent {
+                                    object: object_id.clone(),
+                                    parent: Some(target_id.to_owned()),
+                                },
+                            ]);
+                            app.selected_objects = vec![object_id.clone()];
                         }
                     }
                 } else if pos_changed {
@@ -503,7 +513,7 @@ pub fn handle_canvas_interaction(
                 painter.rect_stroke(
                     rect_px.expand(2.0),
                     2.0,
-                    Stroke::new(2.0_f32 * zoom, Color32::from_rgb(0, 217, 255)),
+                    Stroke::new(2.0_f32 * zoom, Color32::WHITE),
                 );
             }
         }
