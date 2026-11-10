@@ -20,6 +20,8 @@ pub struct ObjectGeom {
     pub rect: Rect,
     pub requests: Vec<EntryGeom>,
     pub outputs: Vec<EntryGeom>,
+    /// Идентификатор родительского отдела, если объект вложен в отдел.
+    pub parent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -135,8 +135,25 @@ pub fn context_menu(
                                 *close_menu = true;
                             }
                         }
-                        ui.separator();
+                    ui.separator();
+                    // Извлечь объект из отдела (доступно только если объект вложен в отдел).
+                    if let Some(o) = published
+                        .geometry
+                        .objects
+                        .iter()
+                        .find(|n| n.id == *object_id)
+                    {
+                        if o.parent.is_some() && o.kind != NodeKind::Department {
+                            if ui.button("Извлечь из отдела").clicked() {
+                                app.apply_cmd(Command::SetObjectParent {
+                                    object: object_id.clone(),
+                                    parent: None,
+                                });
+                                *close_menu = true;
+                            }
+                        }
                     }
+                }
                     if ui.button("Переименовать объект").clicked() {
                         let obj_name = published
                             .geometry

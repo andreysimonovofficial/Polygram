@@ -144,6 +144,7 @@ impl crate::engine::Engine {
                     rect: self.layout.rect_of(o),
                     requests,
                     outputs,
+                    parent: d.parent.map(|p| self.hier.object(p).ext_id.clone()),
                 }
             })
             .collect();

@@ -328,17 +328,15 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
             if obj.id == current {
                 continue;
             }
-            // Пересечение с рамкой отдела (включая край) — объект считается ребёнком.
-            let overlaps = obj.rect.x < dept.rect.x + dept.rect.w
-                && obj.rect.x + obj.rect.w > dept.rect.x
-                && obj.rect.y < dept.rect.y + dept.rect.h
-                && obj.rect.y + obj.rect.h > dept.rect.y;
-            if overlaps {
-                min_x = min_x.min(obj.rect.x);
-                min_y = min_y.min(obj.rect.y);
-                max_x = max_x.max(obj.rect.x + obj.rect.w);
-                max_y = max_y.max(obj.rect.y + obj.rect.h);
+            // Прямой ребёнок отдела по иерархии parent — только такие объекты
+            // участвуют в построении рамки отдела.
+            if obj.parent.as_ref() != Some(&current) {
+                continue;
             }
+            min_x = min_x.min(obj.rect.x);
+            min_y = min_y.min(obj.rect.y);
+            max_x = max_x.max(obj.rect.x + obj.rect.w);
+            max_y = max_y.max(obj.rect.y + obj.rect.h);
         }
         let new_x = (min_x - 1).max(0);
         let new_y = (min_y - 2).max(0);
@@ -349,15 +347,11 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
             break;
         }
         geometry.objects[dept_idx].rect = new_rect;
-        current = match geometry.objects.iter().find(|o| {
-            o.kind == NodeKind::Department
-                && o.id != current
-                && o.rect.x <= new_rect.x
-                && o.rect.y <= new_rect.y
-                && o.rect.x + o.rect.w >= new_rect.x + new_rect.w
-                && o.rect.y + o.rect.h >= new_rect.y + new_rect.h
-        }) {
-            Some(parent) => parent.id.clone(),
+        // Переходим к родительскому отделу через поле parent.
+        current = match geometry.objects.iter().find(|o| o.id == current)
+            .and_then(|o| o.parent.clone())
+        {
+            Some(p) => p,
             None => break,
         };
     }

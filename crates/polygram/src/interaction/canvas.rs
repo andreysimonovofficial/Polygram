@@ -187,7 +187,19 @@ pub fn handle_canvas_interaction(
                     let cell_px = app.canvas.cell_px();
                     let dx = (delta.x / cell_px).round() as i32;
                     let dy = (delta.y / cell_px).round() as i32;
-                    let target = [start_x + dx, start_y + dy];
+                    let mut target = [start_x + dx, start_y + dy];
+                    // Если объект в отделе — ограничить перемещение пределами отдела,
+                    // чтобы объект не мог быть извлечён из отдела через Drag&Drop.
+                    if let Some(dept_id) = &app.drag.drag_department {
+                        if let (Some(dept), Some(obj)) = (
+                            geometry.objects.iter().find(|o| o.id == *dept_id),
+                            geometry.objects.iter().find(|o| o.id == *object_id),
+                        ) {
+                            let tx = target[0].clamp(dept.rect.x, dept.rect.x + dept.rect.w - obj.rect.w);
+                            let ty = target[1].clamp(dept.rect.y, dept.rect.y + dept.rect.h - obj.rect.h);
+                            target = [tx, ty];
+                        }
+                    }
                     // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
                     app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
                 }
