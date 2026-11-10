@@ -109,8 +109,6 @@ impl crate::engine::Engine {
         if children.is_empty() {
             return None;
         }
-        // Собираем всех потомков (включая вложенные отделы) для игнорирования при проверке наложения.
-        let subtree: std::collections::HashSet<ObjectIx> = self.subtree_objects(parent).into_iter().collect();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;
@@ -133,38 +131,6 @@ impl crate::engine::Engine {
         if new_rect == old {
             return None;
         }
-        // Проверка наложения на посторонние объекты (вне поддерева этого отдела).
-        let mut overlap = false;
-        for (i, r) in self.layout.rect.iter().enumerate() {
-            if !self.layout.placed[i] {
-                continue;
-            }
-            let ix = ObjectIx(i as u32);
-            if subtree.contains(&ix) {
-                continue;
-            }
-            if new_rect.overlaps_with_buffer(r, 2) {
-                overlap = true;
-                break;
-            }
-        }
-        if overlap {
-            if let Some((x, y)) = self.layout.find_free_near(new_w, new_h, old.x, old.y, None, 512) {
-                let adjusted = crate::layout::Rect::new(x, y, new_w, new_h);
-                self.layout.replace(parent, adjusted);
-                self.pending.push(EventKind::ObjectMoved {
-                    object: parent.0,
-                    gx: x,
-                    gy: y,
-                });
-                // Попробуем растянуть родителя отдела.
-                if let Some(gp) = self.hier.parent_of(parent) {
-                    self.expand_department_to_fit(gp);
-                }
-                return Some(adjusted);
-            }
-            return None;
-        }
         self.layout.replace(parent, new_rect);
         self.pending.push(EventKind::ObjectMoved {
             object: parent.0,
@@ -185,7 +151,6 @@ impl crate::engine::Engine {
         if children.is_empty() {
             return None;
         }
-        let subtree: std::collections::HashSet<ObjectIx> = self.subtree_objects(parent).into_iter().collect();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;
@@ -203,23 +168,6 @@ impl crate::engine::Engine {
         let new_h = (max_y + 1) - new_y;
         let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
         if new_rect == old {
-            return None;
-        }
-        let mut overlap = false;
-        for (i, r) in self.layout.rect.iter().enumerate() {
-            if !self.layout.placed[i] {
-                continue;
-            }
-            let ix = ObjectIx(i as u32);
-            if subtree.contains(&ix) {
-                continue;
-            }
-            if new_rect.overlaps_with_buffer(r, 2) {
-                overlap = true;
-                break;
-            }
-        }
-        if overlap {
             return None;
         }
         self.layout.replace(parent, new_rect);
