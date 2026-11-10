@@ -175,9 +175,11 @@ pub fn paint_edge(
                 pts.push(Pos2::new(tp.x, fp.y));
             }
             2 => {
-                // Прямой маршрут без локтей: source_grid, target_grid
-                pts.push(Pos2::new(route_pts[1].x, fp.y));
-                pts.push(Pos2::new(route_pts[1].x, tp.y));
+                // Прямой маршрут без локтей: source_grid, target_grid.
+                // Первый локоть берёт X из route_pts[0] (позиция источника в сетке),
+                // чтобы горизонтальный отрезок от порта источника был длиннее.
+                pts.push(Pos2::new(route_pts[0].x, fp.y));
+                pts.push(Pos2::new(route_pts[0].x, tp.y));
             }
             _ => {
                 // Есть локти: source_grid, elbow1, ..., elbowN, target_grid
