@@ -67,6 +67,7 @@ impl Canvas {
         hovered_object: Option<&str>,
         edit_target: Option<&str>,
         selected_objects: &[String],
+        show_grid: bool,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -74,6 +75,37 @@ impl Canvas {
         self.add_metric_hotspots.clear();
         self.container_menu_hotspots.clear();
         self.drag_metric_hotspots.clear();
+
+        // Фон холста.
+        painter.rect_filled(clip_rect, 0.0, self.theme.bg);
+
+        // Сетка — нижний слой, после фона.
+        if show_grid {
+            let cell_size = self.cell_size;
+            let zoom = self.camera.zoom;
+            let offset = self.camera.offset;
+            let grid_color = Color32::from_rgb(35, 35, 42);
+
+            let min_cx = ((clip_rect.min.x / zoom - offset.x) / cell_size).floor() as i32;
+            let max_cx = ((clip_rect.max.x / zoom - offset.x) / cell_size).ceil() as i32;
+            let min_cy = ((clip_rect.min.y / zoom - offset.y) / cell_size).floor() as i32;
+            let max_cy = ((clip_rect.max.y / zoom - offset.y) / cell_size).ceil() as i32;
+
+            for c in min_cx..=max_cx {
+                let sx = (c as f32 * cell_size + offset.x) * zoom;
+                painter.line_segment(
+                    [Pos2::new(sx, clip_rect.min.y), Pos2::new(sx, clip_rect.max.y)],
+                    egui::Stroke::new(1.0_f32, grid_color),
+                );
+            }
+            for r in min_cy..=max_cy {
+                let sy = (r as f32 * cell_size + offset.y) * zoom;
+                painter.line_segment(
+                    [Pos2::new(clip_rect.min.x, sy), Pos2::new(clip_rect.max.x, sy)],
+                    egui::Stroke::new(1.0_f32, grid_color),
+                );
+            }
+        }
 
         // Отделы — рамки-контейнеры (под дочерними карточками)
         for object in &geometry.objects {

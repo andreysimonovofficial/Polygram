@@ -35,6 +35,9 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                     app.canvas.camera = Camera::new();
                     ui.close_menu();
                 }
+                ui.separator();
+                if ui.checkbox(&mut app.show_grid, "Отображать сетку").changed() {}
+                if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
             });
 
             ui.separator();

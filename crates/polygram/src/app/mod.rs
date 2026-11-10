@@ -31,6 +31,8 @@ pub struct UiConfig {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
     pub show_chat_panel: bool,
+    pub show_grid: bool,
+    pub show_cursor_coords: bool,
 }
 
 impl UiConfig {
@@ -71,6 +73,8 @@ pub struct PolygramApp {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
     pub show_chat_panel: bool,
+    pub show_grid: bool,
+    pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
 }
@@ -98,6 +102,8 @@ impl PolygramApp {
             show_sidebar: ui_config.show_sidebar,
             show_command_log_panel: ui_config.show_command_log_panel,
             show_chat_panel: ui_config.show_chat_panel,
+            show_grid: ui_config.show_grid,
+            show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,
         }
@@ -108,6 +114,8 @@ impl PolygramApp {
             show_sidebar: self.show_sidebar,
             show_command_log_panel: self.show_command_log_panel,
             show_chat_panel: self.show_chat_panel,
+            show_grid: self.show_grid,
+            show_cursor_coords: self.show_cursor_coords,
         }
         .save();
     }

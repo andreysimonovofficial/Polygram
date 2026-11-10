@@ -13,12 +13,18 @@ pub fn status_bar(app: &PolygramApp, ui: &mut egui::Ui) {
         })
     });
     let g = &published.geometry;
-    ui.label(format!(
+    let mut text = format!(
         "Ревизия {} | Объектов: {} | Связей: {} | {} | API: {}",
         published.rev,
         g.objects.len(),
         g.edges.len(),
         app.last_status,
         if app.connection.api_connected { "онлайн" } else { "офлайн" }
-    ));
+    );
+    if app.show_cursor_coords {
+        if let Some(pos) = ui.ctx().pointer_hover_pos() {
+            text.push_str(&format!(" | Координаты курсора: X: {}; Y: {}", pos.x as i32, pos.y as i32));
+        }
+    }
+    ui.label(text);
 }

@@ -628,7 +628,7 @@ pub fn handle_canvas_interaction(
         None
     };
 
-    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects);
+    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid);
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
