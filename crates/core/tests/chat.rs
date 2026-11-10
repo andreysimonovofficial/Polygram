@@ -216,20 +216,20 @@ fn object_placed_near_when_cell_occupied_inside_department() {
 fn object_outside_parent_not_allowed_to_overflow_silently() {
     let mut e = Engine::new();
     dept(&mut e, "d1", "Отдел", None);
-    // Объект вне отдела без parent — встанет где указано
+    // Объект вне отдела без parent — встанет где указано (с буфером 2 кванта от соседей).
     e.apply(
         Scope::Root,
         Command::AddObject {
             id: Some("p1".into()),
             name: "p1".into(),
             kind: NodeKind::Process,
-            at: Some([100, 100]),
+            at: Some([110, 110]),
             parent: None,
             author: None,
         },
     )
     .unwrap();
     let p_rect = e.layout().rect_of(e.hierarchy().find_object("p1").unwrap());
-    assert_eq!(p_rect.x, 100);
-    assert_eq!(p_rect.y, 100);
+    assert_eq!(p_rect.x, 110);
+    assert_eq!(p_rect.y, 110);
 }

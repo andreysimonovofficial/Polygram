@@ -38,6 +38,21 @@ impl Rect {
     pub fn overlaps(&self, o: &Rect) -> bool {
         self.x < o.x + o.w && o.x < self.x + self.w && self.y < o.y + o.h && o.y < self.y + self.h
     }
+
+    /// Пересечение с буфером `buffer_quanta` квантов вокруг каждого прямоугольника.
+    /// Возвращает true, если расстояние между контурами меньше `buffer_quanta`.
+    #[inline]
+    pub fn overlaps_with_buffer(&self, o: &Rect, buffer_quanta: i32) -> bool {
+        let l1 = self.x * Q - buffer_quanta;
+        let r1 = (self.x + self.w) * Q + buffer_quanta;
+        let l2 = o.x * Q - buffer_quanta;
+        let r2 = (o.x + o.w) * Q + buffer_quanta;
+        let t1 = self.y * Q - buffer_quanta;
+        let b1 = (self.y + self.h) * Q + buffer_quanta;
+        let t2 = o.y * Q - buffer_quanta;
+        let b2 = (o.y + o.h) * Q + buffer_quanta;
+        l1 < r2 && l2 < r1 && t1 < b2 && t2 < b1
+    }
 }
 
 /// Точка линии в квантах.
@@ -137,8 +152,12 @@ impl Layout {
     }
 
     /// Можно ли поставить прямоугольник (не пересекается ни с кем, кроме `ignore`).
+    /// Между контурами объектов сохраняется буфер 2 кванта.
     pub fn is_free(&self, r: &Rect, ignore: Option<ObjectIx>) -> bool {
-        let (bx0, by0, bx1, by1) = bucket_range(r);
+        // Расширяем диапазон корзин на 1 клетку, чтобы поймать объекты в соседние корзины,
+        // которые могут быть в пределах буфера 2 кванта от r.
+        let padded = Rect::new(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+        let (bx0, by0, bx1, by1) = bucket_range(&padded);
         for by in by0..=by1 {
             for bx in bx0..=bx1 {
                 if let Some(v) = self.grid.buckets.get(&(bx, by)) {
@@ -146,7 +165,7 @@ impl Layout {
                         if Some(ObjectIx(id)) == ignore {
                             continue;
                         }
-                        if self.rect[id as usize].overlaps(r) {
+                        if self.rect[id as usize].overlaps_with_buffer(r, 2) {
                             return false;
                         }
                     }
@@ -157,14 +176,16 @@ impl Layout {
     }
 
     /// Номера объектов, чьи карточки пересекают прямоугольник (без повторов, по возрастанию).
+    /// Учитывается буфер 2 кванта между контурами.
     pub fn objects_overlapping(&self, r: &Rect, ignore: Option<ObjectIx>, out: &mut Vec<u32>) {
         out.clear();
-        let (bx0, by0, bx1, by1) = bucket_range(r);
+        let padded = Rect::new(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+        let (bx0, by0, bx1, by1) = bucket_range(&padded);
         for by in by0..=by1 {
             for bx in bx0..=bx1 {
                 if let Some(v) = self.grid.buckets.get(&(bx, by)) {
                     for &id in v {
-                        if Some(ObjectIx(id)) != ignore && self.rect[id as usize].overlaps(r) {
+                        if Some(ObjectIx(id)) != ignore && self.rect[id as usize].overlaps_with_buffer(r, 2) {
                             out.push(id);
                         }
                     }

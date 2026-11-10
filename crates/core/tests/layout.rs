@@ -29,8 +29,8 @@ fn occupied_cells_are_rejected() {
         object_at(&mut e, "b", [7, 1]).unwrap_err().code(),
         "cell_occupied"
     );
-    object_at(&mut e, "b", [30, 0]).unwrap(); // вплотную справа — можно
-    object_at(&mut e, "c", [0, 30]).unwrap(); // вплотную снизу — можно
+    object_at(&mut e, "b", [32, 0]).unwrap(); // с буфером 2 кванта справа — можно
+    object_at(&mut e, "c", [0, 32]).unwrap(); // с буфером 2 кванта снизу — можно
     assert_eq!(e.stats().objects, 3);
     assert_no_overlaps(&e);
 }
@@ -85,13 +85,13 @@ fn growing_card_relocates_instead_of_overlapping() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object_at(&mut e, "a", [0, 0]).unwrap();
-    object_at(&mut e, "b", [0, 30]).unwrap(); // вплотную под a
+    object_at(&mut e, "b", [0, 32]).unwrap(); // с буфером 2 кванта под a
                                               // Добавляем максимум показателей — карточка остаётся 30×30 (минимум)
     for k in 0..MAX_METRICS_PER_SIDE {
         out(&mut e, "a", &format!("o{k}"), "tovary", 1.0, None);
     }
     assert_no_overlaps(&e);
-    assert_eq!(e.object_view("b").unwrap().at, [0, 30], "соседа не двигаем");
+    assert_eq!(e.object_view("b").unwrap().at, [0, 32], "соседа не двигаем");
     assert_eq!(
         e.object_view("a").unwrap().at,
         [0, 0],
@@ -159,8 +159,8 @@ fn overlapping_vertical_routes_get_separate_lanes() {
         let t = format!("t{k}");
         // s_k и t_k расположены так, чтобы все три вертикали пересекались по Y
         // и пришлось занять три разных дорожки.
-        let sy = k * 30;
-        let ty = (2 - k) * 30;
+        let sy = k * 32;
+        let ty = (2 - k) * 32;
         object_at(&mut e, &s, [0, sy]).unwrap();
         out(&mut e, &s, "o1", "tovary", 1.0, None);
         object_at(&mut e, &t, [90, ty]).unwrap();

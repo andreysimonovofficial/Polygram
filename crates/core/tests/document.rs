@@ -10,10 +10,10 @@ fn sample() -> Engine {
     metric_def(&mut e, "vyruchka", "Выручка", MetricKind::Number, "$");
     object_at(&mut e, "p", [0, 0]).unwrap();
     out(&mut e, "p", "o1", "vyruchka", 50.0, Some(500.0));
-    object_at(&mut e, "a", [30, 30]).unwrap();
+    object_at(&mut e, "a", [32, 32]).unwrap();
     req(&mut e, "a", "r1", "tovary", 60.0, Some(80.0));
     out(&mut e, "a", "o1", "vyruchka", 3.0, None);
-    object_at(&mut e, "b", [30, 60]).unwrap();
+    object_at(&mut e, "b", [32, 64]).unwrap();
     req(&mut e, "b", "r1", "tovary", 40.0, None);
     connect(&mut e, "p", "o1", "a", "r1");
     connect(&mut e, "p", "o1", "b", "r1");
