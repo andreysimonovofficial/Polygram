@@ -176,81 +176,9 @@ pub fn handle_canvas_interaction(
                     app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
                 }
             }
-        } else if let Some((source_object, source_dir, metric_name)) = &app.drag.drag_metric {
-            // Предварительный просмотр перетаскивания показателя: подпись у курсора и подсветка целевого объекта.
-            if canvas_response.dragged_by(egui::PointerButton::Primary) {
-                if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    let painter = ui.painter();
-                    painter.text(
-                        cur + Vec2::new(14.0, 14.0),
-                        egui::Align2::LEFT_TOP,
-                        format!("⇨ {}", metric_name),
-                        egui::FontId::new(16.0, egui::FontFamily::Proportional),
-                        Color32::from_rgb(0, 217, 255),
-                    );
-                    // Подсвечиваем целевой объект под курсором (процесс, не источник).
-                    if let Some(target_id) = app
-                        .canvas
-                        .object_at(&geometry, cur)
-                        .filter(|id| *id != *source_object)
-                    {
-                        if let Some(target) = published
-                            .geometry
-                            .objects
-                            .iter()
-                            .find(|o| o.id == target_id)
-                        {
-                            if target.kind == NodeKind::Process {
-                                let r = polygram_core::layout::Rect::new(
-                                    target.rect.x,
-                                    target.rect.y,
-                                    target.rect.w,
-                                    target.rect.h,
-                                );
-                                let rect_px = Rect::from_min_size(
-                                    app.canvas
-                                        .camera
-                                        .world_to_screen(Pos2::new(r.x as f32, r.y as f32), app.canvas.cell_size),
-                                    Vec2::new(r.w as f32 * app.canvas.cell_px(), r.h as f32 * app.canvas.cell_px()),
-                                );
-                                painter.rect_stroke(
-                                    rect_px.expand(2.0),
-                                    2.0,
-                                    Stroke::new(
-                                        2.0_f32 * app.canvas.camera.zoom,
-                                        Color32::from_rgb(0, 217, 255),
-                                    ),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        } else if let Some(start) = app.drag.selection_box_start {
-            // Selection Box: рисуем резиновый прямоугольник во время перетаскивания.
-            if canvas_response.dragged_by(egui::PointerButton::Primary) {
-                if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    let painter = ui.painter();
-                    let x = start.x.min(cur.x);
-                    let y = start.y.min(cur.y);
-                    let w = (cur.x - start.x).abs();
-                    let h = (cur.y - start.y).abs();
-                    if w > 1.0 && h > 1.0 {
-                        let box_rect = Rect::from_min_size(
-                            Pos2::new(x, y),
-                            Vec2::new(w, h),
-                        );
-                        painter.rect_stroke(
-                            box_rect,
-                            0.0,
-                            Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)),
-                        );
-                    }
-                }
-            }
         }
 
-        // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
+    // Завершение перетаскивания при отпускании левой кнопки мыши — отправляем команду на сервер.
         if app.drag.drag_object.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
         {
@@ -425,6 +353,84 @@ pub fn handle_canvas_interaction(
     }
 
     app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid, &bindings);
+
+    // Перетаскивание показателя: подпись у курсора и подсветка целевого объекта (рисуется поверх холста).
+    if app.drag.drag_metric.is_some()
+        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    {
+        if let Some(cur) = canvas_response.interact_pointer_pos() {
+            if let Some((source_object, _source_dir, metric_name)) = &app.drag.drag_metric {
+                let painter = ui.painter();
+                painter.text(
+                    cur + Vec2::new(14.0, 14.0),
+                    egui::Align2::LEFT_TOP,
+                    format!("⇨ {}", metric_name),
+                    egui::FontId::new(16.0, egui::FontFamily::Proportional),
+                    Color32::from_rgb(0, 217, 255),
+                );
+                if let Some(target_id) = app
+                    .canvas
+                    .object_at(&geometry, cur)
+                    .filter(|id| *id != *source_object)
+                {
+                    if let Some(target) = published
+                        .geometry
+                        .objects
+                        .iter()
+                        .find(|o| o.id == target_id)
+                    {
+                        if target.kind == NodeKind::Process {
+                            let r = polygram_core::layout::Rect::new(
+                                target.rect.x,
+                                target.rect.y,
+                                target.rect.w,
+                                target.rect.h,
+                            );
+                            let rect_px = Rect::from_min_size(
+                                app.canvas.camera.world_to_screen(
+                                    Pos2::new(r.x as f32, r.y as f32),
+                                    app.canvas.cell_size,
+                                ),
+                                Vec2::new(
+                                    r.w as f32 * app.canvas.cell_px(),
+                                    r.h as f32 * app.canvas.cell_px(),
+                                ),
+                            );
+                            painter.rect_stroke(
+                                rect_px.expand(2.0),
+                                2.0,
+                                Stroke::new(
+                                    2.0_f32 * app.canvas.camera.zoom,
+                                    Color32::from_rgb(0, 217, 255),
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Selection Box: рисуем резиновый прямоугольник поверх холста.
+    if app.drag.selection_box_start.is_some()
+        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    {
+        if let (Some(start), Some(cur)) = (app.drag.selection_box_start, canvas_response.interact_pointer_pos()) {
+            let painter = ui.painter();
+            let x = start.x.min(cur.x);
+            let y = start.y.min(cur.y);
+            let w = (cur.x - start.x).abs();
+            let h = (cur.y - start.y).abs();
+            if w > 1.0 && h > 1.0 {
+                let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
+                painter.rect_stroke(
+                    box_rect,
+                    0.0,
+                    Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)),
+                );
+            }
+        }
+    }
 
     // Копировать текст ошибки API-привязки по клику на иконку ⚠ в строке показателя.
     if canvas_response.clicked() {
