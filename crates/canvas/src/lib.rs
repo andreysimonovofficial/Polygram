@@ -248,17 +248,24 @@ impl Canvas {
     }
 }
 
-/// Цвет точки статуса: серый для OK, цветной только для проблем.
-pub fn status_dot_color(status: StatusCode, theme: &Theme) -> Color32 {
-    match status {
-        StatusCode::Ok => theme.text_muted,
-        StatusCode::Warning => theme.status_warning,
-        StatusCode::Deficit => theme.status_deficit,
-        StatusCode::Surplus => theme.status_surplus,
-        StatusCode::Unconnected => theme.status_unconnected,
-        StatusCode::Invalid => theme.status_invalid,
-        StatusCode::Disabled => theme.text_muted,
-        StatusCode::Unknown => theme.text_muted,
+/// Цвет точки статуса и линии связи с учётом направления (Запрос / Выход).
+/// Запрос: Удовлетворён(Ok) = Зелёный, Ожидание(Deficit) = Красный.
+/// Выход: Обеспечен(Ok) = Зелёный, Избыток(Surplus) = Жёлтый, Ожидание(Deficit) = Красный,
+/// В процессе(Warning) = Синий.
+pub fn status_dot_color(status: StatusCode, dir: Direction, theme: &Theme) -> Color32 {
+    match dir {
+        Direction::Request => match status {
+            StatusCode::Ok => theme.status_ok,
+            StatusCode::Deficit => theme.status_deficit,
+            _ => theme.text_muted,
+        },
+        Direction::Output => match status {
+            StatusCode::Ok => theme.status_ok,
+            StatusCode::Surplus => theme.status_warning,
+            StatusCode::Deficit => theme.status_deficit,
+            StatusCode::Warning => theme.status_surplus,
+            _ => theme.text_muted,
+        },
     }
 }
 

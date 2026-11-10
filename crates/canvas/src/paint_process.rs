@@ -84,7 +84,6 @@ fn paint_metric_row(
     error_hotspots: &mut Vec<(Rect, String)>,
 ) {
     let status = dynamic.status[entry.ix as usize];
-    let dot_color = super::status_dot_color(status, theme);
     let dot_radius = theme.port_radius.max(2.0) * zoom;
     let cy = rect.center().y;
 
@@ -95,17 +94,17 @@ fn paint_metric_row(
         Stroke::new(ROW_BORDER_WIDTH * zoom, theme.card_border),
     );
 
-    // Точки сцепления слева и справа внутри тела строки (круг, не символ), цвет статуса
+    // Точки сцепления слева и справа внутри тела строки (круг, не символ), цвет статуса с учётом направления
     let dot_r = CONNECTION_DOT_RADIUS * zoom;
     painter.circle_filled(
         Pos2::new(rect.min.x + dot_r, cy),
         dot_r,
-        dot_color,
+        super::status_dot_color(status, dir, theme),
     );
     painter.circle_filled(
         Pos2::new(rect.max.x - dot_r, cy),
         dot_r,
-        dot_color,
+        super::status_dot_color(status, dir, theme),
     );
 
     // Имя записи
@@ -140,7 +139,7 @@ fn paint_metric_row(
                 Pos2::new(icon_x + 14.0 * zoom, cy),
                 egui::Align2::LEFT_CENTER,
                 ts,
-                egui::FontId::new((theme.text_size * zoom * 0.7).max(8.0), egui::FontFamily::Proportional),
+                egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
                 egui::Color32::from_gray(170),
             );
         }
@@ -221,14 +220,14 @@ fn paint_container_header(
     };
     let count_text = format!("{} ({}) {}", label, entries.len(), status_full);
     let header_color = if status != StatusCode::Ok {
-        super::status_dot_color(status, theme)
+        super::status_dot_color(status, dir, theme)
     } else {
         theme.text_muted
     };
     let text_color = if is_hovered { theme.text } else { header_color };
 
     // Точка статуса контейнера (слева)
-    let dot_color = super::status_dot_color(status, theme);
+    let dot_color = super::status_dot_color(status, dir, theme);
     let dot_radius = theme.port_radius.max(2.0) * zoom;
     painter.circle_filled(
         Pos2::new(rect.min.x + 8.0 * zoom, rect.center().y),

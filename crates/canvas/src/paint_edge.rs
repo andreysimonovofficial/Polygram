@@ -111,8 +111,11 @@ pub fn paint_edge(
                 .unwrap_or(0);
             let from_status = dynamic.status[fo.outputs[k_from].ix as usize];
             let to_status = dynamic.status[to.requests[k_to].ix as usize];
-            if from_status != StatusCode::Ok || to_status != StatusCode::Ok {
-                super::status_dot_color(from_status, theme)
+            // Цвет линии по статусу точки: источник = Выход, приёмник = Запрос.
+            if from_status != StatusCode::Ok {
+                super::status_dot_color(from_status, polygram_core::types::Direction::Output, theme)
+            } else if to_status != StatusCode::Ok {
+                super::status_dot_color(to_status, polygram_core::types::Direction::Request, theme)
             } else {
                 theme.line
             }
