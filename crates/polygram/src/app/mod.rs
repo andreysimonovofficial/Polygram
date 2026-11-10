@@ -454,6 +454,22 @@ impl PolygramApp {
         }
     }
 
+    /// Получить список всех API-привязок с сервера.
+    pub fn get_bindings(&self) -> Vec<serde_json::Value> {
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        match client.get(format!("{api_base}/api/bindings")).send() {
+            Ok(resp) => {
+                let body: serde_json::Value = resp.json().unwrap_or_default();
+                body.get("bindings")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default()
+            }
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// Обновить кэш статусов API-привязок из сервера.
     pub fn refresh_api_bindings(&mut self) {
         let statuses = self.get_binding_statuses();
@@ -511,9 +527,30 @@ impl PolygramApp {
         }
     }
 
-    /// Получить конфиг коннектора по ID (из локального кэша).
-    pub fn get_connector_config(&self, connector_id: &str) -> Option<serde_json::Value> {
+    /// Получить конфиг коннектора по ID (с сервера + локальный кэш).
+    pub fn get_connector_config(&mut self, connector_id: &str) -> Option<serde_json::Value> {
+        // Сначала пробуем сервер.
+        let api_base = self.connection.api_base.clone();
+        let client = self.connection.api_client.clone();
+        let id = connector_id.to_owned();
+        if let Ok(resp) = client.get(format!("{api_base}/api/connectors/{id}/config")).send() {
+            if let Ok(body) = resp.json::<serde_json::Value>() {
+                if let Some(config) = body.get("config").cloned() {
+                    self.connector_configs.insert(connector_id.to_owned(), config.clone());
+                    let _ = self.save_connector_configs();
+                    return Some(config);
+                }
+            }
+        }
+        // Fallback на локальный кэш.
         self.connector_configs.get(connector_id).cloned()
+    }
+
+    /// Обновить все конфиги коннекторов с сервера.
+    pub fn refresh_connector_configs(&mut self, connector_ids: &[String]) {
+        for id in connector_ids {
+            let _ = self.get_connector_config(id);
+        }
     }
 
     /// Сохранить конфиг коннектора по ID (локально + на сервер + в файл).

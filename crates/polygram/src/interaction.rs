@@ -726,6 +726,27 @@ pub fn handle_container_menu_dialog(
         Direction::Output => obj.outputs.iter().collect(),
     };
 
+    // Загрузить существующие API-привязки и заполнить поля диалога для первой записи.
+    if app.dialogs.container_menu_api_connector.is_empty()
+        && app.dialogs.container_menu_api_cell.is_empty()
+    {
+        let bindings = app.get_bindings();
+        if let Some(first_entry) = entries.first() {
+            let binding_id = format!("{}:{}", object_id, first_entry.name);
+            for b in &bindings {
+                if b.get("id").and_then(|v| v.as_str()) == Some(&binding_id) {
+                    app.dialogs.container_menu_api_connector =
+                        b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+                    app.dialogs.container_menu_api_cell =
+                        b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+                    app.dialogs.container_menu_api_interval =
+                        b.get("interval_secs").and_then(|v| v.as_u64()).unwrap_or(30);
+                    break;
+                }
+            }
+        }
+    }
+
     // Инициализировать буферы редактирования (имя, значение, единица).
     // Для запроса редактируем required, для выхода — value.
     if app.dialogs.container_menu_edits.is_empty() {
