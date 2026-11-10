@@ -48,6 +48,8 @@ pub struct DocObject {
     pub kind: NodeKind,
     pub at: [i32; 2],
     #[serde(default)]
+    pub parent: Option<String>,
+    #[serde(default)]
     pub requests: Vec<DocObjectMetric>,
     #[serde(default)]
     pub outputs: Vec<DocObjectMetric>,
@@ -171,6 +173,7 @@ impl Engine {
                     name: d.name.clone(),
                     kind: d.kind,
                     at: [r.x, r.y],
+                    parent: d.parent.map(|p| h.object(p).ext_id.clone()),
                     requests,
                     outputs,
                 }
@@ -223,7 +226,7 @@ impl Engine {
                 name: o.name.clone(),
                 kind: o.kind,
                 at: Some(o.at),
-                parent: None,
+                parent: o.parent.clone(),
                 author: None,
             });
             for (dir, list) in [

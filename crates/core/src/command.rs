@@ -41,6 +41,13 @@ pub enum Command {
         object: String,
         at: [i32; 2],
     },
+    /// Изменить родительский отдел объекта (None — корень).
+    /// Запрещено назначать родителем самого себя или своего потомка (цикл).
+    SetObjectParent {
+        object: String,
+        #[serde(default)]
+        parent: Option<String>,
+    },
 
     /// Создать глобальный показатель (единый для всего холста).
     AddMetricDef {

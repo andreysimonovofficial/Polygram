@@ -11,9 +11,20 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                 }
                 if ui.button("Загрузить .pg").clicked() {
                     ui.close_menu();
+                    app.import_requested = true;
                 }
                 if ui.button("Сохранить .pg").clicked() {
                     ui.close_menu();
+                    app.export_requested = true;
+                }
+                ui.separator();
+                if ui.button("Экспортировать отдел").clicked() {
+                    ui.close_menu();
+                    app.export_department_requested = true;
+                }
+                if ui.button("Импортировать отдел").clicked() {
+                    ui.close_menu();
+                    app.import_department_requested = true;
                 }
                 ui.separator();
                 if ui.button("Выход").clicked() {

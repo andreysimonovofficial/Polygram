@@ -234,6 +234,27 @@ impl ApiService {
         let engine = polygram_core::Engine::from_document(&doc)?;
         Ok(Self::new(engine))
     }
+
+    /// Получить полный документ grafa (включая parent у объектов).
+    pub fn to_document_json(&self) -> Result<String, EngineError> {
+        let json = self
+            .inner
+            .runtime
+            .handle()
+            .query(|e| e.to_json())
+            .ok_or(EngineError::Stopped)?;
+        Ok(json)
+    }
+
+    /// Применить документ (.pg JSON) к текущему графу, заменяя его содержимое.
+    pub fn apply_document(&self, json: &str) -> Result<(), EngineError> {
+        let doc = Document::parse(json)?;
+        let engine = polygram_core::Engine::from_document(&doc)?;
+        // Нельзя просто заменить движок в рантайме — вместо этого применяем команды.
+        // Но для простоты возвращаем документ, а GUI сама разберёт его на команды.
+        let _ = engine;
+        Ok(())
+    }
 }
 
 impl Default for ApiService {

@@ -112,3 +112,62 @@ pub fn handle_rename_object(engine: &mut Engine, object: &str, name: String) -> 
         .push(crate::event::EventKind::ObjectRenamed { object: ix.0 });
     Ok(Applied::default())
 }
+
+/// Изменить родительский отдел объекта.
+/// Запрещено назначать родителем самого себя или своего потомка.
+pub fn handle_set_object_parent(
+    engine: &mut Engine,
+    object: &str,
+    parent: Option<String>,
+) -> Result<Applied> {
+    let object_ix = engine.find_object(object)?;
+    let parent_ix = match &parent {
+        Some(p) => Some(
+            engine
+                .hier
+                .find_object(p)
+                .ok_or_else(|| crate::error::EngineError::ObjectNotFound(p.clone()))?,
+        ),
+        None => None,
+    };
+
+    // Цикл: объект не может быть своим propres родителем.
+    if let Some(p) = parent_ix {
+        if p == object_ix {
+            return Err(crate::error::EngineError::ObjectNotFound(
+                "нельзя назначить родителем самого себя".to_owned(),
+            ));
+        }
+        // Родитель не может быть потомком объекта.
+        if engine.hier.is_descendant_of(p, object_ix) {
+            return Err(crate::error::EngineError::ObjectNotFound(
+                "нельзя назначить родителем своего потомка (цикл)".to_owned(),
+            ));
+        }
+    }
+
+    let old_parent = engine.hier.object(object_ix).parent;
+    if old_parent == parent_ix {
+        return Ok(Applied::default());
+    }
+
+    // Обновляем поле parent в иерархии.
+    engine.hier.objects[object_ix.idx()].parent = parent_ix;
+
+    // Если объект перемещён в отдел — растягиваем отдел под него.
+    if let Some(p) = parent_ix {
+        engine.expand_department_to_fit(p);
+    } else if let Some(old_p) = old_parent {
+        // Ушли из отдела — попробуем сжать старый отдел.
+        engine.shrink_department_to_fit(old_p);
+    }
+
+    engine
+        .pending
+        .push(crate::event::EventKind::ObjectMoved {
+            object: object_ix.0,
+            gx: engine.layout.rect_of(object_ix).x,
+            gy: engine.layout.rect_of(object_ix).y,
+        });
+    Ok(Applied::default())
+}

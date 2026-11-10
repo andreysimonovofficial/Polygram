@@ -29,6 +29,14 @@ pub fn context_menu(
                             *close_menu = true;
                         }
                     }
+                    // Сгруппировать выделенные объекты в отдел.
+                    if app.selected_objects.len() > 1 {
+                        if ui.button("Сгруппировать в отдел").clicked() {
+                            app.group_selected_into_department(&published);
+                            *close_menu = true;
+                        }
+                        ui.separator();
+                    }
                     if ui.button("Добавить показатель в запрос").clicked()
                     {
                         let n_req = published

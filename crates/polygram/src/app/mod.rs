@@ -84,6 +84,11 @@ pub struct PolygramApp {
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
+    /// Экспорт/импорт отдела: флаги запроса открытия диалога файла.
+    pub export_requested: bool,
+    pub import_requested: bool,
+    pub export_department_requested: bool,
+    pub import_department_requested: bool,
     /// Локальный кэш файлов коннекторов из папки connectors/.
     pub connectors: HashMap<String, ConnectorFile>,
     /// Статус подключения каждого коннектора.
@@ -153,6 +158,10 @@ impl PolygramApp {
             chat,
             connectors: Self::load_connectors(),
             connector_status: HashMap::new(),
+            export_requested: false,
+            import_requested: false,
+            export_department_requested: false,
+            import_department_requested: false,
         }
     }
 
@@ -455,6 +464,65 @@ impl PolygramApp {
         }
         ids.sort();
         ids
+    }
+
+    /// Сгруппировать выделенные объекты в новый отдел.
+    /// Вычисляет ограничивающий прямоугольник выделения, создаёт отдел,
+    /// размещает его вокруг объектов и переводит каждого выбранного объекта в отдел.
+    pub fn group_selected_into_department(&mut self, published: &polygram_core::Published) {
+        if self.selected_objects.len() < 2 {
+            return;
+        }
+        let geometry = &published.geometry;
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        let mut selected_ids: Vec<String> = Vec::new();
+        for id in &self.selected_objects {
+            if let Some(obj) = geometry.objects.iter().find(|o| o.id == *id) {
+                let r = polygram_core::layout::Rect::new(obj.rect.x, obj.rect.y, obj.rect.w, obj.rect.h);
+                min_x = min_x.min(r.x);
+                min_y = min_y.min(r.y);
+                max_x = max_x.max(r.x + r.w);
+                max_y = max_y.max(r.y + r.h);
+                selected_ids.push(id.clone());
+            }
+        }
+        if selected_ids.is_empty() {
+            return;
+        }
+        // Отдел: отступ 2 клетки сверху под шапку, padding 1 клетка по бокам.
+        let dept_x = min_x.saturating_sub(1);
+        let dept_y = (min_y - 3).max(0); // 2 для шапки + 1 padding
+
+        // Предсказуемый ID отдела, чтобы сослаться на него в SetObjectParent.
+        let dept_id = format!("dept_{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0));
+
+        let mut batch: Vec<Command> = Vec::new();
+        // Создаём отдел.
+        batch.push(Command::AddObject {
+            id: Some(dept_id.clone()),
+            name: "Отдел".to_owned(),
+            kind: polygram_core::types::NodeKind::Department,
+            at: Some([dept_x, dept_y]),
+            parent: None,
+            author: None,
+        });
+        // Переводим каждый выбранный объект в отдел.
+        for obj_id in &selected_ids {
+            batch.push(Command::SetObjectParent {
+                object: obj_id.clone(),
+                parent: Some(dept_id.clone()),
+            });
+        }
+
+        self.apply_batch(batch);
+        // Очищаем выделение.
+        self.selected_objects.clear();
     }
 
     pub fn get_binding_statuses(&self) -> serde_json::Value {

@@ -100,4 +100,125 @@ impl crate::engine::Engine {
             }
         }
     }
+
+    /// Растянуть отдел под всех своих детей (с отступом на шапку 2 клетки сверху).
+    /// Возвращает новый rect отдела, если он изменился.
+    pub(crate) fn expand_department_to_fit(&mut self, parent: ObjectIx) -> Option<crate::layout::Rect> {
+        let children: Vec<ObjectIx> = self.hier.children_of(parent);
+        if children.is_empty() {
+            return None;
+        }
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        for &c in &children {
+            let r = self.layout.rect_of(c);
+            min_x = min_x.min(r.x);
+            min_y = min_y.min(r.y);
+            max_x = max_x.max(r.x + r.w);
+            max_y = max_y.max(r.y + r.h);
+        }
+        let old = self.layout.rect_of(parent);
+        // Шапка отдела занимает 2 клетки сверху, дети начинаются с parent.y + 2.
+        let new_y = (min_y - 2).max(0);
+        let new_x = min_x;
+        let new_w = max_x - new_x;
+        let new_h = (max_y - new_y).max(old.h);
+        let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
+        if new_rect == old {
+            return None;
+        }
+        // Ручная проверка наложения на посторонние объекты (кроме самого отдела и его детей).
+        let mut overlap = false;
+        for (i, r) in self.layout.rect.iter().enumerate() {
+            if !self.layout.placed[i] {
+                continue;
+            }
+            let ix = ObjectIx(i as u32);
+            if ix == parent || children.contains(&ix) {
+                continue;
+            }
+            if new_rect.overlaps_with_buffer(r, 2) {
+                overlap = true;
+                break;
+            }
+        }
+        if overlap {
+            // Пробуем подальше от текущей позиции.
+            if let Some((x, y)) = self.layout.find_free_near(new_w, new_h, old.x, old.y, None, 512) {
+                let adjusted = crate::layout::Rect::new(x, y, new_w, new_h);
+                self.layout.replace(parent, adjusted);
+                self.pending.push(EventKind::ObjectMoved {
+                    object: parent.0,
+                    gx: x,
+                    gy: y,
+                });
+                return Some(adjusted);
+            }
+            return None;
+        }
+        self.layout.replace(parent, new_rect);
+        self.pending.push(EventKind::ObjectMoved {
+            object: parent.0,
+            gx: new_x,
+            gy: new_y,
+        });
+        Some(new_rect)
+    }
+
+    /// Сжать отдел под оставшихся детей (если возможно без наложений).
+    pub(crate) fn shrink_department_to_fit(&mut self, parent: ObjectIx) -> Option<crate::layout::Rect> {
+        let children: Vec<ObjectIx> = self.hier.children_of(parent);
+        let old = self.layout.rect_of(parent);
+        if children.is_empty() {
+            // Никаких детей — оставить минимальный размер.
+            return None;
+        }
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        for &c in &children {
+            let r = self.layout.rect_of(c);
+            min_x = min_x.min(r.x);
+            min_y = min_y.min(r.y);
+            max_x = max_x.max(r.x + r.w);
+            max_y = max_y.max(r.y + r.h);
+        }
+        let new_y = (min_y - 2).max(0);
+        let new_x = min_x;
+        let new_w = max_x - new_x;
+        let new_h = (max_y - new_y).max(4); // минимум шапка + строка
+        let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
+        if new_rect == old {
+            return None;
+        }
+        let mut ignore: Vec<ObjectIx> = vec![parent];
+        ignore.extend(children);
+        let mut overlap = false;
+        for (i, r) in self.layout.rect.iter().enumerate() {
+            if !self.layout.placed[i] {
+                continue;
+            }
+            let ix = ObjectIx(i as u32);
+            if ix == parent || ignore.contains(&ix) {
+                continue;
+            }
+            if new_rect.overlaps_with_buffer(r, 2) {
+                overlap = true;
+                break;
+            }
+        }
+        if overlap {
+            return None;
+        }
+        self.layout.replace(parent, new_rect);
+        self.pending.push(EventKind::ObjectMoved {
+            object: parent.0,
+            gx: new_x,
+            gy: new_y,
+        });
+        Some(new_rect)
+    }
 }

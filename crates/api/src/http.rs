@@ -48,6 +48,8 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/objects/:id", get(get_object))
         .route("/api/commands", post(post_command))
         .route("/api/commands/batch", post(post_batch))
+        .route("/api/document", get(get_document))
+        .route("/api/document/import", post(post_document_import))
         .route("/api/chat/messages", get(get_chat_messages).post(post_chat_message))
         // Коннекторы и привязки API.
         .route("/api/connectors", get(get_connectors))
@@ -139,6 +141,30 @@ async fn post_batch(State(api): State<Arc<ApiService>>, Json(cmds): Json<Vec<Com
     match api.apply_batch(cmds) {
         Ok(results) => Json(json!({"ok": true, "results": results})),
         Err((i, e)) => Json(json!({"ok": false, "error": e.to_string(), "failed_at": i})),
+    }
+}
+
+/// GET /api/document — полный документ графа (включая parent у объектов).
+async fn get_document(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    match api.to_document_json() {
+        Ok(json) => match serde_json::from_str::<serde_json::Value>(&json) {
+            Ok(v) => Json(v),
+            Err(_) => Json(json!({"ok": false, "error": "не удалось разобрать документ"})),
+        },
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+    }
+}
+
+/// POST /api/document/import — применить документ (.pg JSON) к текущему графу.
+/// Тело: JSON-документ. Объекты создаются командой add_object с parent.
+async fn post_document_import(
+    State(api): State<Arc<ApiService>>,
+    Json(doc): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let json_str = serde_json::to_string(&doc).unwrap_or_default();
+    match api.apply_document(&json_str) {
+        Ok(_) => Json(json!({"ok": true})),
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
     }
 }
 

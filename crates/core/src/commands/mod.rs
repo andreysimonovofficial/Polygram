@@ -17,7 +17,7 @@ pub use metric_entries::{
     handle_add_metric_entry, handle_remove_metric_entry, handle_set_fact, handle_set_max,
     handle_set_required, handle_set_value,
 };
-pub use objects::{handle_add_object, handle_remove_object, handle_rename_object};
+pub use objects::{handle_add_object, handle_remove_object, handle_rename_object, handle_set_object_parent};
 pub use reroute_all::handle_reroute_all;
 
 pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied> {
@@ -32,6 +32,9 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         } => handle_add_object(engine, id, name, kind, at, parent, author),
         Command::RemoveObject { object } => handle_remove_object(engine, &object),
         Command::RenameObject { object, name } => handle_rename_object(engine, &object, name),
+        Command::SetObjectParent { object, parent } => {
+            handle_set_object_parent(engine, &object, parent)
+        }
         Command::MoveObject { object, at } => handle_move_object(engine, &object, at),
         Command::AddMetricDef {
             id,
