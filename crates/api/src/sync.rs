@@ -106,7 +106,7 @@ impl SyncService {
         }
 
         let svc = Self {
-            bindings: Arc::new(Mutex::new(Vec::new())),
+            bindings: Arc::new(Mutex::new(Self::load_bindings(&connectors_dir))),
             connector_configs: Arc::new(Mutex::new(config_vec)),
             statuses: Arc::new(Mutex::new(HashMap::new())),
             engine_handle,
@@ -139,6 +139,24 @@ impl SyncService {
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
             .join(CONNECTORS_DIR_NAME)
+    }
+
+    fn bindings_path(dir: &PathBuf) -> PathBuf {
+        dir.join("bindings.json")
+    }
+
+    fn load_bindings(dir: &PathBuf) -> Vec<ApiBinding> {
+        let path = Self::bindings_path(dir);
+        match fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str::<Vec<ApiBinding>>(&content).unwrap_or_default(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    fn save_bindings(dir: &PathBuf, bindings: &[ApiBinding]) -> std::io::Result<()> {
+        let path = Self::bindings_path(dir);
+        let json = serde_json::to_string_pretty(bindings)?;
+        fs::write(path, json)
     }
 
     /// Создаёт файлы коннекторов по умолчанию, если папка пуста.
@@ -185,6 +203,7 @@ impl SyncService {
         if let Ok(mut b) = self.bindings.lock() {
             b.retain(|ex| ex.object_id != binding.object_id || ex.entry_id != binding.entry_id);
             b.push(binding.clone());
+            let _ = Self::save_bindings(&self.connectors_dir, &b);
         }
         let _ = self.statuses.lock().map(|mut s| {
             s.insert(binding.id.clone(), BindingStatus::default());
@@ -194,6 +213,7 @@ impl SyncService {
     pub fn remove_binding(&self, id: &str) {
         if let Ok(mut b) = self.bindings.lock() {
             b.retain(|ex| ex.id != id);
+            let _ = Self::save_bindings(&self.connectors_dir, &b);
         }
         let _ = self.statuses.lock().map(|mut s| {
             s.remove(id);
