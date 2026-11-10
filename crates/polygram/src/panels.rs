@@ -412,6 +412,17 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
         app.check_connector_status("google-sheets");
     }
 
+    // Время последнего опроса по привязкам этого коннектора.
+    let latest_poll = app
+        .api_bindings
+        .values()
+        .filter(|b| b.connector == "google-sheets")
+        .filter_map(|b| b.last_updated.as_deref())
+        .max();
+    if let Some(ts) = latest_poll {
+        ui.label(format!("Последний опрос: {}", ts));
+    }
+
     ui.separator();
     ui.heading("Настройка Google Таблиц");
     ui.label(

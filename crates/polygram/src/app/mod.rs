@@ -485,6 +485,7 @@ impl PolygramApp {
     /// Обновить кэш статусов API-привязок из сервера.
     pub fn refresh_api_bindings(&mut self) {
         let statuses = self.get_binding_statuses();
+        let bindings = self.get_bindings();
         let statuses_map = statuses.get("statuses").and_then(|v| v.as_object());
         if let Some(map) = statuses_map {
             for (id, status) in map {
@@ -492,11 +493,20 @@ impl PolygramApp {
                 let last_value = status.get("last_value").and_then(|v| v.as_f64());
                 let last_updated = status.get("last_updated").and_then(|v| v.as_str()).map(|s| s.to_owned());
                 let error = status.get("error").and_then(|v| v.as_str()).map(|s| s.to_owned());
-                // connector/cell не приходят в статусе, оставим пустые
+                let (connector, cell) = bindings.iter().find_map(|b| {
+                    if b.get("id").and_then(|v| v.as_str()) == Some(id) {
+                        Some((
+                            b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+                            b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+                        ))
+                    } else {
+                        None
+                    }
+                }).unwrap_or_default();
                 self.api_bindings.insert(id.clone(), BindingStatusInfo {
                     ok,
-                    connector: String::new(),
-                    cell: String::new(),
+                    connector,
+                    cell,
                     last_value,
                     last_updated,
                     error,
@@ -536,6 +546,16 @@ impl PolygramApp {
                 egui::FontId::new(12.0, egui::FontFamily::Proportional),
                 icon_color,
             );
+            // Время последнего опроса ячейки (слева от иконки).
+            if let Some(ts) = &info.last_updated {
+                painter.text(
+                    egui::Pos2::new(icon_x - 4.0, icon_y),
+                    egui::Align2::RIGHT_CENTER,
+                    ts,
+                    egui::FontId::new(9.0, egui::FontFamily::Proportional),
+                    egui::Color32::from_gray(170),
+                );
+            }
         }
     }
 
