@@ -305,7 +305,7 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     for connector_id in &connectors {
                         let config = app.get_connector_config(connector_id);
-                        let config_value = config
+                        let mut config_value = config
                             .as_ref()
                             .and_then(|c| c.as_object())
                             .cloned()
@@ -318,13 +318,13 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
 
                                 match connector_id.as_str() {
                                     "google-sheets" => {
-                                        render_google_sheets_config(ui, app, &config_value);
+                                        render_google_sheets_config(ui, app, &mut config_value);
                                     }
                                     "google-analytics" => {
-                                        render_google_analytics_config(ui, app, &config_value);
+                                        render_google_analytics_config(ui, app, &mut config_value);
                                     }
                                     "static" => {
-                                        render_static_config(ui, &config_value);
+                                        render_static_config(ui, &mut config_value);
                                     }
                                     _ => {
                                         ui.label("Настройки не определены для этого коннектора.");
@@ -344,7 +344,7 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
 }
 
 /// Конфигурация Google Таблиц: URL Apps Script + инструкция.
-fn render_google_sheets_config(ui: &mut egui::Ui, app: &PolygramApp, config: &serde_json::Map<String, serde_json::Value>) {
+fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config: &mut serde_json::Map<String, serde_json::Value>) {
     let mut url = config
         .get("url")
         .and_then(|v| v.as_str())
@@ -357,14 +357,13 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &PolygramApp, config: &se
 
     ui.label("URL Apps Script:");
     let url_response = ui.text_edit_singleline(&mut url);
-    if url_response.lost_focus() {
-        let mut new_config = serde_json::Map::new();
-        new_config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
-        new_config.insert(
+    if url_response.lost_focus() && !url.is_empty() {
+        config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
+        config.insert(
             "intervalSecs".to_owned(),
             serde_json::Value::Number(interval.into()),
         );
-        app.set_connector_config("google-sheets", serde_json::Value::Object(new_config));
+        app.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()));
     }
 
     ui.horizontal(|ui| {
@@ -373,16 +372,44 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &PolygramApp, config: &se
         if ui.text_edit_singleline(&mut interval_str).lost_focus() {
             if let Ok(v) = interval_str.trim().parse::<u64>() {
                 interval = v.max(1);
-                let mut new_config = serde_json::Map::new();
-                new_config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
-                new_config.insert(
+                config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
+                config.insert(
                     "intervalSecs".to_owned(),
                     serde_json::Value::Number(interval.into()),
                 );
-                app.set_connector_config("google-sheets", serde_json::Value::Object(new_config));
+                app.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()));
             }
         }
     });
+
+    // Статус подключения.
+    let status = app.connector_status.get("google-sheets").cloned();
+    let mut check_connection = false;
+    ui.horizontal(|ui| {
+        if let Some(s) = status {
+            let color = if s.ok {
+                egui::Color32::from_rgb(76, 175, 80)
+            } else {
+                egui::Color32::from_rgb(244, 67, 54)
+            };
+            let label = match &s.error {
+                Some(e) if e == "проверка..." => "проверка подключения...",
+                Some(e) => e.as_str(),
+                None if s.ok => "подключено",
+                None => "ошибка",
+            };
+            ui.colored_label(color, label);
+            if let Some(t) = &s.last_checked {
+                ui.label(format!("({})", t));
+            }
+        }
+        if ui.button("Проверить подключение").clicked() {
+            check_connection = true;
+        }
+    });
+    if check_connection {
+        app.check_connector_status("google-sheets");
+    }
 
     ui.separator();
     ui.heading("App Script для Google Таблиц");
@@ -422,7 +449,7 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &PolygramApp, config: &se
 }
 
 /// Конфигурация Google Analytics: список метрик с копированием.
-fn render_google_analytics_config(ui: &mut egui::Ui, app: &PolygramApp, config: &serde_json::Map<String, serde_json::Value>) {
+fn render_google_analytics_config(ui: &mut egui::Ui, app: &mut PolygramApp, config: &mut serde_json::Map<String, serde_json::Value>) {
     let mut property_id = config
         .get("propertyId")
         .and_then(|v| v.as_str())
@@ -440,19 +467,27 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &PolygramApp, config: 
 
     ui.label("Property ID (GA4):");
     let pid_response = ui.text_edit_singleline(&mut property_id);
-    if pid_response.lost_focus() {
-        let mut new_config = serde_json::Map::new();
-        new_config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
-        new_config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
-        new_config.insert(
+    if pid_response.lost_focus() && !property_id.is_empty() {
+        config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
+        config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
+        config.insert(
             "intervalSecs".to_owned(),
             serde_json::Value::Number(interval.into()),
         );
-        app.set_connector_config("google-analytics", serde_json::Value::Object(new_config));
+        app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
     }
 
     ui.label("Channel ID:");
-    ui.text_edit_singleline(&mut channel_id);
+    let cid_response = ui.text_edit_singleline(&mut channel_id);
+    if cid_response.lost_focus() && !channel_id.is_empty() {
+        config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
+        config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
+        config.insert(
+            "intervalSecs".to_owned(),
+            serde_json::Value::Number(interval.into()),
+        );
+        app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
+    }
 
     ui.horizontal(|ui| {
         ui.label("Интервал опроса (сек):");
@@ -460,14 +495,13 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &PolygramApp, config: 
         if ui.text_edit_singleline(&mut interval_str).lost_focus() {
             if let Ok(v) = interval_str.trim().parse::<u64>() {
                 interval = v.max(30);
-                let mut new_config = serde_json::Map::new();
-                new_config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
-                new_config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
-                new_config.insert(
+                config.insert("propertyId".to_owned(), serde_json::Value::String(property_id.clone()));
+                config.insert("channelId".to_owned(), serde_json::Value::String(channel_id.clone()));
+                config.insert(
                     "intervalSecs".to_owned(),
                     serde_json::Value::Number(interval.into()),
                 );
-                app.set_connector_config("google-analytics", serde_json::Value::Object(new_config));
+                app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
             }
         }
     });
@@ -493,7 +527,7 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &PolygramApp, config: 
 }
 
 /// Конфигурация константы (для теста).
-fn render_static_config(ui: &mut egui::Ui, _config: &serde_json::Map<String, serde_json::Value>) {
+fn render_static_config(ui: &mut egui::Ui, _config: &mut serde_json::Map<String, serde_json::Value>) {
     ui.label("Константа — вводите любое число в поле «ячейка / метрика» при привязке показателя.");
     ui.label("Пример: 42");
 }

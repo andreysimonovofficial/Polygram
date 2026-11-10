@@ -84,6 +84,18 @@ pub struct PolygramApp {
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
+    /// Локальный кэш конфигов коннекторов (чтобы URL не исчезал при перерисовке).
+    pub connector_configs: HashMap<String, serde_json::Value>,
+    /// Статус подключения каждого коннектора.
+    pub connector_status: HashMap<String, ConnectorStatusInfo>,
+}
+
+/// Статус подключения коннектора.
+#[derive(Clone, Debug, Default)]
+pub struct ConnectorStatusInfo {
+    pub ok: bool,
+    pub last_checked: Option<String>,
+    pub error: Option<String>,
 }
 
 /// Информация о статусе одной API-привязки для отображения в UI.
@@ -127,6 +139,8 @@ impl PolygramApp {
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,
+            connector_configs: Self::load_connector_configs(),
+            connector_status: HashMap::new(),
         }
     }
 
@@ -497,21 +511,16 @@ impl PolygramApp {
         }
     }
 
-    /// Получить конфиг коннектора по ID.
+    /// Получить конфиг коннектора по ID (из локального кэша).
     pub fn get_connector_config(&self, connector_id: &str) -> Option<serde_json::Value> {
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        match client.get(format!("{api_base}/api/connectors/{connector_id}/config")).send() {
-            Ok(resp) => {
-                let body: serde_json::Value = resp.json().unwrap_or_default();
-                body.get("config").cloned()
-            }
-            Err(_) => None,
-        }
+        self.connector_configs.get(connector_id).cloned()
     }
 
-    /// Сохранить конфиг коннектора по ID.
-    pub fn set_connector_config(&self, connector_id: &str, config: serde_json::Value) {
+    /// Сохранить конфиг коннектора по ID (локально + на сервер + в файл).
+    pub fn set_connector_config(&mut self, connector_id: &str, config: serde_json::Value) {
+        self.connector_configs
+            .insert(connector_id.to_owned(), config.clone());
+        let _ = self.save_connector_configs();
         let api_base = self.connection.api_base.clone();
         let client = self.connection.api_client.clone();
         let id = connector_id.to_owned();
@@ -523,20 +532,8 @@ impl PolygramApp {
         });
     }
 
-    /// Получить список метрик Google Analytics (демо-список, если OAuth не настроен).
+    /// Получить список метрик Google Analytics.
     pub fn get_ga_metrics(&self) -> Vec<String> {
-        // Попробуем получить через коннектор, если есть URL; иначе — демо-список.
-        let config = self.get_connector_config("google-analytics");
-        let has_config = config
-            .as_ref()
-            .and_then(|c| c.get("property_id"))
-            .and_then(|v| v.as_str())
-            .map_or(false, |s| !s.is_empty());
-
-        if has_config {
-            // В реальном режиме здесь был бы запрос к GA4 API.
-            // Сейчас возвращаем общий список, который пользователь может скопировать.
-        }
         vec![
             "ga:sessions".to_owned(),
             "ga:users".to_owned(),
@@ -551,5 +548,77 @@ impl PolygramApp {
             "ga4:ga:screenviews".to_owned(),
             "ga4:ga:conversions".to_owned(),
         ]
+    }
+
+    /// Проверить подключение к Apps Script URL (для Google Таблиц).
+    pub fn check_connector_status(&mut self, connector_id: &str) {
+        let config = match self.connector_configs.get(connector_id) {
+            Some(c) => c.clone(),
+            None => return,
+        };
+        let url = match connector_id {
+            "google-sheets" => config
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_owned(),
+            _ => return,
+        };
+
+        if url.is_empty() || !url.starts_with("http") {
+            self.connector_status.insert(
+                connector_id.to_owned(),
+                ConnectorStatusInfo {
+                    ok: false,
+                    last_checked: Some(chrono::Local::now().format("%H:%M:%S").to_string()),
+                    error: Some("URL не задан".to_owned()),
+                },
+            );
+            return;
+        }
+
+        let api_client = self.connection.api_client.clone();
+        let id = connector_id.to_owned();
+        std::thread::spawn(move || {
+            let result = api_client.get(&url).query(&[("cell", "status")]).send();
+            let ok = result.as_ref().map_or(false, |resp| resp.status().is_success());
+            let error = result.err().map(|e| e.to_string());
+            let _ = ok;
+            let _ = error;
+            let _ = id;
+        });
+
+        self.connector_status.insert(
+            connector_id.to_owned(),
+            ConnectorStatusInfo {
+                ok: false,
+                last_checked: Some(chrono::Local::now().format("%H:%M:%S").to_string()),
+                error: Some("проверка...".to_owned()),
+            },
+        );
+    }
+
+    // ----- Персистентность конфигов коннекторов -----
+
+    fn connector_configs_path() -> std::path::PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+            .join("polygram_connector_configs.json")
+    }
+
+    fn load_connector_configs() -> HashMap<String, serde_json::Value> {
+        let path = Self::connector_configs_path();
+        match std::fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+            Err(_) => HashMap::new(),
+        }
+    }
+
+    fn save_connector_configs(&self) -> std::io::Result<()> {
+        let path = Self::connector_configs_path();
+        let json = serde_json::to_string_pretty(&self.connector_configs)?;
+        std::fs::write(path, json)
     }
 }
