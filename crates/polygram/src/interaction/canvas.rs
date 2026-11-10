@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{object_at, MetricBinding};
+use polygram_canvas::{object_at, MetricBinding, paint_drag_preview};
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Command, Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
@@ -134,9 +134,18 @@ pub fn handle_canvas_interaction(
                     .iter()
                     .find(|(_, _, _, rect)| rect.contains(pos));
                 if let Some((object_id, dir, metric_name, _)) = metric_drag {
-                    app.drag.drag_metric =
-                        Some((object_id.clone(), *dir, metric_name.clone()));
-                    app.drag.drag_metric_start_screen = Some(pos);
+                    let entry = geometry.objects.iter()
+                        .find(|o| o.id == *object_id)
+                        .and_then(|o| match dir {
+                            Direction::Request => o.requests.iter().find(|e| e.name == *metric_name),
+                            Direction::Output => o.outputs.iter().find(|e| e.name == *metric_name),
+                        })
+                        .cloned();
+                    if let Some(entry) = entry {
+                        app.drag.drag_metric =
+                            Some((object_id.clone(), *dir, entry));
+                        app.drag.drag_metric_start_screen = Some(pos);
+                    }
                 } else if let Some(object_id) = object_at(
                     &geometry,
                     pos,
@@ -205,8 +214,9 @@ pub fn handle_canvas_interaction(
         if app.drag.drag_metric.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))
         {
-            let (source_object, source_dir, metric_name) =
+            let (source_object, source_dir, entry) =
                 app.drag.drag_metric.take().expect("drag_metric is Some");
+            let metric_name = entry.name.clone();
             app.drag.drag_metric_start_screen = None;
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if let Some(target_id) = app
@@ -354,19 +364,29 @@ pub fn handle_canvas_interaction(
 
     app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid, &bindings);
 
-    // Перетаскивание показателя: подпись у курсора и подсветка целевого объекта (рисуется поверх холста).
+    // Перетаскивание показателя: графическая копия строки у курсора и подсветка целевого объекта (рисуется поверх холста).
     if app.drag.drag_metric.is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
         if let Some(cur) = canvas_response.interact_pointer_pos() {
-            if let Some((source_object, _source_dir, metric_name)) = &app.drag.drag_metric {
+            if let Some((source_object, source_dir, entry)) = &app.drag.drag_metric {
                 let painter = ui.painter();
-                painter.text(
+                let preview_w = 220.0 * app.canvas.camera.zoom;
+                let preview_h = 27.0 * app.canvas.camera.zoom;
+                let preview_rect = Rect::from_min_size(
                     cur + Vec2::new(14.0, 14.0),
-                    egui::Align2::LEFT_TOP,
-                    format!("⇨ {}", metric_name),
-                    egui::FontId::new(16.0, egui::FontFamily::Proportional),
-                    Color32::from_rgb(0, 217, 255),
+                    Vec2::new(preview_w, preview_h),
+                );
+                let binding = bindings.get(&(source_object.clone(), entry.name.clone()));
+                paint_drag_preview(
+                    painter,
+                    preview_rect,
+                    entry,
+                    &published.dynamic,
+                    app.canvas.camera.zoom,
+                    &app.canvas.theme,
+                    *source_dir,
+                    binding,
                 );
                 if let Some(target_id) = app
                     .canvas

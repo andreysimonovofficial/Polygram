@@ -16,6 +16,7 @@ pub use paint_department::paint_department_frame;
 pub use paint_edge::paint_edge;
 pub use paint_object::paint_object;
 pub use paint_process::paint_process;
+pub use paint_process::paint_drag_preview;
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Vec2};

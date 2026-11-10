@@ -7,7 +7,7 @@
 use crate::theme::Theme;
 use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::types::Direction;
-use polygram_core::{DynamicState, ObjectGeom, StatusCode};
+use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 use std::collections::HashMap;
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -173,6 +173,21 @@ fn paint_metric_row(
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         name_color,
     );
+}
+
+/// Рисовать графическую копию строки показателя в произвольном месте (превью при Drag&Drop).
+/// То же оформление, что и обычная строка: рамка, точки сцепления, имя, иконка привязки, значение.
+pub fn paint_drag_preview(
+    painter: &Painter,
+    rect: Rect,
+    entry: &EntryGeom,
+    dynamic: &DynamicState,
+    zoom: f32,
+    theme: &Theme,
+    dir: Direction,
+    binding: Option<&MetricBinding>,
+) {
+    paint_metric_row(painter, rect, entry, dynamic, zoom, theme, false, dir, binding, &mut Vec::new());
 }
 
 /// Рисовать строку "+ Добавить показатель" (центрированная, кликабельная).

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use polygram_core::types::Direction;
+use polygram_core::{EntryGeom, types::Direction};
 
 pub struct DragState {
     pub drag_object: Option<String>,
@@ -12,8 +12,8 @@ pub struct DragState {
     pub pending_move_age: u32,
     /// Начало выделения рамкой (Selection Box) в экранных координатах.
     pub selection_box_start: Option<egui::Pos2>,
-    /// Перетаскивание показателя: (id объекта-источника, направление, имя показателя).
-    pub drag_metric: Option<(String, Direction, String)>,
+    /// Перетаскивание показателя: (id объекта-источника, направление, копия строки показателя).
+    pub drag_metric: Option<(String, Direction, EntryGeom)>,
     pub drag_metric_start_screen: Option<egui::Pos2>,
 }
 
