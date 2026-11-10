@@ -418,12 +418,25 @@ pub fn handle_canvas_interaction(
                 MetricBinding {
                     ok: info.ok,
                     last_updated: info.last_updated.clone(),
+                    error: info.error.clone(),
                 },
             );
         }
     }
 
     app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid, &bindings);
+
+    // Копировать текст ошибки API-привязки по клику на иконку ⚠ в строке показателя.
+    if canvas_response.clicked() {
+        if let Some(pos) = canvas_response.interact_pointer_pos() {
+            for (rect, error_text) in &app.canvas.api_error_hotspots {
+                if rect.contains(pos) {
+                    ctx.copy_text(error_text.clone());
+                    break;
+                }
+            }
+        }
+    }
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {

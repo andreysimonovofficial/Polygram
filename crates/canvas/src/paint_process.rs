@@ -34,6 +34,7 @@ pub const MIN_ROW_H_PX: f32 = 27.0;
 pub struct MetricBinding {
     pub ok: bool,
     pub last_updated: Option<String>,
+    pub error: Option<String>,
 }
 
 /// Ранг статуса (чем выше — тем хуже).
@@ -69,6 +70,7 @@ fn worst_status(entries: &[polygram_core::EntryGeom], dynamic: &DynamicState) ->
 /// Рисовать одну строку показателя: точка сцепления слева и справа, имя, значение справа.
 /// Для запроса показывается required, для выхода — value.
 /// binding — опциональная API-привязка этой строки (иконка + время последнего опроса внутри строки).
+/// error_hotspots — накопление rect иконок ошибок + текст ошибки для копирования по клику.
 fn paint_metric_row(
     painter: &Painter,
     rect: Rect,
@@ -79,6 +81,7 @@ fn paint_metric_row(
     is_hovered: bool,
     dir: Direction,
     binding: Option<&MetricBinding>,
+    error_hotspots: &mut Vec<(Rect, String)>,
 ) {
     let status = dynamic.status[entry.ix as usize];
     let dot_color = super::status_dot_color(status, theme);
@@ -140,6 +143,16 @@ fn paint_metric_row(
                 egui::FontId::new((theme.text_size * zoom * 0.7).max(8.0), egui::FontFamily::Proportional),
                 egui::Color32::from_gray(170),
             );
+        }
+        // Кликабельная зона иконки ошибки — копировать текст ошибки по клику.
+        if let Some(e) = &b.error {
+            if !b.ok {
+                let icon_rect = Rect::from_min_size(
+                    Pos2::new(icon_x, cy - 10.0 * zoom),
+                    Vec2::new(20.0 * zoom, 20.0 * zoom),
+                );
+                error_hotspots.push((icon_rect, e.clone()));
+            }
         }
     }
 
@@ -277,6 +290,7 @@ pub fn paint_process(
     is_hovered: bool,
     _edit_target: Option<&str>,
     bindings: &HashMap<(String, String), MetricBinding>,
+    error_hotspots: &mut Vec<(Rect, String)>,
 ) -> (
     Vec<(String, Direction, Rect)>,
     Vec<(String, Direction, Rect)>,
@@ -388,7 +402,7 @@ pub fn paint_process(
         }
         let binding_key = (object.id.clone(), entry.name.clone());
         let binding = bindings.get(&binding_key);
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Request, binding);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Request, binding, error_hotspots);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Request,
@@ -452,7 +466,7 @@ pub fn paint_process(
         }
         let binding_key = (object.id.clone(), entry.name.clone());
         let binding = bindings.get(&binding_key);
-        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Output, binding);
+        paint_metric_row(painter, row_rect, entry, dynamic, zoom, theme, is_hovered, Direction::Output, binding, error_hotspots);
         drag_hotspots.push((
             object.id.clone(),
             Direction::Output,

@@ -37,6 +37,8 @@ pub struct Canvas {
     pub container_menu_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны строк показателей для перетаскивания (id объекта, направление, имя показателя, экранный rect строки).
     pub drag_metric_hotspots: Vec<(String, Direction, String, Rect)>,
+    /// Горячие зоны иконок ошибок API-привязки (экранный rect, текст ошибки для копирования).
+    pub api_error_hotspots: Vec<(Rect, String)>,
 }
 
 impl Default for Canvas {
@@ -54,6 +56,7 @@ impl Canvas {
             add_metric_hotspots: Vec::new(),
             container_menu_hotspots: Vec::new(),
             drag_metric_hotspots: Vec::new(),
+            api_error_hotspots: Vec::new(),
         }
     }
 
@@ -79,6 +82,8 @@ impl Canvas {
         self.add_metric_hotspots.clear();
         self.container_menu_hotspots.clear();
         self.drag_metric_hotspots.clear();
+        self.api_error_hotspots.clear();
+        let mut error_hotspots: Vec<(Rect, String)> = Vec::new();
 
         // Фон холста.
         painter.rect_filled(clip_rect, 0.0, self.theme.bg);
@@ -162,6 +167,7 @@ impl Canvas {
                     is_hovered,
                     edit_target,
                     bindings,
+                    &mut error_hotspots,
                 );
                 self.add_metric_hotspots.extend(add_hotspots);
                 self.container_menu_hotspots.extend(menu_hotspots);
@@ -179,6 +185,8 @@ impl Canvas {
                 );
             }
         }
+
+        self.api_error_hotspots = error_hotspots;
 
         // Линии связи рисуются поверх объектов, чтобы объекты не загораживали их.
         for edge in &geometry.edges {
