@@ -1,5 +1,14 @@
 use polygram_core::{Direction, MetricKind};
 use polygram_core::types::MAX_UI_METRICS_PER_SIDE;
+use std::collections::HashMap;
+
+/// API binding settings being edited for a single metric entry.
+#[derive(Clone, Default)]
+pub struct EntryApiBinding {
+    pub connector: String,
+    pub cell: String,
+    pub interval_secs: u64,
+}
 
 pub struct DialogState {
     pub rename_target: Option<String>,
@@ -15,10 +24,10 @@ pub struct DialogState {
     pub add_metric_api_cell: String,
     pub container_menu_target: Option<(String, Direction)>,
     pub container_menu_edits: Vec<(String, String, String)>,
-    /// API-привязка для текущей записи в меню контейнера (коннектор, ячейка, интервал).
-    pub container_menu_api_connector: String,
-    pub container_menu_api_cell: String,
-    pub container_menu_api_interval: u64,
+    /// Per-entry API binding settings being edited in the container menu dialog.
+    pub container_menu_api_settings: HashMap<String, EntryApiBinding>,
+    /// Entry name whose settings block is currently expanded.
+    pub container_menu_api_expanded: Option<String>,
     /// Объекты, ожидающие подтверждения удаления ("Удалить?").
     pub delete_confirm: Option<Vec<String>>,
 }
@@ -39,9 +48,8 @@ impl DialogState {
             add_metric_api_cell: String::new(),
             container_menu_target: None,
             container_menu_edits: Vec::new(),
-            container_menu_api_connector: String::new(),
-            container_menu_api_cell: String::new(),
-            container_menu_api_interval: 30,
+            container_menu_api_settings: HashMap::new(),
+            container_menu_api_expanded: None,
             delete_confirm: None,
         }
     }
@@ -71,9 +79,8 @@ impl DialogState {
     pub fn reset_container_menu(&mut self) {
         self.container_menu_target = None;
         self.container_menu_edits.clear();
-        self.container_menu_api_connector.clear();
-        self.container_menu_api_cell.clear();
-        self.container_menu_api_interval = 30;
+        self.container_menu_api_settings.clear();
+        self.container_menu_api_expanded = None;
     }
 
     pub fn can_add_metric(&self, object_id: &str, dir: Direction, published: &polygram_core::Published) -> bool {

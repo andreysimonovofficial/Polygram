@@ -1,4 +1,4 @@
-use crate::app::PolygramApp;
+use crate::app::{PolygramApp, dialogs::EntryApiBinding};
 use polygram_core::Published;
 use egui::{Context, Window};
 
@@ -38,21 +38,21 @@ pub fn handle_container_menu_dialog(
         polygram_core::types::Direction::Output => obj.outputs.iter().collect(),
     };
 
-    // Загрузить существующие API-привязки и заполнить поля диалога для первой записи.
-    if app.dialogs.container_menu_api_connector.is_empty()
-        && app.dialogs.container_menu_api_cell.is_empty()
-    {
+    // Загрузить существующие API-привязки для каждой записи в настройки диалога.
+    if app.dialogs.container_menu_api_settings.is_empty() {
         let bindings = app.get_bindings();
-        if let Some(first_entry) = entries.first() {
-            let binding_id = format!("{}:{}", object_id, first_entry.name);
+        for entry in &entries {
+            let binding_id = format!("{}:{}", object_id, entry.name);
             for b in &bindings {
                 if b.get("id").and_then(|v| v.as_str()) == Some(&binding_id) {
-                    app.dialogs.container_menu_api_connector =
-                        b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned();
-                    app.dialogs.container_menu_api_cell =
-                        b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned();
-                    app.dialogs.container_menu_api_interval =
-                        b.get("interval_secs").and_then(|v| v.as_u64()).unwrap_or(30);
+                    app.dialogs.container_menu_api_settings.insert(
+                        entry.name.clone(),
+                        EntryApiBinding {
+                            connector: b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+                            cell: b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+                            interval_secs: b.get("interval_secs").and_then(|v| v.as_u64()).unwrap_or(30),
+                        },
+                    );
                     break;
                 }
             }
@@ -105,7 +105,6 @@ pub fn handle_container_menu_dialog(
 
     let mut delete_entry: Option<String> = None;
     let mut apply_edits = false;
-    let mut apply_api_binding = false;
     let mut close_dialog = false;
 
     Window::new(format!("Показатели — {label} ({object_id})"))
@@ -158,62 +157,48 @@ pub fn handle_container_menu_dialog(
                         ui.label("единица:");
                         ui.text_edit_singleline(unit_buf);
 
+                        // Статус привязки и время последнего опроса для этой записи.
+                        let binding_id = format!("{}:{}", object_id, entry.name);
+                        if let Some(info) = app.api_bindings.get(&binding_id) {
+                            let icon_color = if info.ok {
+                                egui::Color32::from_rgb(0, 200, 80)
+                            } else {
+                                egui::Color32::from_rgb(240, 80, 80)
+                            };
+                            let icon_text = if info.ok { "🔗" } else { "⚠" };
+                            ui.colored_label(icon_color, icon_text);
+                            if let Some(ts) = &info.last_updated {
+                                ui.label(ts);
+                            }
+                        }
+
+                        if ui.button("⚙").clicked() {
+                            if app
+                                .dialogs
+                                .container_menu_api_expanded
+                                .as_deref()
+                                == Some(entry.name.as_str())
+                            {
+                                app.dialogs.container_menu_api_expanded = None;
+                            } else {
+                                app.dialogs.container_menu_api_expanded =
+                                    Some(entry.name.clone());
+                            }
+                        }
                         if ui.button("🗑").clicked() {
                             delete_entry = Some(entry.name.clone());
                         }
                     });
-                }
 
-                ui.separator();
-                ui.heading("Синхронизация с API");
-                ui.separator();
-
-                let direction_text = match dir {
-                    polygram_core::types::Direction::Request => "запись в: необходимое (required)",
-                    polygram_core::types::Direction::Output => "запись в: значение (value)",
-                };
-                ui.label(direction_text);
-
-                let connectors = app.get_connectors();
-                let current_connector = &mut app.dialogs.container_menu_api_connector;
-                egui::ComboBox::new("api_connector", "")
-                    .selected_text(if current_connector.is_empty() {
-                        "коннектор".to_owned()
-                    } else {
-                        current_connector.clone()
-                    })
-                    .show_ui(ui, |ui| {
-                        if connectors.is_empty() {
-                            ui.disable();
-                            ui.label("нет коннекторов (API недоступен)");
-                        } else {
-                            for c in &connectors {
-                                if ui.selectable_label(current_connector == c, c).clicked() {
-                                    *current_connector = c.clone();
-                                }
-                            }
-                        }
-                    });
-
-                ui.label("ячейка / метрика:");
-                ui.text_edit_singleline(&mut app.dialogs.container_menu_api_cell);
-
-                ui.label("интервал опроса (сек):");
-                let mut interval_str = app.dialogs.container_menu_api_interval.to_string();
-                if ui.text_edit_singleline(&mut interval_str).lost_focus() {
-                    if let Ok(interval) = interval_str.trim().parse::<u64>() {
-                        app.dialogs.container_menu_api_interval = interval.max(1);
+                    // Развёрнутые настройки привязки для этой записи.
+                    if app
+                        .dialogs
+                        .container_menu_api_expanded
+                        .as_deref()
+                        == Some(entry.name.as_str())
+                    {
+                        render_entry_api_settings(ui, app, &object_id, *entry, dir);
                     }
-                }
-
-                if !app.dialogs.container_menu_api_connector.is_empty()
-                    && !app.dialogs.container_menu_api_cell.is_empty()
-                {
-                    ui.label(format!(
-                        "привязка: {} → {}",
-                        app.dialogs.container_menu_api_connector,
-                        app.dialogs.container_menu_api_cell
-                    ));
                 }
             });
 
@@ -221,13 +206,6 @@ pub fn handle_container_menu_dialog(
             ui.horizontal(|ui| {
                 if ui.button("Применить").clicked() {
                     apply_edits = true;
-                }
-                if !app.dialogs.container_menu_api_connector.is_empty()
-                    && !app.dialogs.container_menu_api_cell.is_empty()
-                {
-                    if ui.button("Привязать к API").clicked() {
-                        apply_api_binding = true;
-                    }
                 }
                 if ui.button("Закрыть").clicked() {
                     close_dialog = true;
@@ -280,26 +258,6 @@ pub fn handle_container_menu_dialog(
         }
     }
 
-    // Применить API-привязку.
-    if apply_api_binding {
-        let connector = app.dialogs.container_menu_api_connector.clone();
-        let cell = app.dialogs.container_menu_api_cell.clone();
-        let interval = app.dialogs.container_menu_api_interval;
-        // Привязываем к первой записи в списке (пользователь может повторить для остальных).
-        if let Some(first_entry) = entries.first() {
-            app.post_binding(
-                object_id.clone(),
-                first_entry.name.clone(),
-                connector,
-                cell,
-                interval,
-            );
-        }
-        app.dialogs.container_menu_api_connector.clear();
-        app.dialogs.container_menu_api_cell.clear();
-        app.dialogs.container_menu_api_interval = 30;
-    }
-
     // Удалить показатель.
     if let Some(entry_name) = delete_entry {
         app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
@@ -311,8 +269,130 @@ pub fn handle_container_menu_dialog(
     if close_dialog {
         app.dialogs.container_menu_target = None;
         app.dialogs.container_menu_edits.clear();
-        app.dialogs.container_menu_api_connector.clear();
-        app.dialogs.container_menu_api_cell.clear();
-        app.dialogs.container_menu_api_interval = 30;
+        app.dialogs.container_menu_api_settings.clear();
+        app.dialogs.container_menu_api_expanded = None;
+    }
+}
+
+/// Настройки API-привязки для одной записи показателя
+/// (разворачиваются по нажатию ⚙ в строке показателя).
+fn render_entry_api_settings(
+    ui: &mut egui::Ui,
+    app: &mut PolygramApp,
+    object_id: &str,
+    entry: &polygram_core::geometry::EntryGeom,
+    dir: polygram_core::types::Direction,
+) {
+    let binding_id = format!("{}:{}", object_id, entry.name);
+
+    // Неизменяемые чтения из API (клонируем, заимствование освобождается).
+    let connectors: Vec<String> = app.get_connectors();
+    let bindings: Vec<serde_json::Value> = app.get_bindings();
+    let current = bindings.iter().find(|b| {
+        b.get("id").and_then(|v| v.as_str()) == Some(&binding_id)
+    });
+    let current_label = if let Some(b) = current {
+        format!(
+            "привязка: {} → {} (интервал {} сек)",
+            b.get("connector").and_then(|v| v.as_str()).unwrap_or(""),
+            b.get("cell").and_then(|v| v.as_str()).unwrap_or(""),
+            b.get("interval_secs").and_then(|v| v.as_u64()).unwrap_or(0)
+        )
+    } else {
+        "привязка: не привязано".to_owned()
+    };
+
+    let direction_text = match dir {
+        polygram_core::types::Direction::Request => "запись в: необходимое (required)",
+        polygram_core::types::Direction::Output => "запись в: значение (value)",
+    };
+
+    // Изменяемые настройки одной записи в области, чтобы заимствование
+    // приложения было освобождено перед записями (post/delete_binding).
+    let (do_bind, do_unbind, do_close, bind_connector, bind_cell, bind_interval) = {
+        let settings = app
+            .dialogs
+            .container_menu_api_settings
+            .entry(entry.name.clone())
+            .or_default();
+        let mut do_bind = false;
+        let mut do_unbind = false;
+        let mut do_close = false;
+
+        ui.label(direction_text);
+
+        ui.label("коннектор:");
+        egui::ComboBox::new(format!("api_connector_{}", binding_id), "")
+            .selected_text(if settings.connector.is_empty() {
+                "коннектор".to_owned()
+            } else {
+                settings.connector.clone()
+            })
+            .show_ui(ui, |ui| {
+                if connectors.is_empty() {
+                    ui.disable();
+                    ui.label("нет коннекторов (API недоступен)");
+                } else {
+                    for c in &connectors {
+                        if ui.selectable_label(settings.connector == c.as_str(), c).clicked() {
+                            settings.connector = c.clone();
+                        }
+                    }
+                }
+            });
+
+        ui.label("ячейка / метрика:");
+        ui.text_edit_singleline(&mut settings.cell);
+
+        ui.label("интервал опроса (сек):");
+        let mut interval_str = settings.interval_secs.to_string();
+        if ui.text_edit_singleline(&mut interval_str).lost_focus() {
+            if let Ok(interval) = interval_str.trim().parse::<u64>() {
+                settings.interval_secs = interval.max(1);
+            }
+        }
+
+        ui.label(current_label);
+
+        ui.separator();
+        ui.horizontal(|ui| {
+            if !settings.connector.is_empty() && !settings.cell.is_empty() {
+                if ui.button("Привязать").clicked() {
+                    do_bind = true;
+                }
+            }
+            if ui.button("Отвязать").clicked() {
+                do_unbind = true;
+            }
+            if ui.button("Закрыть").clicked() {
+                do_close = true;
+            }
+        });
+
+        (
+            do_bind,
+            do_unbind,
+            do_close,
+            settings.connector.clone(),
+            settings.cell.clone(),
+            settings.interval_secs,
+        )
+    };
+
+    // Записи в API после освобождения заимствования настроек.
+    if do_bind {
+        app.post_binding(
+            object_id.to_owned(),
+            entry.name.clone(),
+            bind_connector,
+            bind_cell,
+            bind_interval,
+        );
+    }
+    if do_unbind {
+        app.delete_binding(object_id.to_owned(), entry.name.clone());
+    }
+    if do_close {
+        app.dialogs.container_menu_api_expanded = None;
     }
 }
