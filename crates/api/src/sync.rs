@@ -344,7 +344,17 @@ impl Drop for SyncService {
     }
 }
 
+/// Результат получения одной ячейки коннектора.
+struct CellResult {
+    value: Option<f64>,
+    error: Option<String>,
+}
+
 /// Фоновый цикл опроса привязок.
+/// Опрос выполняется один раз на коннектор за интервал: собираются все ячейки
+/// привязок этого коннектора, делается один вызов к внешнему API, затем
+/// значения распределяются по соответствующим записям показателей. Это
+/// защищает от превышения квоты (например, Google Sheets Read requests per minute).
 fn run_sync_loop(
     bindings: Arc<Mutex<Vec<ApiBinding>>>,
     configs: Arc<Mutex<Vec<ConnectorConfig>>>,
@@ -367,151 +377,166 @@ fn run_sync_loop(
             Err(_) => continue,
         };
 
-        for binding in &current_bindings {
-            let interval = Duration::from_secs(binding.interval_secs.max(1));
+        // Группируем привязки по коннектору.
+        let mut by_connector: HashMap<String, Vec<ApiBinding>> = HashMap::new();
+        for b in &current_bindings {
+            by_connector.entry(b.connector.clone()).or_default().push(b.clone());
+        }
+
+        for (connector, items) in &by_connector {
+            // Интервал опроса коннектора — из его конфига (intervalSecs),
+            // по умолчанию 30 сек. Все привязки коннектора опрашиваются разом.
+            let interval_secs = current_configs
+                .iter()
+                .find(|c| c.id == *connector)
+                .and_then(|c| c.config.get("intervalSecs").and_then(|v| v.as_u64()))
+                .unwrap_or(30)
+                .max(1);
+            let interval = Duration::from_secs(interval_secs);
             let due = last_poll
-                .get(&binding.id)
+                .get(connector)
                 .map_or(true, |t| t.elapsed() >= interval);
             if !due {
                 continue;
             }
-            last_poll.insert(binding.id.clone(), Instant::now());
+            last_poll.insert(connector.clone(), Instant::now());
 
-            let object_id = binding.object_id.clone();
-            let entry_id = binding.entry_id.clone();
-            let binding_id = binding.id.clone();
-            let connector = binding.connector.clone();
-            let cell = binding.cell.clone();
-
-            let object_id_for_cmd = object_id.clone();
-            let entry_id_for_cmd = entry_id.clone();
-
-            // Определяем направление записи (Запрос → required, Выход → value).
-            let direction = engine_handle.query(move |e| {
-                let hier = e.hierarchy();
-                let object_ix = match hier.find_object(&object_id) {
-                    Some(ix) => ix,
-                    None => return None,
-                };
-                let entry_ix = match hier.find_entry(object_ix, &entry_id) {
-                    Some(ix) => ix,
-                    None => return None,
-                };
-                Some(hier.object_metric(entry_ix).direction)
-            });
-
-            let Some(dir) = direction else {
-                let _ = statuses.lock().map(|mut s| {
-                    s.insert(
-                        binding_id.clone(),
-                        BindingStatus {
-                            ok: false,
-                            error: Some(format!(
-                                "запись {} не найдена в объекте {}",
-                                entry_id_for_cmd, object_id_for_cmd
-                            )),
-                            ..Default::default()
-                        },
-                    );
-                });
-                continue;
-            };
-
-            // Получаем конфиг коннектора.
             let connector_config = current_configs
                 .iter()
-                .find(|c| c.id == connector)
+                .find(|c| c.id == *connector)
                 .map(|c| c.config.clone());
 
-            // Запрашиваем значение у коннектора.
-            let result = fetch_value(&connector, &cell, connector_config.as_ref());
+            let cells: Vec<String> = items.iter().map(|b| b.cell.clone()).collect();
+            let results = fetch_values(&connector, &cells, connector_config.as_ref());
 
-            match result {
-                Ok(value) => {
-                    let cmd = match dir {
-                        Some(Direction::Request) => Command::SetRequired {
-                            object: object_id_for_cmd.clone(),
-                            entry: entry_id_for_cmd.clone(),
-                            required: value,
-                        },
-                        Some(Direction::Output) => Command::SetValue {
-                            object: object_id_for_cmd.clone(),
-                            entry: entry_id_for_cmd.clone(),
-                            value,
-                        },
-                        None => {
-                            let _ = statuses.lock().map(|mut s| {
-                                s.insert(
-                                    binding_id.clone(),
-                                    BindingStatus {
-                                        ok: false,
-                                        error: Some("неизвестное направление записи".to_owned()),
-                                        ..Default::default()
-                                    },
-                                );
-                            });
-                            continue;
-                        }
-                    };
+            for (binding, result) in items.iter().zip(results) {
+                apply_binding_result(
+                    binding,
+                    result,
+                    &engine_handle,
+                    &statuses,
+                    &connectors_dir,
+                    connector,
+                );
+            }
+        }
+    }
+}
 
-                    match engine_handle.apply(cmd) {
-                        Ok(_) => {
-                            let now = chrono::Local::now().format("%H:%M:%S").to_string();
-                            let _ = statuses.lock().map(|mut s| {
-                                s.insert(
-                                    binding_id.clone(),
-                                    BindingStatus {
-                                        ok: true,
-                                        last_value: Some(value),
-                                        last_updated: Some(now),
-                                        error: None,
-                                    },
-                                );
-                            });
-                            // Персистим кэш значения в файл коннектора.
-                            let cache_path = connectors_dir.join(format!("{connector}.json"));
-                            if let Ok(content) = fs::read_to_string(&cache_path) {
-                                if let Ok(mut cf) =
-                                    serde_json::from_str::<ConnectorFile>(&content)
-                                {
-                                    let mut cache = cf
-                                        .cache
-                                        .as_object()
-                                        .cloned()
-                                        .unwrap_or_default();
-                                    cache.insert(
-                                        cell.clone(),
-                                        serde_json::Value::from(value),
-                                    );
-                                    cf.cache = serde_json::Value::Object(cache);
-                                    let _ = fs::write(
-                                        &cache_path,
-                                        serde_json::to_string_pretty(&cf).unwrap_or_default(),
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = statuses.lock().map(|mut s| {
-                                s.insert(
-                                    binding_id.clone(),
-                                    BindingStatus {
-                                        ok: false,
-                                        error: Some(format!("ошибка команды: {e}")),
-                                        ..Default::default()
-                                    },
-                                );
-                            });
-                        }
-                    }
-                }
-                Err(err) => {
+/// Применить значение одной ячейки к записи показателя (SetValue / SetRequired)
+/// и обновить её статус + кэш в файле коннектора.
+fn apply_binding_result(
+    binding: &ApiBinding,
+    result: Result<f64, String>,
+    engine_handle: &EngineHandle,
+    statuses: &Arc<Mutex<HashMap<String, BindingStatus>>>,
+    connectors_dir: &PathBuf,
+    connector: &str,
+) {
+    let object_id = binding.object_id.clone();
+    let entry_id = binding.entry_id.clone();
+    let binding_id = binding.id.clone();
+    let cell = binding.cell.clone();
+    let object_id_cmd = object_id.clone();
+    let entry_id_cmd = entry_id.clone();
+
+    let direction = engine_handle.query(move |e| {
+        let hier = e.hierarchy();
+        let object_ix = match hier.find_object(&object_id) {
+            Some(ix) => ix,
+            None => return None,
+        };
+        let entry_ix = match hier.find_entry(object_ix, &entry_id) {
+            Some(ix) => ix,
+            None => return None,
+        };
+        Some(hier.object_metric(entry_ix).direction)
+    });
+
+    let Some(dir) = direction else {
+        let _ = statuses.lock().map(|mut s| {
+            s.insert(
+                binding_id.clone(),
+                BindingStatus {
+                    ok: false,
+                    error: Some(format!("запись {} не найдена в объекте {}", entry_id_cmd, object_id_cmd)),
+                    ..Default::default()
+                },
+            );
+        });
+        return;
+    };
+
+    match result {
+        Ok(value) => {
+            let cmd = match dir {
+                Some(Direction::Request) => Command::SetRequired {
+                    object: object_id_cmd.clone(),
+                    entry: entry_id_cmd.clone(),
+                    required: value,
+                },
+                Some(Direction::Output) => Command::SetValue {
+                    object: object_id_cmd.clone(),
+                    entry: entry_id_cmd.clone(),
+                    value,
+                },
+                None => {
                     let _ = statuses.lock().map(|mut s| {
                         s.insert(
                             binding_id.clone(),
                             BindingStatus {
                                 ok: false,
-                                error: Some(err),
+                                error: Some("неизвестное направление записи".to_owned()),
+                                ..Default::default()
+                            },
+                        );
+                    });
+                    return;
+                }
+            };
+
+            match engine_handle.apply(cmd) {
+                Ok(_) => {
+                    let now = chrono::Local::now().format("%H:%M:%S").to_string();
+                    let _ = statuses.lock().map(|mut s| {
+                        s.insert(
+                            binding_id.clone(),
+                            BindingStatus {
+                                ok: true,
+                                last_value: Some(value),
+                                last_updated: Some(now),
+                                error: None,
+                            },
+                        );
+                    });
+                    // Персистим кэш значения в файл коннектора.
+                    let cache_path = connectors_dir.join(format!("{connector}.json"));
+                    if let Ok(content) = fs::read_to_string(&cache_path) {
+                        if let Ok(mut cf) = serde_json::from_str::<ConnectorFile>(&content) {
+                            let mut cache = cf
+                                .cache
+                                .as_object()
+                                .cloned()
+                                .unwrap_or_default();
+                            cache.insert(
+                                cell.clone(),
+                                serde_json::Value::from(value),
+                            );
+                            cf.cache = serde_json::Value::Object(cache);
+                            let _ = fs::write(
+                                &cache_path,
+                                serde_json::to_string_pretty(&cf).unwrap_or_default(),
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = statuses.lock().map(|mut s| {
+                        s.insert(
+                            binding_id.clone(),
+                            BindingStatus {
+                                ok: false,
+                                error: Some(format!("ошибка команды: {e}")),
                                 ..Default::default()
                             },
                         );
@@ -519,22 +544,45 @@ fn run_sync_loop(
                 }
             }
         }
+        Err(err) => {
+            let _ = statuses.lock().map(|mut s| {
+                s.insert(
+                    binding_id.clone(),
+                    BindingStatus {
+                        ok: false,
+                        error: Some(err),
+                        ..Default::default()
+                    },
+                );
+            });
+        }
     }
 }
 
-/// Запросить значение у коннектора.
-fn fetch_value(
+/// Запросить значения у коннектора для списка ячеек.
+/// Возвращает результаты в том же порядке, что и ячейки.
+fn fetch_values(
     connector: &str,
-    cell: &str,
+    cells: &[String],
     config: Option<&serde_json::Value>,
-) -> Result<f64, String> {
+) -> Vec<Result<f64, String>> {
     match connector {
-        "static" => cell
-            .parse::<f64>()
-            .map_err(|_| format!("не удалось разобрать константу: {cell}")),
-        "google-sheets" => fetch_google_sheets(cell, config),
-        "google-analytics" => fetch_google_analytics(cell, config),
-        _ => Err(format!("неизвестный коннектор: {connector}")),
+        "static" => cells
+            .iter()
+            .map(|c| {
+                c.parse::<f64>()
+                    .map_err(|_| format!("не удалось разобрать константу: {c}"))
+            })
+            .collect(),
+        "google-sheets" => fetch_google_sheets_batch(cells, config),
+        "google-analytics" => cells
+            .iter()
+            .map(|c| fetch_google_analytics(c, config))
+            .collect(),
+        _ => cells
+            .iter()
+            .map(|_| Err(format!("неизвестный коннектор: {connector}")))
+            .collect(),
     }
 }
 
@@ -565,23 +613,37 @@ fn gws_binary_path() -> String {
         .to_owned()
 }
 
-/// Google Таблицы: читаем значение ячейки через gws CLI (OAuth уже настроен в gws).
-fn fetch_google_sheets(cell: &str, config: Option<&serde_json::Value>) -> Result<f64, String> {
-    // Извлекаем ID таблицы из URL в конфиге коннектора.
-    let spreadsheet_id = config
+/// Google Таблицы: читаем значения нескольких ячеек за один вызов gws CLI.
+/// Возвращает результаты в том же порядке, что и ячейки.
+fn fetch_google_sheets_batch(
+    cells: &[String],
+    config: Option<&serde_json::Value>,
+) -> Vec<Result<f64, String>> {
+    let spreadsheet_id = match config
         .and_then(|c| c.get("url").and_then(|v| v.as_str()))
         .and_then(extract_spreadsheet_id)
-        .ok_or_else(|| {
-            "не задан URL Google Таблицы в конфиге коннектора google-sheets. Укажите URL таблицы в сайдбаре «Коннекторы» → Google Таблицы".to_owned()
-        })?;
+    {
+        Some(id) => id,
+        None => {
+            return cells
+                .iter()
+                .map(|_| {
+                    Err(
+                        "не задан URL Google Таблицы в конфиге коннектора google-sheets. Укажите URL таблицы в сайдбаре «Коннекторы» → Google Таблицы"
+                            .to_owned(),
+                    )
+                })
+                .collect();
+        }
+    };
 
     let gws_path = gws_binary_path();
 
-    // Параметры запроса к Google Sheets API.
+    // Параметры запроса к Google Sheets API (несколько диапазонов за один вызов).
     let params = serde_json::json!({
         "spreadsheetId": spreadsheet_id,
-        "ranges": cell,
-        "fields": "sheets(data(rowData(values(formattedValue,userEnteredValue))))"
+        "ranges": cells,
+        "fields": "sheets(data(rowData(values(userEnteredValue,formattedValue))))"
     });
 
     let output = std::process::Command::new("cmd")
@@ -593,72 +655,93 @@ fn fetch_google_sheets(cell: &str, config: Option<&serde_json::Value>) -> Result
             "--format", "json"
         ])
         .output()
-        .map_err(|e| format!("не удалось запустить gws.exe ({gws_path}): {e}"))?;
+        .map_err(|e| {
+            let err = format!("не удалось запустить gws.exe ({gws_path}): {e}");
+            cells.iter().map(|_| Err(err.clone())).collect::<Vec<_>>()
+        });
+
+    let output = match output {
+        Ok(o) => o,
+        Err(errs) => return errs,
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("gws.exe завершился с ошибкой: stdout={stdout} stderr={stderr}"));
+        let err = format!("gws.exe завершился с ошибкой: stdout={stdout} stderr={stderr}");
+        return cells.iter().map(|_| Err(err.clone())).collect();
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Отладочный вывод в stderr сервера для диагностики.
     eprintln!("[gws debug] stdout={stdout}");
     // Извлекаем JSON-объект из вывода gws (пропуская служебную строку "Using keyring backend").
-    // gws.exe может выводить pretty-printed JSON, поэтому ищем первый { и соответствующий }.
-    let first_brace = stdout.find('{').ok_or_else(|| {
-        format!("не найден JSON в ответе gws.exe. stdout={stdout}")
-    })?;
-    let last_brace = stdout.rfind('}').ok_or_else(|| {
-        format!("не найден закрывающий скобку JSON в ответе gws.exe. stdout={stdout}")
-    })?;
+    let first_brace = match stdout.find('{') {
+        Some(p) => p,
+        None => {
+            let err = format!("не найден JSON в ответе gws.exe. stdout={stdout}");
+            return cells.iter().map(|_| Err(err.clone())).collect();
+        }
+    };
+    let last_brace = match stdout.rfind('}') {
+        Some(p) => p,
+        None => {
+            let err = format!("не найден закрывающий скобку JSON в ответе gws.exe. stdout={stdout}");
+            return cells.iter().map(|_| Err(err.clone())).collect();
+        }
+    };
     let json_str = &stdout[first_brace..=last_brace];
 
-    let resp: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| format!("KILO_DEBUG_MARKER не удалось распарсить ответ gws: {e}"))?;
+    let resp: serde_json::Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            let err = format!("не удалось распарсить ответ gws: {e}");
+            return cells.iter().map(|_| Err(err.clone())).collect();
+        }
+    };
 
-    // Извлекаем значение ячейки из ответа Google Sheets API.
-    let value = resp
+    // data[i] соответствует ranges[i].
+    let data_arr = resp
         .get("sheets")
         .and_then(|s| s.as_array())
         .and_then(|arr| arr.first())
         .and_then(|s| s.get("data"))
-        .and_then(|d| d.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|d| d.get("rowData"))
-        .and_then(|rd| rd.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|rd| rd.get("values"))
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|v| v.get("userEnteredValue"))
-        .and_then(|uev| uev.get("numberValue"))
-        .and_then(|n| n.as_f64())
-        .or_else(|| {
-            // Fallback на formattedValue.
-            resp.get("sheets")
-                .and_then(|s| s.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|s| s.get("data"))
-                .and_then(|d| d.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|d| d.get("rowData"))
-                .and_then(|rd| rd.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|rd| rd.get("values"))
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|v| v.get("formattedValue"))
-                .and_then(|fv| fv.as_str())
-                .and_then(|s| s.parse::<f64>().ok())
-        })
-        .ok_or_else(|| {
+        .and_then(|d| d.as_array());
+
+    let mut results = Vec::with_capacity(cells.len());
+    for (i, cell) in cells.iter().enumerate() {
+        let value = data_arr
+            .and_then(|d| d.get(i))
+            .and_then(|d| d.get("rowData"))
+            .and_then(|rd| rd.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|rd| rd.get("values"))
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.get("userEnteredValue"))
+            .and_then(|uev| uev.get("numberValue"))
+            .and_then(|n| n.as_f64())
+            .or_else(|| {
+                // Fallback на formattedValue.
+                data_arr
+                    .and_then(|d| d.get(i))
+                    .and_then(|d| d.get("rowData"))
+                    .and_then(|rd| rd.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|rd| rd.get("values"))
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|v| v.get("formattedValue"))
+                    .and_then(|fv| fv.as_str())
+                    .and_then(|s| s.parse::<f64>().ok())
+            });
+        results.push(value.ok_or_else(|| {
             format!(
                 "ячейка {cell} в таблице {spreadsheet_id} пуста или не содержит числовое значение"
             )
-        })?;
-
-    Ok(value)
+        }));
+    }
+    results
 }
 
 /// Google Analytics: заглушка (OAuth требует отдельной настройки).
