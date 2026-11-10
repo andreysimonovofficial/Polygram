@@ -229,8 +229,8 @@ pub fn handle_canvas_interaction(
                     false
                 };
                 if dropped_on_dept {
-                    // Перемещаем объект в отдел и фиксируем его текущую (предсказанную)
-                    // позицию, чтобы при подтверждении сервера он не перепрыгнул назад.
+                    // Сначала переводим объект в отдел (отдел растянется под текущую позицию),
+                    // затем перемещаем на позицию отпускания. Отдел растянется повторно под неё.
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         if let Some(target_id) = object_at(
                             &geometry,
@@ -242,13 +242,13 @@ pub fn handle_canvas_interaction(
                             app.drag.pending_move =
                                 Some((object_id.clone(), app.connection.last_rev));
                             app.apply_batch(vec![
-                                Command::MoveObject {
-                                    object: object_id.clone(),
-                                    at: [target.0, target.1],
-                                },
                                 Command::SetObjectParent {
                                     object: object_id.clone(),
                                     parent: Some(target_id.to_owned()),
+                                },
+                                Command::MoveObject {
+                                    object: object_id.clone(),
+                                    at: [target.0, target.1],
                                 },
                             ]);
                             app.selected_objects = vec![object_id.clone()];
