@@ -162,8 +162,22 @@ pub fn paint_edge(
         ));
     }
 
-    /// Привязать экранную координату к ближайшей линии сетки.
-    fn snap_to_grid(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+    /// Привязать координату X к следующей вертикальной линии сетки (округление вверх).
+    fn snap_grid_x_right(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+        let world = screen / zoom - offset;
+        let cell = (world / cell_size).ceil() * cell_size;
+        (cell + offset) * zoom
+    }
+
+    /// Привязать координату X к предыдущей вертикальной линии сетки (округление вниз).
+    fn snap_grid_x_left(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+        let world = screen / zoom - offset;
+        let cell = (world / cell_size).floor() * cell_size;
+        (cell + offset) * zoom
+    }
+
+    /// Привязать координату к узлу сетки (округление к ближайшему).
+    fn snap_to_grid_node(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
         let world = screen / zoom - offset;
         let cell = (world / cell_size).round() * cell_size;
         (cell + offset) * zoom
@@ -171,49 +185,51 @@ pub fn paint_edge(
 
     // Построить ортогональную ломаную:
     // 1-й сегмент от порта источника — горизонталь на 1 клетку за границу объекта,
-    // x привязан к вертикальной линии сетки.
-    // Далее — ступеньками (вертикаль → горизонталь) через промежуточные точки и цель,
-    // углы привязаны к узлам сетки.
+    // x привязан к следующей вертикальной линии сетки (округление вверх),
+    // y остаётся на уровне порта (без привязки к горизонтальной сетке).
+    // Далее — ступеньками через промежуточные точки маршрута,
+    // углы привязаны к узлам сетки (и x, и y).
     // Последний сегмент к порту приёмника — горизонталь на 1 клетку за границу цели,
-    // x привязан к вертикальной линии сетки.
+    // x привязан к предыдущей вертикальной линии сетки (округление вниз),
+    // y остаётся на уровне порта приёмника (без привязки к горизонтальной сетке).
     // Все сегменты строго горизонтальные или вертикальные, без диагоналей.
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some(fp), Some(tp)) = (from_port, to_port) {
         pts.push(fp);
 
         // Порт источника — всегда Выход (правая граница объекта): первый сегмент вправо.
-        let from_elbow_x = snap_to_grid(fp.x + cell_px, camera_offset.x, camera_zoom, cell_size);
+        let from_elbow_x =
+            snap_grid_x_right(fp.x + cell_px, camera_offset.x, camera_zoom, cell_size);
         pts.push(Pos2::new(from_elbow_x, fp.y));
 
-        // Ступеньки через промежуточные точки и до цели.
+        // Ступеньки через промежуточные точки маршрута.
         let mut cur = Pos2::new(from_elbow_x, fp.y);
-        let mut targets: Vec<Pos2> = route_pts.clone();
-        targets.push(tp);
-
-        for wp in targets {
-            // Вертикальный сегмент: текущий x (уже на линии сетки), y привязан к горизонтальной сетке.
-            let wp_y = snap_to_grid(wp.y, camera_offset.y, camera_zoom, cell_size);
+        for wp in &route_pts {
+            // Вертикальный сегмент: y привязан к горизонтальной линии сетки.
+            let wp_y = snap_to_grid_node(wp.y, camera_offset.y, camera_zoom, cell_size);
             if (cur.y - wp_y).abs() > 1.0 {
                 pts.push(Pos2::new(cur.x, wp_y));
             }
-            // Горизонтальный сегмент: y цели (уже на горизонтальной линии сетки),
-            // x привязан к вертикальной линии сетки.
-            let wp_x = snap_to_grid(wp.x, camera_offset.x, camera_zoom, cell_size);
+            // Горизонтальный сегмент: x привязан к вертикальной линии сетки.
+            let wp_x = snap_to_grid_node(wp.x, camera_offset.x, camera_zoom, cell_size);
             if (cur.x - wp_x).abs() > 1.0 {
                 pts.push(Pos2::new(wp_x, wp_y));
             }
             cur = Pos2::new(wp_x, wp_y);
         }
 
-        // Последний сегмент: порт приёмника — всегда Запрос (левая граница объекта),
-        // локоть на 1 клетку левее порта, затем горизонтально вправо к порту.
-        let tp_y_snapped = snap_to_grid(tp.y, camera_offset.y, camera_zoom, cell_size);
-        if (cur.y - tp_y_snapped).abs() > 1.0 {
-            pts.push(Pos2::new(cur.x, tp_y_snapped));
+        // Последний сегмент к порту приёмника.
+        // Вертикально к y порта (без привязки к горизонтальной сетке),
+        // затем горизонтально к точке на 1 клетку за границу объекта
+        // (x привязан к предыдущей вертикальной линии сетки, округление вниз),
+        // затем к самому порту.
+        if (cur.y - tp.y).abs() > 1.0 {
+            pts.push(Pos2::new(cur.x, tp.y));
         }
-        let to_elbow_x = snap_to_grid(tp.x - cell_px, camera_offset.x, camera_zoom, cell_size);
+        let to_elbow_x =
+            snap_grid_x_left(tp.x - cell_px, camera_offset.x, camera_zoom, cell_size);
         if (cur.x - to_elbow_x).abs() > 1.0 {
-            pts.push(Pos2::new(to_elbow_x, tp_y_snapped));
+            pts.push(Pos2::new(to_elbow_x, tp.y));
         }
         pts.push(tp);
     }
