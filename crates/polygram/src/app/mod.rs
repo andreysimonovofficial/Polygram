@@ -193,6 +193,25 @@ impl PolygramApp {
     }
 
     pub fn poll_snapshot(&mut self) {
+        // Обработка pending_move: если сервер не применил MoveObject (CellOccupied из-за буфера 2 кванта),
+        // откатываем клиентское предсказание после короткого таймаута.
+        if let Some((ref obj_id, rev_at_move)) = self.drag.pending_move {
+            if self.connection.last_rev > rev_at_move {
+                // Команда применена сервером — позиция актуальна в снимке.
+                self.drag.predicted_positions.remove(obj_id);
+                self.drag.pending_move = None;
+                self.drag.pending_move_age = 0;
+            } else {
+                // Команда, вероятно, отклонена — увеличиваем возраст.
+                self.drag.pending_move_age += 1;
+                if self.drag.pending_move_age > 5 {
+                    self.drag.predicted_positions.remove(obj_id);
+                    self.drag.pending_move = None;
+                    self.drag.pending_move_age = 0;
+                }
+            }
+        }
+
         while let Ok(new_snapshot) = self.connection.snapshot_rx.try_recv() {
             let new_rev = new_snapshot.rev;
             if new_rev != self.connection.last_rev {
@@ -206,6 +225,7 @@ impl PolygramApp {
                     if new_rev > rev_at_move {
                         self.drag.predicted_positions.remove(obj_id);
                         self.drag.pending_move = None;
+                        self.drag.pending_move_age = 0;
                     }
                 }
             }

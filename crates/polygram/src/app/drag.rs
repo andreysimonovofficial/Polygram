@@ -8,6 +8,8 @@ pub struct DragState {
     pub drag_start_cell: Option<(i32, i32)>,
     pub predicted_positions: HashMap<String, (i32, i32)>,
     pub pending_move: Option<(String, u64)>,
+    /// Возраст pending_move в кадрах — для отката при отклонении сервером (CellOccupied).
+    pub pending_move_age: u32,
     /// Начало выделения рамкой (Selection Box) в экранных координатах.
     pub selection_box_start: Option<egui::Pos2>,
     /// Перетаскивание показателя: (id объекта-источника, направление, имя показателя).
@@ -23,6 +25,7 @@ impl DragState {
             drag_start_cell: None,
             predicted_positions: HashMap::new(),
             pending_move: None,
+            pending_move_age: 0,
             selection_box_start: None,
             drag_metric: None,
             drag_metric_start_screen: None,
