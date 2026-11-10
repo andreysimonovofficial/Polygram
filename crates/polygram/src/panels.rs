@@ -343,7 +343,7 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
         });
 }
 
-/// Конфигурация Google Таблиц: URL Apps Script + инструкция.
+/// Конфигурация Google Таблиц: прямая ссылка на таблицу (через gws CLI, Apps Script не требуется).
 fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config: &mut serde_json::Map<String, serde_json::Value>) {
     let mut url = config
         .get("url")
@@ -355,7 +355,8 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
         .and_then(|v| v.as_u64())
         .unwrap_or(30);
 
-    ui.label("URL Apps Script:");
+    ui.label("URL Google Таблицы:");
+    ui.label("Пример: https://docs.google.com/spreadsheets/d/1tr5UxsQIUlfs4Td2OdGoNGnKhsYRIvXRQdtrWAvnPvk/edit");
     let url_response = ui.text_edit_singleline(&mut url);
     if url_response.lost_focus() && !url.is_empty() {
         config.insert("url".to_owned(), serde_json::Value::String(url.clone()));
@@ -412,39 +413,22 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
     }
 
     ui.separator();
-    ui.heading("App Script для Google Таблиц");
-    ui.label("Скопируйте код ниже в редактор Apps Script (https://script.google.com):");
-
-    const APPS_SCRIPT: &str = r#"function doGet(e) {
-  var cell = e.parameter.cell;
-  if (!cell) return ContentService.createTextOutput("no cell");
-  var sheet = SpreadsheetApp.openByUrl(PropertiesService.getScriptProperties().getProperty("SHEET_URL"));
-  var range = sheet.getRange(cell);
-  var value = range.getValue();
-  if (typeof value === "boolean") value = value ? 1 : 0;
-  return ContentService.createTextOutput(JSON.stringify({value: value}));
-}"#;
-
-    ui.add(
-        egui::TextEdit::multiline(&mut APPS_SCRIPT.to_owned())
-            .code_editor()
-            .desired_rows(12)
-            .interactive(false),
+    ui.heading("Настройка Google Таблиц");
+    ui.label(
+        "1. Откройте свою Google Таблицу и скопируйте ссылку из адресной строки браузера.\n\
+         2. Вставьте её в поле «URL Google Таблицы» выше.\n\
+         3. Убедитесь, что на компьютере установлен и авторизован gws CLI (@googleworkspace/cli),\n\
+         4. Изменения сохраняются автоматически и переживают перезапуск API/GUI.\n\
+         5. В привязке показателя укажите ячейку, например: Sheet1!A1",
     );
 
-    if ui.button("Копировать App Script").clicked() {
-        ui.ctx().copy_text(APPS_SCRIPT.to_owned());
-    }
-
     ui.separator();
-    ui.heading("Инструкция");
+    ui.heading("Как это работает");
     ui.label(
-        "1. Откройте https://script.google.com и создайте новый проект.\n\
-         2. Вставьте код App Script выше.\n\
-         3. Добавьте свойство скрипта SHEET_URL со ссылкой на вашу Google Таблицу.\n\
-         4. Разверните как Веб-приложение (Deploy → New deployment → Web app).\n\
-         5. Скопируйте URL веб-приложения в поле «URL Apps Script» выше.\n\
-         6. В привязке показателя укажите ячейку, например: Sheet1!A1",
+        "Значения читаются напрямую из ячеек таблицы через gws CLI (Google Sheets API).\n\
+         Deploy Apps Script не требуется — достаточно ссылки на таблицу и настроенного gws.\n\
+         Привязки (объект + запись + ячейка + интервал) хранятся в connectors/bindings.json\n\
+         и восстанавливаются после перезапуска API/GUI.",
     );
 }
 
