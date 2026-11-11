@@ -13,8 +13,12 @@ use crate::{
     values::Values,
 };
 
-pub(crate) fn same_num(a: f64, b: f64) -> bool {
-    (a.is_nan() && b.is_nan()) || a == b
+pub(crate) fn same_val(a: &MetricValue, b: &MetricValue) -> bool {
+    a == b
+}
+
+pub(crate) fn same_val_opt(a: &Option<MetricValue>, b: &Option<MetricValue>) -> bool {
+    a == b
 }
 
 #[derive(Clone, Debug)]

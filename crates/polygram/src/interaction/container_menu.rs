@@ -1,5 +1,5 @@
 use crate::app::{PolygramApp, dialogs::EntryApiBinding};
-use polygram_core::Published;
+use polygram_core::{MetricValue, Published};
 use egui::{Context, Window};
 
 /// Диалог редактирования списка показателей контейнера (запросы/выходы) и
@@ -247,12 +247,12 @@ pub fn handle_container_menu_dialog(
                 polygram_core::types::Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
                     object: object_id.clone(),
                     entry: entry_name,
-                    required: value,
+                    required: MetricValue::Number(value),
                 }),
                 polygram_core::types::Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
                     object: object_id.clone(),
                     entry: entry_name,
-                    value,
+                    value: MetricValue::Number(value),
                 }),
             }
         }

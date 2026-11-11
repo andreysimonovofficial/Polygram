@@ -1,5 +1,6 @@
 use crate::app::PolygramApp;
-use polygram_core::{Command, MetricKind, Published};
+use chrono::{NaiveDate, Utc};
+use polygram_core::{Command, MetricKind, MetricValue, Published};
 use egui::{Context, Window};
 
 /// Модальное диалоговое окно добавления показателя.
@@ -57,9 +58,13 @@ pub fn handle_add_metric_dialog(
                         for kind in [
                             MetricKind::Number,
                             MetricKind::Time,
+                            MetricKind::Date,
+                            MetricKind::Deadline,
                             MetricKind::Percentage,
                             MetricKind::Binary,
                             MetricKind::Duration,
+                            MetricKind::Money,
+                            MetricKind::Text,
                             MetricKind::Formula,
                         ] {
                             if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
@@ -133,7 +138,7 @@ pub fn handle_add_metric_dialog(
             return;
         }
 
-        let value: f64 = app.dialogs.add_metric_value.trim().parse().unwrap_or(0.0);
+        let value: MetricValue = parse_metric_value(&app.dialogs.add_metric_value, app.dialogs.add_metric_kind);
         let object_id_for_cmd = object_id.clone();
         let name_for_cmd = name.clone();
 
@@ -141,8 +146,8 @@ pub fn handle_add_metric_dialog(
             // Используем существующий показатель — создаём только запись на объекте.
             // Для запроса вводимое значение — необходимое (required), для выхода — значение (value).
             let (entry_value, entry_required) = match dir {
-                polygram_core::types::Direction::Request => (0.0, value),
-                polygram_core::types::Direction::Output => (value, 0.0),
+                polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
+                polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
             };
             app.apply_batch(vec![Command::AddMetricEntry {
                 object: object_id_for_cmd.clone(),
@@ -153,14 +158,14 @@ pub fn handle_add_metric_dialog(
                 value: entry_value,
                 required: entry_required,
                 max: None,
-                fact: 0.0,
+                fact: MetricValue::Null,
             }]);
         } else {
             let kind = app.dialogs.add_metric_kind;
             let unit = app.dialogs.add_metric_unit.trim().to_owned();
             let (entry_value, entry_required) = match dir {
-                polygram_core::types::Direction::Request => (0.0, value),
-                polygram_core::types::Direction::Output => (value, 0.0),
+                polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
+                polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
             };
 
             app.apply_batch(vec![
@@ -180,7 +185,7 @@ pub fn handle_add_metric_dialog(
                     value: entry_value,
                     required: entry_required,
                     max: None,
-                    fact: 0.0,
+                    fact: MetricValue::Null,
                 },
             ]);
 
@@ -218,5 +223,52 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_unit.clear();
         app.dialogs.add_metric_api_connector.clear();
         app.dialogs.add_metric_api_cell.clear();
+    }
+}
+
+/// Преобразовать строку из текстового поля в MetricValue согласно типу показателя.
+fn parse_metric_value(s: &str, kind: MetricKind) -> MetricValue {
+    let trimmed = s.trim();
+    match kind {
+        MetricKind::Number => trimmed
+            .parse::<f64>()
+            .map(MetricValue::Number)
+            .unwrap_or(MetricValue::Null),
+        MetricKind::Money => trimmed
+            .parse::<f64>()
+            .map(|v| MetricValue::Money(v as i64))
+            .unwrap_or(MetricValue::Null),
+        MetricKind::Percentage => trimmed
+            .parse::<f64>()
+            .map(MetricValue::Percentage)
+            .unwrap_or(MetricValue::Null),
+        MetricKind::Duration => trimmed
+            .parse::<f64>()
+            .map(|v| MetricValue::Duration(v as i64))
+            .unwrap_or(MetricValue::Null),
+        MetricKind::Date | MetricKind::Deadline => {
+            if let Ok(d) = NaiveDate::parse_from_str(trimmed, "%d.%m.%Y") {
+                let dt = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
+                match kind {
+                    MetricKind::Deadline => MetricValue::Deadline(dt),
+                    _ => MetricValue::Date(dt),
+                }
+            } else if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+                let dt = dt.with_timezone(&Utc);
+                match kind {
+                    MetricKind::Deadline => MetricValue::Deadline(dt),
+                    _ => MetricValue::Date(dt),
+                }
+            } else {
+                MetricValue::Null
+            }
+        }
+        MetricKind::Binary => match trimmed.to_lowercase().as_str() {
+            "true" | "1" | "да" | "yes" => MetricValue::Binary(true),
+            "false" | "0" | "нет" | "no" => MetricValue::Binary(false),
+            _ => MetricValue::Null,
+        },
+        MetricKind::Text => MetricValue::Text(trimmed.to_owned()),
+        _ => MetricValue::Null,
     }
 }

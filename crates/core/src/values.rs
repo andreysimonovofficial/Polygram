@@ -3,19 +3,20 @@
 //! Один и тот же глобальный показатель может иметь разные значения в разных объектах.
 
 use crate::{hierarchy::Hierarchy, types::*};
+use chrono::Utc;
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Values {
     /// Значение записи (per-object).
-    pub value: Vec<f64>,
+    pub value: Vec<MetricValue>,
     /// Поставлено источниками (per-object, для запросов — сумма подключённых выходов).
-    pub supplied: Vec<f64>,
+    pub supplied: Vec<MetricValue>,
     /// Необходимое значение (per-object, для запросов).
-    pub required: Vec<f64>,
+    pub required: Vec<MetricValue>,
     /// Максимум (per-object).
-    pub max: Vec<f64>,
+    pub max: Vec<Option<MetricValue>>,
     /// Факт (фактическое значение, per-object).
-    pub fact: Vec<f64>,
+    pub fact: Vec<MetricValue>,
     /// Статус записи.
     pub status: Vec<StatusCode>,
     /// Грязные флаги для пересчёта.
@@ -24,7 +25,7 @@ pub struct Values {
     /// Список записей, требующих пересчёта.
     pub out_list: Vec<EntryIx>,
     pub in_list: Vec<EntryIx>,
-    /// Выделенное под рёбер (alloc).
+    /// Выделенное под рёбра (alloc).
     pub alloc: Vec<f64>,
 }
 
@@ -36,11 +37,11 @@ impl Values {
     pub fn ensure(&mut self, object_metrics: usize, edges: usize) {
         if self.value.len() < object_metrics {
             let old = self.value.len();
-            self.value.resize(object_metrics, 0.0);
-            self.supplied.resize(object_metrics, 0.0);
-            self.required.resize(object_metrics, 0.0);
-            self.max.resize(object_metrics, f64::NAN);
-            self.fact.resize(object_metrics, 0.0);
+            self.value.resize(object_metrics, MetricValue::Null);
+            self.supplied.resize(object_metrics, MetricValue::Null);
+            self.required.resize(object_metrics, MetricValue::Null);
+            self.max.resize(object_metrics, None);
+            self.fact.resize(object_metrics, MetricValue::Null);
             self.status.resize(object_metrics, StatusCode::Unknown);
             self.dirty_out.resize(object_metrics, false);
             self.dirty_in.resize(object_metrics, false);
@@ -56,11 +57,11 @@ impl Values {
 
     pub fn reset_metric(&mut self, e: EntryIx) {
         let i = e.idx();
-        self.value[i] = 0.0;
-        self.supplied[i] = 0.0;
-        self.required[i] = 0.0;
-        self.max[i] = f64::NAN;
-        self.fact[i] = 0.0;
+        self.value[i] = MetricValue::Null;
+        self.supplied[i] = MetricValue::Null;
+        self.required[i] = MetricValue::Null;
+        self.max[i] = None;
+        self.fact[i] = MetricValue::Null;
         self.status[i] = StatusCode::Unknown;
     }
 
@@ -133,6 +134,11 @@ impl Values {
         }
     }
 
+    fn metric_kind(&self, h: &Hierarchy, e: EntryIx) -> MetricKind {
+        let meta = h.object_metric(e);
+        h.metric_def(meta.metric_def).kind
+    }
+
     fn recompute_exit(
         &mut self,
         h: &Hierarchy,
@@ -142,27 +148,74 @@ impl Values {
         let meta = h.object_metric(e);
         debug_assert_eq!(meta.direction, Direction::Output);
         let i = e.idx();
-        let exit_value = self.value[i];
+        let kind = self.metric_kind(h, e);
 
-        // Сумма запросов целей (взвешенная пропускной способностью).
-        let mut sum_requests: f64 = 0.0;
-        for edge in h.out_entries(e) {
-            let to = h.edge(edge).to;
-            let req_meta = h.object_metric(to);
-            if req_meta.direction == Direction::Request {
-                let t = h.edge(edge).throughput;
-                sum_requests += self.required[to.idx()] * (t / 100.0);
+        let new_status = match kind {
+            MetricKind::Number | MetricKind::Time | MetricKind::Percentage | MetricKind::Money | MetricKind::Duration => {
+                let exit_value = match self.value[i] {
+                    MetricValue::Number(v) => v,
+                    MetricValue::Percentage(v) => v,
+                    MetricValue::Money(v) => v as f64,
+                    MetricValue::Duration(v) => v as f64,
+                    _ => 0.0,
+                };
+
+                // Сумма запросов целей (взвешенная пропускной способностью).
+                let mut sum_requests: f64 = 0.0;
+                for edge in h.out_entries(e) {
+                    let to = h.edge(edge).to;
+                    let req_meta = h.object_metric(to);
+                    if req_meta.direction == Direction::Request {
+                        let t = h.edge(edge).throughput;
+                        let req_val = match self.required[to.idx()] {
+                            MetricValue::Number(v) => v,
+                            MetricValue::Percentage(v) => v,
+                            MetricValue::Money(v) => v as f64,
+                            MetricValue::Duration(v) => v as f64,
+                            _ => 0.0,
+                        };
+                        sum_requests += req_val * (t / 100.0);
+                    }
+                }
+
+                if !h.has_edges(e) {
+                    StatusCode::Unconnected
+                } else if sum_requests > exit_value + EPS {
+                    StatusCode::Deficit
+                } else if (sum_requests - exit_value).abs() <= EPS {
+                    StatusCode::Ok
+                } else {
+                    StatusCode::Surplus
+                }
             }
-        }
-
-        let new_status = if !h.has_edges(e) {
-            StatusCode::Unconnected
-        } else if sum_requests > exit_value + EPS {
-            StatusCode::Deficit
-        } else if (sum_requests - exit_value).abs() <= EPS {
-            StatusCode::Ok
-        } else {
-            StatusCode::Surplus
+            MetricKind::Deadline => {
+                let now = Utc::now();
+                match self.value[i] {
+                    MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
+                        if dt < now {
+                            StatusCode::Deficit // просрочено
+                        } else if (dt - now).num_seconds() < 86400 {
+                            StatusCode::Warning // до конца дня
+                        } else {
+                            StatusCode::Ok // в срок
+                        }
+                    }
+                    _ => StatusCode::Unknown,
+                }
+            }
+            MetricKind::Date => {
+                if self.value[i].is_null() {
+                    StatusCode::Unknown
+                } else {
+                    StatusCode::Ok
+                }
+            }
+            MetricKind::Binary => match self.value[i] {
+                MetricValue::Binary(true) => StatusCode::Ok,
+                MetricValue::Binary(false) => StatusCode::Invalid,
+                _ => StatusCode::Unknown,
+            },
+            _ => StatusCode::Unknown,
         };
 
         if new_status != self.status[i] {
@@ -181,26 +234,68 @@ impl Values {
         let meta = h.object_metric(e);
         debug_assert_eq!(meta.direction, Direction::Request);
         let i = e.idx();
-        let required = self.required[i];
+        let kind = self.metric_kind(h, e);
 
-        // Сумма выходов источников (взвешенная пропускной способностью).
-        let mut sum_supply: f64 = 0.0;
-        for edge in h.in_entries(e) {
-            let from = h.edge(edge).from;
-            let src_meta = h.object_metric(from);
-            if src_meta.direction == Direction::Output {
-                let t = h.edge(edge).throughput;
-                sum_supply += self.value[from.idx()] * (t / 100.0);
+        let new_status = match kind {
+            MetricKind::Number | MetricKind::Time | MetricKind::Percentage | MetricKind::Money | MetricKind::Duration => {
+                let required = match self.required[i] {
+                    MetricValue::Number(v) => v,
+                    MetricValue::Percentage(v) => v,
+                    MetricValue::Money(v) => v as f64,
+                    MetricValue::Duration(v) => v as f64,
+                    _ => 0.0,
+                };
+
+                // Сумма выходов источников (взвешенная пропускной способностью).
+                let mut sum_supply: f64 = 0.0;
+                for edge in h.in_entries(e) {
+                    let from = h.edge(edge).from;
+                    let src_meta = h.object_metric(from);
+                    if src_meta.direction == Direction::Output {
+                        let t = h.edge(edge).throughput;
+                        let val = match self.value[from.idx()] {
+                            MetricValue::Number(v) => v,
+                            MetricValue::Percentage(v) => v,
+                            MetricValue::Money(v) => v as f64,
+                            MetricValue::Duration(v) => v as f64,
+                            _ => 0.0,
+                        };
+                        sum_supply += val * (t / 100.0);
+                    }
+                }
+                self.supplied[i] = MetricValue::Number(sum_supply.min(required));
+
+                if !h.has_edges(e) {
+                    StatusCode::Unconnected
+                } else if sum_supply >= required - EPS {
+                    StatusCode::Ok
+                } else {
+                    StatusCode::Deficit
+                }
             }
-        }
-        self.supplied[i] = sum_supply.min(required);
-
-        let new_status = if !h.has_edges(e) {
-            StatusCode::Unconnected
-        } else if sum_supply >= required - EPS {
-            StatusCode::Ok
-        } else {
-            StatusCode::Deficit
+            MetricKind::Deadline => {
+                let now = Utc::now();
+                match self.required[i] {
+                    MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
+                        if dt < now {
+                            StatusCode::Deficit
+                        } else if (dt - now).num_seconds() < 86400 {
+                            StatusCode::Warning
+                        } else {
+                            StatusCode::Ok
+                        }
+                    }
+                    _ => StatusCode::Unknown,
+                }
+            }
+            MetricKind::Date => {
+                if self.required[i].is_null() {
+                    StatusCode::Unknown
+                } else {
+                    StatusCode::Ok
+                }
+            }
+            _ => StatusCode::Unknown,
         };
 
         if new_status != self.status[i] {
@@ -215,7 +310,7 @@ impl Values {
             rev,
             value: self.value.clone(),
             required: self.required.clone(),
-            max: self.max.iter().map(|&x| if x.is_nan() { None } else { Some(x) }).collect(),
+            max: self.max.clone(),
             fact: self.fact.clone(),
             status: self.status.clone(),
         }
@@ -225,10 +320,10 @@ impl Values {
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct DynamicState {
     pub rev: u64,
-    pub value: Vec<f64>,
-    pub required: Vec<f64>,
-    pub max: Vec<Option<f64>>,
-    pub fact: Vec<f64>,
+    pub value: Vec<MetricValue>,
+    pub required: Vec<MetricValue>,
+    pub max: Vec<Option<MetricValue>>,
+    pub fact: Vec<MetricValue>,
     pub status: Vec<StatusCode>,
 }
 
@@ -236,30 +331,10 @@ impl PartialEq for DynamicState {
     fn eq(&self, other: &Self) -> bool {
         self.rev == other.rev
             && self.value.len() == other.value.len()
-            && self
-                .value
-                .iter()
-                .zip(other.value.iter())
-                .all(|(a, b)| (a - b).abs() < 1e-9)
-            && self
-                .required
-                .iter()
-                .zip(other.required.iter())
-                .all(|(a, b)| (a - b).abs() < 1e-9)
-            && self
-                .max
-                .iter()
-                .zip(other.max.iter())
-                .all(|(a, b)| match (a, b) {
-                    (None, None) => true,
-                    (Some(a), Some(b)) => (a - b).abs() < 1e-9,
-                    _ => false,
-                })
-            && self
-                .fact
-                .iter()
-                .zip(other.fact.iter())
-                .all(|(a, b)| (a - b).abs() < 1e-9)
+            && self.value == other.value
+            && self.required == other.required
+            && self.max == other.max
+            && self.fact == other.fact
             && self.status == other.status
     }
 }

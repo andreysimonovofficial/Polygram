@@ -1,6 +1,6 @@
 use crate::app::PolygramApp;
 use polygram_core::types::{Direction, NodeKind};
-use polygram_core::{Command, Published};
+use polygram_core::{Command, MetricValue, Published};
 use egui::{Context, Window};
 
 /// Контекстное меню по правой кнопке на объекте или на пустом месте холста.
@@ -44,10 +44,10 @@ pub fn context_menu(
                             id: None,
                             metric_def: "по умолчанию".into(),
                             name: format!("request{}", n_req + 1),
-                            value: 0.0,
-                            required: 0.0,
+                            value: MetricValue::Null,
+                            required: MetricValue::Null,
                             max: None,
-                            fact: 0.0,
+                            fact: MetricValue::Null,
                         };
                         app.apply_cmd(cmd);
                         *close_menu = true;
@@ -66,10 +66,10 @@ pub fn context_menu(
                             id: None,
                             metric_def: "по умолчанию".into(),
                             name: format!("out{}", n_out + 1),
-                            value: 0.0,
-                            required: 0.0,
+                            value: MetricValue::Null,
+                            required: MetricValue::Null,
                             max: None,
-                            fact: 0.0,
+                            fact: MetricValue::Null,
                         };
                         app.apply_cmd(cmd);
                         *close_menu = true;

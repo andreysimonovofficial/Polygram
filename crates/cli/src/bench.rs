@@ -39,9 +39,9 @@ fn metric(
     dir: Direction,
     id: &str,
     metric_def: &str,
-    value: f64,
-    required: f64,
-    max: Option<f64>,
+    value: MetricValue,
+    required: MetricValue,
+    max: Option<MetricValue>,
 ) -> Command {
     Command::AddMetricEntry {
         object: object.to_owned(),
@@ -52,7 +52,7 @@ fn metric(
         value,
         required,
         max,
-        fact: 0.0,
+        fact: MetricValue::Null,
     }
 }
 
@@ -81,8 +81,8 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
                 Direction::Request,
                 &format!("r{k}"),
                 "tovary",
-                0.0,
-                5.0 + rng.below(45) as f64,
+                MetricValue::Number(0.0),
+                MetricValue::Number(5.0 + rng.below(45) as f64),
                 None,
             ));
             cmds.push(metric(
@@ -90,9 +90,9 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
                 Direction::Output,
                 &format!("o{k}"),
                 "tovary",
-                rng.below(100) as f64,
-                0.0,
-                Some(150.0),
+                MetricValue::Number(rng.below(100) as f64),
+                MetricValue::Number(0.0),
+                Some(MetricValue::Number(150.0)),
             ));
         }
     }
@@ -159,7 +159,7 @@ pub fn bench(n: usize) -> i32 {
         let cmd = Command::SetValue {
             object: format!("n{}", rng.below(n)),
             entry: format!("o{}", 1 + rng.below(2)),
-            value: ((k * 7) % 160) as f64,
+            value: MetricValue::Number(((k * 7) % 160) as f64),
         };
         let t = Instant::now();
         e.apply(Scope::Root, cmd).unwrap();
@@ -254,7 +254,7 @@ pub fn bench(n: usize) -> i32 {
         let cmd = Command::SetValue {
             object: format!("n{}", rng.below(n)),
             entry: format!("o{}", 1 + rng.below(2)),
-            value: ((k * 11) % 170) as f64,
+            value: MetricValue::Number(((k * 11) % 170) as f64),
         };
         let t = Instant::now();
         h.apply(cmd).unwrap();

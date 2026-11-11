@@ -162,8 +162,8 @@ fn paint_metric_row(
         format!(" {}", entry.unit)
     };
     let displayed_value = match dir {
-        Direction::Request => dynamic.required[entry.ix as usize],
-        Direction::Output => entry.value,
+        Direction::Request => dynamic.required[entry.ix as usize].clone(),
+        Direction::Output => entry.value.clone(),
     };
     let value_text = format!("{:.0}{}", displayed_value, unit);
     painter.text(

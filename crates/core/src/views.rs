@@ -1,4 +1,4 @@
-use crate::types::{Direction, MetricKind, NodeKind, StatusCode};
+use crate::types::{Direction, MetricKind, MetricValue, NodeKind, StatusCode};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Stats {
@@ -18,11 +18,11 @@ pub struct MetricView {
     pub unit: String,
     pub kind: MetricKind,
     pub direction: Direction,
-    pub value: f64,
-    pub supplied: f64,
-    pub required: f64,
-    pub max: Option<f64>,
-    pub fact: f64,
+    pub value: MetricValue,
+    pub supplied: MetricValue,
+    pub required: MetricValue,
+    pub max: Option<MetricValue>,
+    pub fact: MetricValue,
     pub connected: bool,
     pub status: StatusCode,
     pub status_text: &'static str,

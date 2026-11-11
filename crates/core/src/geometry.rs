@@ -1,13 +1,13 @@
 use crate::layout::Rect;
-use crate::types::NodeKind;
+use crate::types::{MetricValue, NodeKind};
 
 /// Редко меняющаяся часть для холста: положение карточек и линии.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EntryGeom {
     pub ix: u32,
     pub name: String,
-    pub value: f64,
-    pub supplied: f64,
+    pub value: MetricValue,
+    pub supplied: MetricValue,
     pub unit: String,
 }
 

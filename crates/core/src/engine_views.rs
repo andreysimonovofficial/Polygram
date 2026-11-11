@@ -47,7 +47,6 @@ impl crate::engine::Engine {
         let md = self.hier.metric_def(om.metric_def);
         let i = e.idx();
         let v = &self.vals;
-        let opt = |x: f64| if x.is_nan() { None } else { Some(x) };
         MetricView {
             id: om.ext_id.clone(),
             name: om.ext_id.clone(),
@@ -56,11 +55,11 @@ impl crate::engine::Engine {
             unit: md.unit.clone(),
             kind: md.kind,
             direction: om.direction,
-            value: v.value[i],
-            supplied: v.supplied[i],
-            required: v.required[i],
-            max: opt(v.max[i]),
-            fact: v.fact[i],
+            value: v.value[i].clone(),
+            supplied: v.supplied[i].clone(),
+            required: v.required[i].clone(),
+            max: v.max[i].clone(),
+            fact: v.fact[i].clone(),
             connected: self.hier.has_edges(e),
             status: v.status[i],
             status_text: v.status[i].label_ru(),
@@ -104,37 +103,37 @@ impl crate::engine::Engine {
             .live_objects()
             .map(|o| {
                 let d = self.hier.object(o);
-                let requests: Vec<crate::geometry::EntryGeom> = d
-                    .requests
-                    .iter()
-                    .map(|&e| {
-                        let i = e.idx();
-                        let om = self.hier.object_metric(e);
-                        let md = self.hier.metric_def(om.metric_def);
-                        crate::geometry::EntryGeom {
-                            ix: e.0,
-                            name: om.ext_id.clone(),
-                            value: self.vals.value[i],
-                            supplied: self.vals.supplied[i],
-                            unit: md.unit.clone(),
-                        }
-                    })
-                    .collect();
-                let outputs: Vec<crate::geometry::EntryGeom> = d
-                    .outputs
-                    .iter()
-                    .map(|&e| {
-                        let i = e.idx();
-                        let om = self.hier.object_metric(e);
-                        let md = self.hier.metric_def(om.metric_def);
-                        crate::geometry::EntryGeom {
-                            ix: e.0,
-                            name: om.ext_id.clone(),
-                            value: self.vals.value[i],
-                            supplied: self.vals.value[i],
-                            unit: md.unit.clone(),
-                        }
-                    })
+                    let requests: Vec<crate::geometry::EntryGeom> = d
+                        .requests
+                        .iter()
+                        .map(|&e| {
+                            let i = e.idx();
+                            let om = self.hier.object_metric(e);
+                            let md = self.hier.metric_def(om.metric_def);
+                            crate::geometry::EntryGeom {
+                                ix: e.0,
+                                name: om.ext_id.clone(),
+                                value: self.vals.value[i].clone(),
+                                supplied: self.vals.supplied[i].clone(),
+                                unit: md.unit.clone(),
+                            }
+                        })
+                        .collect();
+                    let outputs: Vec<crate::geometry::EntryGeom> = d
+                        .outputs
+                        .iter()
+                        .map(|&e| {
+                            let i = e.idx();
+                            let om = self.hier.object_metric(e);
+                            let md = self.hier.metric_def(om.metric_def);
+                            crate::geometry::EntryGeom {
+                                ix: e.0,
+                                name: om.ext_id.clone(),
+                                value: self.vals.value[i].clone(),
+                                supplied: self.vals.supplied[i].clone(),
+                                unit: md.unit.clone(),
+                            }
+                        })
                     .collect();
                 crate::geometry::ObjectGeom {
                     ix: o.0,

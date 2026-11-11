@@ -123,10 +123,10 @@ fn department_feed_includes_metric_and_status_events() {
             id: Some("o1".into()),
             metric_def: "tovary".into(),
             name: String::new(),
-            value: 10.0,
-            required: 0.0,
+            value: MetricValue::Number(10.0),
+            required: MetricValue::Null,
             max: None,
-            fact: 0.0,
+            fact: MetricValue::Null,
         },
     )
     .unwrap();
@@ -135,7 +135,7 @@ fn department_feed_includes_metric_and_status_events() {
         Command::SetValue {
             object: "p1".into(),
             entry: "o1".into(),
-            value: 50.0,
+            value: MetricValue::Number(50.0),
         },
     )
     .unwrap();

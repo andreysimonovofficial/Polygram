@@ -88,7 +88,7 @@ fn growing_card_relocates_instead_of_overlapping() {
     object_at(&mut e, "b", [0, 32]).unwrap(); // с буфером 2 кванта под a
                                               // Добавляем максимум показателей — карточка остаётся 30×30 (минимум)
     for k in 0..MAX_METRICS_PER_SIDE {
-        out(&mut e, "a", &format!("o{k}"), "tovary", 1.0, None);
+        out(&mut e, "a", &format!("o{k}"), "tovary", MetricValue::Number(1.0), None);
     }
     assert_no_overlaps(&e);
     assert_eq!(e.object_view("b").unwrap().at, [0, 32], "соседа не двигаем");
@@ -104,9 +104,9 @@ fn straight_forward_and_dogleg_routes() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object_at(&mut e, "a", [0, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", 10.0, None);
+    out(&mut e, "a", "o1", "tovary", MetricValue::Number(10.0), None);
     object_at(&mut e, "b", [60, 0]).unwrap();
-    req(&mut e, "b", "r1", "tovary", 10.0, None);
+    req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
     connect(&mut e, "a", "o1", "b", "r1");
     let g = e.geometry();
     assert_eq!(g.edges.len(), 1);
@@ -117,7 +117,7 @@ fn straight_forward_and_dogleg_routes() {
     );
 
     object_at(&mut e, "c", [60, 70]).unwrap();
-    req(&mut e, "c", "r1", "tovary", 10.0, None);
+    req(&mut e, "c", "r1", "tovary", MetricValue::Number(10.0), None);
     connect(&mut e, "a", "o1", "c", "r1");
     let g = e.geometry();
     let dog = g
@@ -134,9 +134,9 @@ fn backward_edge_goes_around() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object_at(&mut e, "a", [90, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", 10.0, None);
+    out(&mut e, "a", "o1", "tovary", MetricValue::Number(10.0), None);
     object_at(&mut e, "b", [0, 0]).unwrap();
-    req(&mut e, "b", "r1", "tovary", 10.0, None);
+    req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
     connect(&mut e, "a", "o1", "b", "r1");
     let g = e.geometry();
     let pts = &g.edges[0].points;
@@ -162,9 +162,9 @@ fn overlapping_vertical_routes_get_separate_lanes() {
         let sy = k * 32;
         let ty = (2 - k) * 32;
         object_at(&mut e, &s, [0, sy]).unwrap();
-        out(&mut e, &s, "o1", "tovary", 1.0, None);
+        out(&mut e, &s, "o1", "tovary", MetricValue::Number(1.0), None);
         object_at(&mut e, &t, [90, ty]).unwrap();
-        req(&mut e, &t, "r1", "tovary", 1.0, None);
+        req(&mut e, &t, "r1", "tovary", MetricValue::Number(1.0), None);
         connect(&mut e, &s, "o1", &t, "r1");
     }
     let g = e.geometry();
@@ -183,13 +183,13 @@ fn route_avoids_blocking_card_when_possible() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object_at(&mut e, "a", [0, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", 1.0, None);
+    out(&mut e, "a", "o1", "tovary", MetricValue::Number(1.0), None);
     object_at(&mut e, "b", [130, 40]).unwrap();
-    req(&mut e, "b", "r1", "tovary", 1.0, None);
+    req(&mut e, "b", "r1", "tovary", MetricValue::Number(1.0), None);
     // помеха частично перекрывает канал — маршрут должен обойти
     object_at(&mut e, "wall", [60, 20]).unwrap();
     for k in 0..8 {
-        out(&mut e, "wall", &format!("w{k}"), "tovary", 0.0, None);
+        out(&mut e, "wall", &format!("w{k}"), "tovary", MetricValue::Number(0.0), None);
     }
     connect(&mut e, "a", "o1", "b", "r1");
     let g = e.geometry();
@@ -214,10 +214,10 @@ fn auto_layout_is_overlap_free_and_routes_are_orthogonal() {
         let n_out = 1 + rng.below(3);
         let n_req = 1 + rng.below(3);
         for j in 0..n_out {
-            out(&mut e, &id, &format!("o{j}"), "tovary", 10.0, None);
+            out(&mut e, &id, &format!("o{j}"), "tovary", MetricValue::Number(10.0), None);
         }
         for j in 0..n_req {
-            req(&mut e, &id, &format!("r{j}"), "tovary", 5.0, None);
+            req(&mut e, &id, &format!("r{j}"), "tovary", MetricValue::Number(5.0), None);
         }
     }
     let mut connected = 0;
@@ -256,8 +256,8 @@ fn auto_layout_puts_sources_left_of_consumers() {
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     for id in ["a", "b", "c"] {
         object(&mut e, id);
-        out(&mut e, id, "o1", "tovary", 1.0, None);
-        req(&mut e, id, "r1", "tovary", 1.0, None);
+        out(&mut e, id, "o1", "tovary", MetricValue::Number(1.0), None);
+        req(&mut e, id, "r1", "tovary", MetricValue::Number(1.0), None);
     }
     connect(&mut e, "a", "o1", "b", "r1");
     connect(&mut e, "b", "o1", "c", "r1");
@@ -272,7 +272,7 @@ fn events_are_ordered_and_gaps_detected() {
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object(&mut e, "a");
     let r1 = e.rev();
-    out(&mut e, "a", "o1", "tovary", 1.0, None);
+    out(&mut e, "a", "o1", "tovary", MetricValue::Number(1.0), None);
     let evs = e.events_since(r1).unwrap();
     assert!(!evs.is_empty() && evs.iter().all(|x| x.rev > r1));
     assert!(evs.windows(2).all(|w| w[0].rev <= w[1].rev));

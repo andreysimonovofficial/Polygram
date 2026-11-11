@@ -4,6 +4,7 @@
 //! Запись контейнера (ObjectMetric) — локальная в объекте, ссылается на MetricDef,
 //! хранит своё значение, необходимое и максимум для этого объекта.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Допуск сравнения чисел (перенесён из MVP).
@@ -37,16 +38,92 @@ ix_type!(MetricDefIx);
 ix_type!(EntryIx);
 ix_type!(EdgeIx);
 
+/// Логический тип показателя. Определяет семантику значения и способ расчёта статуса.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum MetricKind {
     #[default]
-    Number,
-    Time,
-    Percentage,
-    Binary,
-    Duration,
-    Formula,
+    Number,      // число (шт., кол-во, рейтинг)
+    Time,        // обратная совместимость: хранится как Number
+    Date,        // абсолютная дата/время (точка на таймлайне)
+    Deadline,    // срок окончания — статус считается относительно now (просрочено/в срок)
+    Percentage,  // 0..=100
+    Binary,      // да/нет, выполнено/нет
+    Duration,    // обратная совместимость: интервал, хранится как Number (мс)
+    Money,       // сумма в минорных единицах (копейки/центы), без float-ошибок
+    Text,        // свободная строка
+    Formula,     // вычисляемое
+    Timestamp,   // метка времени создания/обновления (read-only из системы)
+}
+
+/// Типизированное значение показателя. Единое хранилище для всех источников.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value")]
+#[non_exhaustive]
+pub enum MetricValue {
+    Null,
+    Number(f64),
+    Date(DateTime<Utc>),
+    Deadline(DateTime<Utc>),
+    Duration(i64),    // миллисекунды
+    Percentage(f64),  // 0..=100
+    Binary(bool),
+    Money(i64),       // минорные единицы (копейки)
+    Text(String),
+}
+
+impl Default for MetricValue {
+    fn default() -> Self {
+        MetricValue::Null
+    }
+}
+
+impl MetricValue {
+    /// Извлечь f64 для числовых операций (Number, Percentage, Money, Duration).
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            MetricValue::Number(v) => Some(*v),
+            MetricValue::Percentage(v) => Some(*v),
+            MetricValue::Money(v) => Some(*v as f64),
+            MetricValue::Duration(v) => Some(*v as f64),
+            _ => None,
+        }
+    }
+
+    /// Извлечь DateTime для временных операций (Date, Deadline).
+    pub fn as_datetime(&self) -> Option<DateTime<Utc>> {
+        match self {
+            MetricValue::Date(v) => Some(*v),
+            MetricValue::Deadline(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, MetricValue::Null)
+    }
+}
+
+impl std::fmt::Display for MetricValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MetricValue::Null => write!(f, "–"),
+            MetricValue::Number(v) => write!(f, "{v}"),
+            MetricValue::Date(dt) => write!(f, "{}", dt.format("%d.%m.%Y")),
+            MetricValue::Deadline(dt) => write!(f, "{}", dt.format("%d.%m.%Y %H:%M")),
+            MetricValue::Duration(ms) => {
+                let secs = *ms / 1000;
+                let h = secs / 3600;
+                let m = (secs % 3600) / 60;
+                write!(f, "{h}:{m:02}")
+            }
+            MetricValue::Percentage(v) => write!(f, "{v}%"),
+            MetricValue::Binary(b) => write!(f, "{}", if *b { "да" } else { "нет" }),
+            MetricValue::Money(v) => write!(f, "{v}"),
+            MetricValue::Text(s) => write!(f, "{s}"),
+        }
+    }
 }
 
 /// Направление контейнера: Запрос (вход) или Выход.
@@ -104,10 +181,10 @@ pub struct ObjectMetric {
     pub id: String,
     pub metric_def: MetricDefIx,
     pub direction: Direction,
-    pub value: f64,
-    pub required: f64,
-    pub max: Option<f64>,
-    pub fact: f64,
+    pub value: MetricValue,
+    pub required: MetricValue,
+    pub max: Option<MetricValue>,
+    pub fact: MetricValue,
     pub alive: bool,
 }
 
@@ -153,8 +230,23 @@ impl StatusCode {
     }
 }
 
+/// Подсказка парсинга значения из источника (для Date/Deadline/Number и т.д.).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ParseHint {
+    #[default]
+    None,
+    DateFormat(String),     // для Date/Deadline: "dd.MM.yyyy", "ISO 8601", …
+    DurationUnit(String),   // для Duration: "days", "hours", "iso8601"
+    NumberFormat(String),   // для Number/Money: "0.00", "ru", "en"
+}
+
+/// Привязка показателя к внешнему источнику API.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetricApi {
-    pub connector: String,
-    pub cell: String,
+    pub connector: String,   // "google-sheets" | "todoist" | "static" | "jira" | …
+    pub cell: String,        // "Sheet1!B5" | "todoist:task:123:due_date" | "42"
+    #[serde(default)]
+    pub parse_hint: ParseHint,
 }

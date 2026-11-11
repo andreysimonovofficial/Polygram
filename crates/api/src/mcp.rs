@@ -315,16 +315,20 @@ impl McpServer {
                 };
                 let kind = match args.get("kind").and_then(|v| v.as_str()) {
                     Some(s) => s.to_owned(),
-                    None => return mcp_tool_error("Для add_metric_def требуется поле kind (number, time, percentage, binary, duration, formula)."),
+                    None => return mcp_tool_error("Для add_metric_def требуется поле kind (number, time, date, deadline, percentage, binary, duration, money, text, formula)."),
                 };
                 let cmd = Command::AddMetricDef {
                     id: args.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned()),
                     name,
                     kind: match kind.as_str() {
                         "time" => MetricKind::Time,
+                        "date" => MetricKind::Date,
+                        "deadline" => MetricKind::Deadline,
                         "percentage" => MetricKind::Percentage,
                         "binary" => MetricKind::Binary,
                         "duration" => MetricKind::Duration,
+                        "money" => MetricKind::Money,
+                        "text" => MetricKind::Text,
                         "formula" => MetricKind::Formula,
                         _ => MetricKind::Number,
                     },

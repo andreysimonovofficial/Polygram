@@ -3,7 +3,7 @@ use polygram_canvas::{department_at, object_at};
 use polygram_core::geometry::Geometry;
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
-use polygram_core::Command;
+use polygram_core::{Command, MetricValue};
 use egui::{Context, Pos2, Rect, Vec2, Response, PointerButton};
 
 /// Вся логика перетаскивания: старт (объект / показатель / selection box),
@@ -225,10 +225,10 @@ pub fn handle_drag(
                                     id: Some(metric_name.clone()),
                                     metric_def: metric_name.clone(),
                                     name: metric_name.clone(),
-                                    value: 0.0,
-                                    required: 0.0,
+                                    value: MetricValue::Null,
+                                    required: MetricValue::Null,
                                     max: None,
-                                    fact: 0.0,
+                                    fact: MetricValue::Null,
                                 });
                             }
                             let (from_object, from_entry, to_object, to_entry) =

@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_core::{Command, Published};
+use polygram_core::{Command, MetricValue, Published};
 use polygram_core::{geometry::Geometry, values::DynamicState};
 use polygram_core::types::{Direction, MetricKind, NodeKind};
 use reqwest::blocking::Client;
@@ -119,9 +119,13 @@ pub fn import_department(app: &mut PolygramApp) {
                             let unit = md.get("unit").and_then(|v| v.as_str()).unwrap_or("").to_string();
                             let kind_enum = match kind.as_str() {
                                 "time" => MetricKind::Time,
+                                "date" => MetricKind::Date,
+                                "deadline" => MetricKind::Deadline,
                                 "percentage" => MetricKind::Percentage,
                                 "binary" => MetricKind::Binary,
                                 "duration" => MetricKind::Duration,
+                                "money" => MetricKind::Money,
+                                "text" => MetricKind::Text,
                                 "formula" => MetricKind::Formula,
                                 _ => MetricKind::Number,
                             };
@@ -163,10 +167,10 @@ pub fn import_department(app: &mut PolygramApp) {
                                         let mname = m.get("name").and_then(|v| v.as_str()).unwrap_or(&mid).to_string();
                                         let mdef = m.get("metric_def").and_then(|v| v.as_str()).unwrap_or("").to_string();
                                         let dir = m.get("dir").and_then(|v| v.as_str()).unwrap_or("request").to_string();
-                                        let value = m.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                        let required = m.get("required").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                        let max = m.get("max").and_then(|v| v.as_f64());
-                                        let fact = m.get("fact").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                        let value = MetricValue::Number(m.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0));
+                                        let required = MetricValue::Number(m.get("required").and_then(|v| v.as_f64()).unwrap_or(0.0));
+                                        let max = m.get("max").and_then(|v| v.as_f64()).map(MetricValue::Number);
+                                        let fact = MetricValue::Number(m.get("fact").and_then(|v| v.as_f64()).unwrap_or(0.0));
                                         let dir_enum = if dir == "output" {
                                             Direction::Output
                                         } else {

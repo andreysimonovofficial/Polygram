@@ -31,13 +31,13 @@ pub struct DocObjectMetric {
     #[serde(default)]
     pub dir: Direction,
     #[serde(default)]
-    pub value: f64,
+    pub value: MetricValue,
     #[serde(default)]
-    pub required: f64,
+    pub required: MetricValue,
     #[serde(default)]
-    pub max: Option<f64>,
+    pub max: Option<MetricValue>,
     #[serde(default)]
-    pub fact: f64,
+    pub fact: MetricValue,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -135,14 +135,10 @@ impl Engine {
                             id: om.ext_id.clone(),
                             metric_def: md.ext_id.clone(),
                             dir: om.direction,
-                            value: v.value[i],
-                            required: v.required[i],
-                            max: if v.max[i].is_nan() {
-                                None
-                            } else {
-                                Some(v.max[i])
-                            },
-                            fact: v.fact[i],
+                            value: v.value[i].clone(),
+                            required: v.required[i].clone(),
+                            max: v.max[i].clone(),
+                            fact: v.fact[i].clone(),
                         }
                     })
                     .collect();
@@ -157,14 +153,10 @@ impl Engine {
                             id: om.ext_id.clone(),
                             metric_def: md.ext_id.clone(),
                             dir: om.direction,
-                            value: v.value[i],
-                            required: v.required[i],
-                            max: if v.max[i].is_nan() {
-                                None
-                            } else {
-                                Some(v.max[i])
-                            },
-                            fact: v.fact[i],
+                            value: v.value[i].clone(),
+                            required: v.required[i].clone(),
+                            max: v.max[i].clone(),
+                            fact: v.fact[i].clone(),
                         }
                     })
                     .collect();
@@ -240,10 +232,10 @@ impl Engine {
                         id: Some(m.id.clone()),
                         metric_def: m.metric_def.clone(),
                         name: String::new(),
-                        value: m.value,
-                        required: m.required,
-                        max: m.max,
-                        fact: m.fact,
+                        value: m.value.clone(),
+                        required: m.required.clone(),
+                        max: m.max.clone(),
+                        fact: m.fact.clone(),
                     });
                 }
             }

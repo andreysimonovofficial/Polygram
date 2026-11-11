@@ -28,13 +28,13 @@ pub fn find(h: &Hierarchy, v: &Values, limit: usize) -> Vec<Bottleneck> {
                 let to = h.edge(edge).to;
                 let to_meta = h.object_metric(to);
                 if to_meta.direction == Direction::Request {
-                    demand += v.required[to.idx()] * (h.edge(edge).throughput / 100.0);
+                    demand += v.required[to.idx()].as_f64().unwrap_or(0.0) * (h.edge(edge).throughput / 100.0);
                 }
             }
             Bottleneck {
                 object: h.object_metric(e).object.0,
                 entry: e.0,
-                shortfall: (demand - v.value[e.idx()]).max(0.0),
+                shortfall: (demand - v.value[e.idx()].as_f64().unwrap_or(0.0)).max(0.0),
                 consumers: h.out_entries(e).count() as u32,
             }
         })

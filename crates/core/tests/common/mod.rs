@@ -49,8 +49,8 @@ pub fn out(
     object: &str,
     entry: &str,
     metric_def: &str,
-    value: f64,
-    max: Option<f64>,
+    value: MetricValue,
+    max: Option<MetricValue>,
 ) {
     e.apply(
         Scope::Root,
@@ -61,9 +61,9 @@ pub fn out(
             metric_def: metric_def.into(),
             name: String::new(),
             value,
-            required: 0.0,
+            required: MetricValue::Null,
             max,
-            fact: 0.0,
+            fact: MetricValue::Null,
         },
     )
     .unwrap();
@@ -74,8 +74,8 @@ pub fn req(
     object: &str,
     entry: &str,
     metric_def: &str,
-    required: f64,
-    max: Option<f64>,
+    required: MetricValue,
+    max: Option<MetricValue>,
 ) {
     e.apply(
         Scope::Root,
@@ -85,10 +85,10 @@ pub fn req(
             id: Some(entry.into()),
             metric_def: metric_def.into(),
             name: String::new(),
-            value: 0.0,
+            value: MetricValue::Null,
             required,
             max,
-            fact: 0.0,
+            fact: MetricValue::Null,
         },
     )
     .unwrap();
@@ -108,7 +108,7 @@ pub fn connect(e: &mut Engine, a: &str, am: &str, b: &str, bm: &str) {
     .unwrap();
 }
 
-pub fn set_value(e: &mut Engine, object: &str, entry: &str, value: f64) {
+pub fn set_value(e: &mut Engine, object: &str, entry: &str, value: MetricValue) {
     e.apply(
         Scope::Root,
         Command::SetValue {
@@ -120,7 +120,7 @@ pub fn set_value(e: &mut Engine, object: &str, entry: &str, value: f64) {
     .unwrap();
 }
 
-pub fn set_required(e: &mut Engine, object: &str, entry: &str, required: f64) {
+pub fn set_required(e: &mut Engine, object: &str, entry: &str, required: MetricValue) {
     e.apply(
         Scope::Root,
         Command::SetRequired {
@@ -150,6 +150,8 @@ pub fn value_of(e: &Engine, object: &str, entry: &str) -> f64 {
         .find(|m| m.id == entry)
         .unwrap()
         .supplied
+        .as_f64()
+        .unwrap_or(0.0)
 }
 
 /// Простой детерминированный генератор (xorshift64*), чтобы тесты были воспроизводимы.

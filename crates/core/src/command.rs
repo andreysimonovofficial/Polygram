@@ -7,8 +7,8 @@
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 
-fn zero() -> f64 {
-    0.0
+fn null_value() -> MetricValue {
+    MetricValue::Null
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -81,14 +81,14 @@ pub enum Command {
         id: Option<String>,
         metric_def: String,
         name: String,
-        #[serde(default = "zero")]
-        value: f64,
-        #[serde(default = "zero")]
-        required: f64,
+        #[serde(default = "null_value")]
+        value: MetricValue,
+        #[serde(default = "null_value")]
+        required: MetricValue,
         #[serde(default)]
-        max: Option<f64>,
-        #[serde(default = "zero")]
-        fact: f64,
+        max: Option<MetricValue>,
+        #[serde(default = "null_value")]
+        fact: MetricValue,
     },
     RemoveMetricEntry {
         object: String,
@@ -97,22 +97,22 @@ pub enum Command {
     SetValue {
         object: String,
         entry: String,
-        value: f64,
+        value: MetricValue,
     },
     SetRequired {
         object: String,
         entry: String,
-        required: f64,
+        required: MetricValue,
     },
     SetMax {
         object: String,
         entry: String,
-        max: Option<f64>,
+        max: Option<MetricValue>,
     },
     SetFact {
         object: String,
         entry: String,
-        fact: f64,
+        fact: MetricValue,
     },
 
     /// Связь: запись Выхода источника → запись Запроса цели.
@@ -161,9 +161,14 @@ pub fn default_unit(kind: MetricKind) -> &'static str {
     match kind {
         MetricKind::Number => "ед.",
         MetricKind::Time => "чч:мм",
+        MetricKind::Date => "дд.мм.гггг",
+        MetricKind::Deadline => "дд.мм.гггг чч:мм",
         MetricKind::Percentage => "%",
         MetricKind::Binary => "",
         MetricKind::Duration => "чч:мм",
+        MetricKind::Money => "₽",
+        MetricKind::Text => "",
         MetricKind::Formula => "",
+        MetricKind::Timestamp => "",
     }
 }

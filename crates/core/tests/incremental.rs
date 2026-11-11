@@ -28,10 +28,10 @@ fn incremental_equals_full_recompute_under_random_operations() {
         for k in 0..30 {
             let id = format!("n{k}");
             object(&mut e, &id);
-            out(&mut e, &id, "o1", "tovary", rng.unit() * 100.0, None);
-            out(&mut e, &id, "o2", "tovary", rng.unit() * 100.0, Some(50.0));
-            req(&mut e, &id, "r1", "tovary", rng.unit() * 80.0, None);
-            req(&mut e, &id, "r2", "tovary", rng.unit() * 80.0, Some(40.0));
+            out(&mut e, &id, "o1", "tovary", MetricValue::Number(rng.unit() * 100.0), None);
+            out(&mut e, &id, "o2", "tovary", MetricValue::Number(rng.unit() * 100.0), Some(MetricValue::Number(50.0)));
+            req(&mut e, &id, "r1", "tovary", MetricValue::Number(rng.unit() * 80.0), None);
+            req(&mut e, &id, "r2", "tovary", MetricValue::Number(rng.unit() * 80.0), Some(MetricValue::Number(40.0)));
             ids.push(id);
         }
         let mut counter = 100;
@@ -43,14 +43,14 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     Command::SetValue {
                         object: a.clone(),
                         entry: m,
-                        value: (rng.unit() * 120.0 * 100.0).round() / 100.0,
+                        value: MetricValue::Number((rng.unit() * 120.0 * 100.0).round() / 100.0),
                     }
                 }),
                 3 => random_metric(&e, &a, &mut rng, Some(Direction::Request)).map(|m| {
                     Command::SetRequired {
                         object: a.clone(),
                         entry: m,
-                        required: (rng.unit() * 90.0).round(),
+                        required: MetricValue::Number((rng.unit() * 90.0).round()),
                     }
                 }),
                 4 => random_metric(&e, &a, &mut rng, None).map(|m| Command::SetMax {
@@ -59,7 +59,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     max: if rng.below(3) == 0 {
                         None
                     } else {
-                        Some((rng.unit() * 70.0).round())
+                        Some(MetricValue::Number((rng.unit() * 70.0).round()))
                     },
                 }),
                 5 | 6 | 7 => {
@@ -103,10 +103,10 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     id: None,
                     metric_def: "tovary".into(),
                     name: "новый".into(),
-                    value: (rng.unit() * 50.0).round(),
-                    required: (rng.unit() * 50.0).round(),
+                    value: MetricValue::Number((rng.unit() * 50.0).round()),
+                    required: MetricValue::Number((rng.unit() * 50.0).round()),
                     max: None,
-                    fact: 0.0,
+                    fact: MetricValue::Null,
                 }),
                 _ => {
                     if rng.below(2) == 0 && ids.len() > 10 {
@@ -156,9 +156,9 @@ fn removing_nodes_updates_neighbours() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object(&mut e, "p");
-    out(&mut e, "p", "o1", "tovary", 100.0, None);
+    out(&mut e, "p", "o1", "tovary", MetricValue::Number(100.0), None);
     object(&mut e, "a");
-    req(&mut e, "a", "r1", "tovary", 100.0, None);
+    req(&mut e, "a", "r1", "tovary", MetricValue::Number(100.0), None);
     connect(&mut e, "p", "o1", "a", "r1");
     assert_eq!(status(&e, "a", "r1"), StatusCode::Ok);
     e.apply(Scope::Root, Command::RemoveObject { object: "p".into() })
@@ -173,14 +173,14 @@ fn slots_are_reused_without_stale_state() {
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
     object(&mut e, "p");
-    out(&mut e, "p", "o1", "tovary", 100.0, None);
+    out(&mut e, "p", "o1", "tovary", MetricValue::Number(100.0), None);
     object(&mut e, "a");
-    req(&mut e, "a", "r1", "tovary", 100.0, None);
+    req(&mut e, "a", "r1", "tovary", MetricValue::Number(100.0), None);
     connect(&mut e, "p", "o1", "a", "r1");
     e.apply(Scope::Root, Command::RemoveObject { object: "a".into() })
         .unwrap();
     object(&mut e, "b");
-    req(&mut e, "b", "r1", "tovary", 10.0, None);
+    req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
     assert_eq!(
         status(&e, "b", "r1"),
         StatusCode::Unconnected,
