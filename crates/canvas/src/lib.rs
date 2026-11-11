@@ -11,7 +11,7 @@ mod paint_process;
 mod theme;
 
 pub use camera::Camera;
-pub use hit_test::{header_at, object_at, object_at_cell, department_at, find_free_cell_near};
+pub use hit_test::{header_at, object_at, object_at_cell, department_at, find_ghost_cell, find_ghost_cell_in_dept, rect_is_free};
 pub use paint_department::paint_department_frame;
 pub use paint_edge::paint_edge;
 pub use paint_object::paint_object;

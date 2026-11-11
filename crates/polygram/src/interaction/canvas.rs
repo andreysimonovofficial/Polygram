@@ -1,7 +1,7 @@
 use crate::app::PolygramApp;
 use polygram_canvas::{
-    department_at, object_at, object_at_cell, find_free_cell_near, MetricBinding, paint_dashed_rect,
-    paint_drag_preview,
+    department_at, object_at, object_at_cell, find_ghost_cell, find_ghost_cell_in_dept,
+    MetricBinding, paint_dashed_rect, paint_drag_preview,
 };
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Command, Published};
@@ -195,34 +195,32 @@ pub fn handle_canvas_interaction(
                     let occupant = object_at_cell(&geometry, target.0, target.1, object_id);
                     let target_kind = occupant
                         .and_then(|id| geometry.objects.iter().find(|o| o.id == id).map(|o| o.kind));
-                    // Визуальная позиция объекта, клетка призрачной копии и цель, под которой нависаем.
-                    let (visual_cell, ghost, over) = match (occupant, target_kind) {
-                        (Some(id), Some(NodeKind::Department)) => {
-                            // Отдел: призрачная копия внутри отдела, объект следует за ней.
+                    // Размер перетаскиваемого объекта (для призрачной копии).
+                    let dragged_size = geometry
+                        .objects
+                        .iter()
+                        .find(|o| o.id == *object_id)
+                        .map(|o| (o.rect.w, o.rect.h));
+                    // Объект следует за курсором (visual_cell = target).
+                    // Призрачная копия — на расстоянии 2 клеток от цели, со свободной стороны.
+                    let (ghost, over) = match (occupant, target_kind, dragged_size) {
+                        (Some(id), Some(NodeKind::Department), Some((w, h))) => {
+                            // Отдел: копия внутри отдела, на расстоянии 2 от содержащихся процессов.
                             let dept_id = id;
-                            let g = find_free_cell_near(
-                                &geometry,
-                                target,
-                                8,
-                                object_id,
-                                Some(&dept_id),
-                            )
-                            .or_else(|| {
-                                find_free_cell_near(&geometry, target, 8, object_id, None)
-                            })
-                            .unwrap_or(target);
-                            (g, Some(g), Some(dept_id))
+                            let g = find_ghost_cell_in_dept(&geometry, dept_id, w, h, 2, object_id);
+                            (g, Some(dept_id.to_owned()))
                         }
-                        (Some(id), None) => {
-                            // Чужий процесс: объект накладывается поверх, копия — в свободной клетке рядом.
-                            let g = find_free_cell_near(&geometry, target, 8, object_id, None);
-                            (g.unwrap_or(target), g, Some(id))
+                        (Some(id), None, Some((w, h))) => {
+                            // Чужий процесс: копия на расстоянии 2 клеток, со свободной стороны.
+                            let obj_b = geometry.objects.iter().find(|o| o.id == id).unwrap();
+                            let g = find_ghost_cell(&geometry, obj_b, w, h, 2, object_id, None);
+                            (g, Some(id.to_owned()))
                         }
-                        _ => (target, None, None),
+                        _ => (None, None),
                     };
-                    app.drag.predicted_positions.insert(object_id.clone(), visual_cell);
+                    app.drag.predicted_positions.insert(object_id.clone(), target);
                     app.drag.drag_ghost = ghost;
-                    app.drag.drag_over = over.map(|s| s.to_owned());
+                    app.drag.drag_over = over;
                 }
             }
         }

@@ -299,40 +299,43 @@ impl PolygramApp {
                 obj.rect.y = *y;
             }
         }
-        // Если процесс нависает над отделом и есть клетка призрачной копии,
-        // временно считаем объект ребёнком отдела в позиции копии, чтобы
-        // fit_departments_to_children растянул отдел и охватил копию на этапе предпросмотра.
-        let dragged_id = self.drag.drag_object.as_deref().unwrap_or("");
-        let over_is_dept = self.drag.drag_over.as_ref().map_or(false, |id| {
-            geometry.objects.iter().any(|o| o.id == *id && o.kind == NodeKind::Department)
-        });
-        let ghost = self.drag.drag_ghost;
-        let mut temp_reparent: Option<(String, Option<String>)> = None;
-        if over_is_dept && ghost.is_some() {
-            if let Some(dept_id) = &self.drag.drag_over {
-                if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == dragged_id) {
-                    temp_reparent = Some((obj.id.clone(), obj.parent.clone()));
-                    obj.parent = Some(dept_id.clone());
-                    if let Some((gx, gy)) = ghost {
-                        obj.rect.x = gx;
-                        obj.rect.y = gy;
-                    }
-                }
-            }
-        }
         // Отдел не имеет фиксированного размера: его рамка всегда обтягивает
         // прямых детей (с отступом под шапку и по бокам). Пересобираем перед
         // каждой отрисовкой, чтобы рамка актуально следовала за содержимым.
         Self::fit_departments_to_children(&mut geometry);
-        // Вернуть родителя перетаскиваемого объекта: реальная иерархия меняется
-        // только на сервере по команде SetObjectParent при Drop.
-        if let Some((id, parent)) = temp_reparent {
-            if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == id) {
-                obj.parent = parent;
+        // Если нависаем над отделом и есть призрачная копия — растянем отдел «на лету»,
+        // чтобы его рамка охватывала копию ещё до события Drop.
+        let dragged_id = self.drag.drag_object.as_deref().unwrap_or("");
+        if let Some(dept_id) = &self.drag.drag_over {
+            if geometry.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
+                if let Some((gx, gy)) = self.drag.drag_ghost {
+                    let dragged_size = geometry
+                        .objects
+                        .iter()
+                        .find(|o| o.id == dragged_id)
+                        .map(|o| (o.rect.w, o.rect.h));
+                    if let Some((w, h)) = dragged_size {
+                        if let Some(dept_idx) = geometry
+                            .objects
+                            .iter()
+                            .position(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+                        {
+                            let dept = &geometry.objects[dept_idx];
+                            let new_x = dept.rect.x.min(gx);
+                            let new_y = dept.rect.y.min(gy);
+                            let new_w = (dept.rect.x + dept.rect.w).max(gx + w) - new_x;
+                            let new_h = (dept.rect.y + dept.rect.h).max(gy + h) - new_y;
+                            let new_rect = Rect::new(new_x, new_y, new_w, new_h);
+                            if geometry.objects[dept_idx].rect != new_rect {
+                                geometry.objects[dept_idx].rect = new_rect;
+                            }
+                        }
+                    }
+                }
             }
         }
         // Растянуть отдел под перетаскиваемый объект «на лету» (страховка
-        // во время активного перетаскивания, до подтверждения сервером).
+        // во время активного перетаскивания, до подтверждения сервера).
         if let Some(dept_id) = &self.drag.drag_department {
             Self::stretch_department_for_drag(&mut geometry, dept_id);
         }

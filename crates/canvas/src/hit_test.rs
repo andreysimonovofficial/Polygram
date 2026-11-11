@@ -145,38 +145,141 @@ pub fn is_cell_free(geometry: &Geometry, cx: i32, cy: i32, exclude_id: &str) -> 
 }
 
 /// Вернута ли клетка внутри отдела dept_id.
-fn inside_dept(geometry: &Geometry, dept_id: &str, cx: i32, cy: i32) -> bool {
+pub fn inside_dept(geometry: &Geometry, dept_id: &str, cx: i32, cy: i32) -> bool {
     geometry.objects.iter().find(|o| o.id == dept_id).map_or(false, |d| {
         d.rect.x <= cx && cx < d.rect.x + d.rect.w && d.rect.y <= cy && cy < d.rect.y + d.rect.h
     })
 }
 
-/// Ближайшая свободная клетка рядом со start (спиралью по кольцам Manhattan).
-/// exclude_id — объект, которого игнорируют при проверке занятости.
-/// dept_id — если Some, ищет только внутри отдела dept_id.
-pub fn find_free_cell_near(
+/// Свободен ли rect (без учета exclude_id) — нет пересечений с другими объектами.
+pub fn rect_is_free(
     geometry: &Geometry,
-    start: (i32, i32),
-    max_radius: i32,
+    rect: &polygram_core::layout::Rect,
+    exclude_id: &str,
+) -> bool {
+    for object in &geometry.objects {
+        if object.id == exclude_id {
+            continue;
+        }
+        if object.rect.overlaps(rect) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Свободная клетка для призрачной копии на расстоянии `offset` клеток от края объекта obj.
+/// Пытаемся 4 стороны (справа, слева, снизу, сверху). Если ни одна не свободна —
+/// спиральный поиск от центра объекта, начиная снаружи от его границ.
+/// Если dept_id задан — ищем только внутри этого отдела.
+pub fn find_ghost_cell(
+    geometry: &Geometry,
+    obj: &polygram_core::ObjectGeom,
+    ghost_w: i32,
+    ghost_h: i32,
+    offset: i32,
     exclude_id: &str,
     dept_id: Option<&str>,
 ) -> Option<(i32, i32)> {
-    if is_cell_free(geometry, start.0, start.1, exclude_id)
-        && dept_id.map_or(true, |d| inside_dept(geometry, d, start.0, start.1))
-    {
-        return Some(start);
+    let r_obj = &obj.rect;
+    let inside = |cx: i32, cy: i32| dept_id.map_or(true, |d| inside_dept(geometry, d, cx, cy));
+
+    // 4 позиции со смещением offset от краёв объекта.
+    let candidates: [(i32, i32); 4] = [
+        (r_obj.x + r_obj.w + offset, r_obj.y),           // справа
+        (r_obj.x - offset - ghost_w, r_obj.y),            // слева
+        (r_obj.x, r_obj.y + r_obj.h + offset),            // снизу
+        (r_obj.x, r_obj.y - offset - ghost_h),            // сверху
+    ];
+    for (cx, cy) in &candidates {
+        if !inside(*cx, *cy) {
+            continue;
+        }
+        let r_ghost = polygram_core::layout::Rect::new(*cx, *cy, ghost_w, ghost_h);
+        if rect_is_free(geometry, &r_ghost, exclude_id) {
+            return Some((*cx, *cy));
+        }
     }
-    for r in 1..=max_radius {
+
+    // Fallback: спиральный поиск от центра объекта, начиная снаружи от его границ.
+    let cx0 = r_obj.x + r_obj.w / 2;
+    let cy0 = r_obj.y + r_obj.h / 2;
+    let min_r = (r_obj.w.max(r_obj.h) / 2) + offset;
+    for r in min_r..=min_r + 12 {
         for dx in -r..=r {
             for dy in -r..=r {
                 if dx.abs() != r && dy.abs() != r {
                     continue;
                 }
-                let cx = start.0 + dx;
-                let cy = start.1 + dy;
-                if is_cell_free(geometry, cx, cy, exclude_id)
-                    && dept_id.map_or(true, |d| inside_dept(geometry, d, cx, cy))
+                let cx = cx0 + dx;
+                let cy = cy0 + dy;
+                if !inside(cx, cy) {
+                    continue;
+                }
+                let r_ghost = polygram_core::layout::Rect::new(cx, cy, ghost_w, ghost_h);
+                if rect_is_free(geometry, &r_ghost, exclude_id) {
+                    return Some((cx, cy));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Для отдела: свободная клетка внутри отдела на расстоянии `offset` от содержащихся в нём процессов.
+pub fn find_ghost_cell_in_dept(
+    geometry: &Geometry,
+    dept_id: &str,
+    ghost_w: i32,
+    ghost_h: i32,
+    offset: i32,
+    exclude_id: &str,
+) -> Option<(i32, i32)> {
+    let dept = geometry.objects.iter().find(|o| o.id == dept_id)?;
+    let children: Vec<&polygram_core::ObjectGeom> = geometry
+        .objects
+        .iter()
+        .filter(|o| o.parent.as_deref() == Some(dept_id) && o.id != exclude_id)
+        .collect();
+
+    // Для каждого дочернего процесса пробуем 4 позиции со смещением offset от его краёв.
+    for child in &children {
+        let r_child = &child.rect;
+        let candidates: [(i32, i32); 4] = [
+            (r_child.x + r_child.w + offset, r_child.y),
+            (r_child.x - offset - ghost_w, r_child.y),
+            (r_child.x, r_child.y + r_child.h + offset),
+            (r_child.x, r_child.y - offset - ghost_h),
+        ];
+        for (cx, cy) in candidates {
+            if cx < dept.rect.x || cx + ghost_w > dept.rect.x + dept.rect.w
+                || cy < dept.rect.y || cy + ghost_h > dept.rect.y + dept.rect.h
+            {
+                continue;
+            }
+            let r_ghost = polygram_core::layout::Rect::new(cx, cy, ghost_w, ghost_h);
+            if rect_is_free(geometry, &r_ghost, exclude_id) {
+                return Some((cx, cy));
+            }
+        }
+    }
+
+    // Fallback: поиск внутри отдела от его краёв наружу.
+    for r in offset..=offset + 12 {
+        for dx in -r..=r {
+            for dy in -r..=r {
+                if dx.abs() != r && dy.abs() != r {
+                    continue;
+                }
+                let cx = dept.rect.x + dx;
+                let cy = dept.rect.y + dy;
+                if cx < dept.rect.x || cx + ghost_w > dept.rect.x + dept.rect.w
+                    || cy < dept.rect.y || cy + ghost_h > dept.rect.y + dept.rect.h
                 {
+                    continue;
+                }
+                let r_ghost = polygram_core::layout::Rect::new(cx, cy, ghost_w, ghost_h);
+                if rect_is_free(geometry, &r_ghost, exclude_id) {
                     return Some((cx, cy));
                 }
             }
