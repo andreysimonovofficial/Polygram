@@ -252,32 +252,29 @@ pub fn handle_canvas_interaction(
                     .get(&object_id)
                     .copied()
                     .unwrap_or((start_x, start_y));
+                // Размер перетаскиваемого объекта для перепроверки наложения на целевую позицию.
+                let dragged_size = geometry
+                    .objects
+                    .iter()
+                    .find(|o| o.id == object_id)
+                    .map(|o| (o.rect.w, o.rect.h));
+                // Целевая клетка: клетка призрачной копии, если наложение было, иначе — позиция под курсором.
+                let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
+                // Перепроверяем, не перекрывает ли целевая позиция другой объект (защита от наслоений).
+                let target_overlaps = dragged_size.is_some_and(|(w, h)| {
+                    let pr = polygram_core::layout::Rect::new(drop_cell.0, drop_cell.1, w, h);
+                    geometry.objects.iter().any(|o| {
+                        o.id != object_id && o.rect.overlaps(&pr)
+                    })
+                });
                 // Если наложение на другой объект обнаружено, но свободная клетка для копии не найдена —
                 // не отправляем MoveObject на занятую клетку, объект останется на месте.
                 let skip_move = app.drag.drag_over.is_some() && app.drag.drag_ghost.is_none();
-                if !skip_move {
-                    // Если цель была занята — объект уезжает в клетку призрачной копии,
-                    // иначе — туда, куда наводили (предсказанная позиция).
-                    let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
+                if !skip_move && !target_overlaps {
                     let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
-                // Отдел под курсором на момент отпускания (department_at игнорирует не-отделы,
-                // поэтому перетаскиваемый объект не затеняет отдел под собой).
-                let dropped_on_dept = canvas_response
-                    .interact_pointer_pos()
-                    .and_then(|cur| {
-                        department_at(
-                            &geometry,
-                            cur,
-                            app.canvas.camera.offset,
-                            app.canvas.camera.zoom,
-                            app.canvas.cell_size,
-                        )
-                    })
-                    .map_or(false, |dept_id| dept_id != object_id);
-
-                if dropped_on_dept {
-                    // Поместить процесс в отдел: SetObjectParent + переместить на клетку копии.
-                    let dept_id = canvas_response
+                    // Отдел под курсором на момент отпускания (department_at игнорирует не-отделы,
+                    // поэтому перетаскиваемый объект не затеняет отдел под собой).
+                    let dropped_on_dept = canvas_response
                         .interact_pointer_pos()
                         .and_then(|cur| {
                             department_at(
@@ -288,34 +285,50 @@ pub fn handle_canvas_interaction(
                                 app.canvas.cell_size,
                             )
                         })
-                        .unwrap();
-                    app.drag.pending_move =
-                        Some((object_id.clone(), app.connection.last_rev));
-                    app.apply_batch(vec![
-                        Command::SetObjectParent {
-                            object: object_id.clone(),
-                            parent: Some(dept_id.to_owned()),
-                        },
-                        Command::MoveObject {
-                            object: object_id.clone(),
-                            at: [drop_cell.0, drop_cell.1],
-                        },
-                    ]);
-                    app.selected_objects = vec![object_id.clone()];
-                } else {
-                    app.drag.drag_department = None;
-                    if pos_changed {
-                        app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
-                        app.apply_cmd(Command::MoveObject {
-                            object: object_id,
-                            at: [drop_cell.0, drop_cell.1],
-                        });
+                        .map_or(false, |dept_id| dept_id != object_id);
+
+                    if dropped_on_dept {
+                        // Поместить процесс в отдел: SetObjectParent + переместить на клетку копии.
+                        let dept_id = canvas_response
+                            .interact_pointer_pos()
+                            .and_then(|cur| {
+                                department_at(
+                                    &geometry,
+                                    cur,
+                                    app.canvas.camera.offset,
+                                    app.canvas.camera.zoom,
+                                    app.canvas.cell_size,
+                                )
+                            })
+                            .unwrap();
+                        app.drag.pending_move =
+                            Some((object_id.clone(), app.connection.last_rev));
+                        app.apply_batch(vec![
+                            Command::SetObjectParent {
+                                object: object_id.clone(),
+                                parent: Some(dept_id.to_owned()),
+                            },
+                            Command::MoveObject {
+                                object: object_id.clone(),
+                                at: [drop_cell.0, drop_cell.1],
+                            },
+                        ]);
+                        app.selected_objects = vec![object_id.clone()];
+                    } else {
+                        app.drag.drag_department = None;
+                        if pos_changed {
+                            app.drag.pending_move =
+                                Some((object_id.clone(), app.connection.last_rev));
+                            app.apply_cmd(Command::MoveObject {
+                                object: object_id,
+                                at: [drop_cell.0, drop_cell.1],
+                            });
+                        }
                     }
                 }
             }
             // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
             // иначе будет виден скачок на старую позицию.
-            }
         }
 
     // Завершение перетаскивания показателя: копируем показатель в целевой объект (в противоположном направлении)
