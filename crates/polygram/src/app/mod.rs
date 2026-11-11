@@ -280,7 +280,11 @@ impl PolygramApp {
                         self.drag.predicted_positions.remove(obj_id);
                         self.drag.pending_move = None;
                         self.drag.pending_move_age = 0;
-                        self.drag.drag_department = None;
+                        // drag_department не сбрасываем здесь: отдел должен сохранить
+                        // новый размер после Drop до следующего перетаскивания.
+                        // Размер отдела в published.geometry уже обновлён сервером
+                        // (expand_department_to_fit), поэтому при сбросе drag_department
+                        // отдел примет актуальный размер без мигания к старому.
                     }
                 }
             }
