@@ -69,6 +69,7 @@ pub fn handle_add_metric_dialog(
                         ] {
                             if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
                                 app.dialogs.add_metric_kind = kind;
+                                app.dialogs.add_metric_value.clear();
                             }
                         }
                     });
