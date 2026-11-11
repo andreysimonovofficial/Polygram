@@ -229,7 +229,13 @@ pub fn handle_canvas_interaction(
                         // Нет наложения — клетка свободна, копия не нужна, дропаем прямо под курсор.
                         None => (None, None),
                     };
-                    app.drag.predicted_positions.insert(object_id.clone(), target);
+                    // Объект следует за курсором только если нет наложения или
+                    // найдена клетка для призрачной копии. Если наложение есть и
+                    // копию разместить нельзя — объект визуально остаётся на месте.
+                    let can_move = ghost.is_some() || over.is_none();
+                    if can_move {
+                        app.drag.predicted_positions.insert(object_id.clone(), target);
+                    }
                     app.drag.drag_ghost = ghost;
                     app.drag.drag_over = over;
                 }
@@ -325,6 +331,10 @@ pub fn handle_canvas_interaction(
                             });
                         }
                     }
+                } else {
+                    // Невозможно переместить (занято, нет клетки для копии) —
+                    // сбрасываем предсказание, объект вернётся на исходную позицию.
+                    app.drag.predicted_positions.remove(&object_id);
                 }
             }
             // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
