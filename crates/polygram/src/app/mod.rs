@@ -4,7 +4,6 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,6 +13,7 @@ pub mod chat;
 pub mod dialogs;
 pub mod drag;
 pub mod commands;
+pub mod ui_config;
 
 use connection::ConnectionState;
 use connection::ConnectionResult;
@@ -21,45 +21,11 @@ use chat::ChatState;
 use dialogs::DialogState;
 use drag::DragState;
 use commands::CommandState;
+use ui_config::UiConfig;
 
 pub struct CommandLogEntry {
     pub cmd: String,
     pub result: String,
-}
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct UiConfig {
-    pub show_sidebar: bool,
-    pub show_command_log_panel: bool,
-    pub show_chat_panel: bool,
-    pub show_connectors_panel: bool,
-    pub show_grid: bool,
-    pub show_cursor_coords: bool,
-}
-
-impl UiConfig {
-    pub fn path() -> PathBuf {
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-            .join("polygram_ui_config.json")
-    }
-
-    pub fn load() -> Self {
-        let path = Self::path();
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-            Err(_) => Self::default(),
-        }
-    }
-
-    pub fn save(&self) {
-        let path = Self::path();
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(&path, json);
-        }
-    }
 }
 
 pub struct PolygramApp {
