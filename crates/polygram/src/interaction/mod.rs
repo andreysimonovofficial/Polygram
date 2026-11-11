@@ -3,11 +3,14 @@
 //! Разбито на узкие модули по одной ответственности каждому.
 
 mod add_metric;
+mod camera;
 mod canvas;
 mod context_menu;
 mod container_menu;
 mod delete;
+mod drag_object;
 mod rename;
+mod selection;
 
 pub use canvas::handle_canvas_interaction;
 pub use context_menu::context_menu;
