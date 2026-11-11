@@ -252,10 +252,14 @@ pub fn handle_canvas_interaction(
                     .get(&object_id)
                     .copied()
                     .unwrap_or((start_x, start_y));
-                // Если цель была занята — объект уезжает в клетку призрачной копии,
-                // иначе — туда, куда наводили (предсказанная позиция).
-                let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
-                let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
+                // Если наложение на другой объект обнаружено, но свободная клетка для копии не найдена —
+                // не отправляем MoveObject на занятую клетку, объект останется на месте.
+                let skip_move = app.drag.drag_over.is_some() && app.drag.drag_ghost.is_none();
+                if !skip_move {
+                    // Если цель была занята — объект уезжает в клетку призрачной копии,
+                    // иначе — туда, куда наводили (предсказанная позиция).
+                    let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
+                    let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
                 // Отдел под курсором на момент отпускания (department_at игнорирует не-отделы,
                 // поэтому перетаскиваемый объект не затеняет отдел под собой).
                 let dropped_on_dept = canvas_response
@@ -308,12 +312,13 @@ pub fn handle_canvas_interaction(
                         });
                     }
                 }
-                // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
-                // иначе будет виден скачок на старую позицию.
+            }
+            // Не очищаем predicted_positions здесь — оставим до подтверждения сервера (reconciliation в poll_snapshot),
+            // иначе будет виден скачок на старую позицию.
             }
         }
 
-        // Завершение перетаскивания показателя: копируем показатель в целевой объект (в противоположном направлении)
+    // Завершение перетаскивания показателя: копируем показатель в целевой объект (в противоположном направлении)
         // и строим связь между записями Выход → Запрос.
         if app.drag.drag_metric.is_some()
             && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary))

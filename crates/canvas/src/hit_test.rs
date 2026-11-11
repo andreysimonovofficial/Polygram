@@ -226,7 +226,9 @@ pub fn find_ghost_cell(
     None
 }
 
-/// Для отдела: свободная клетка внутри отдела на расстоянии `offset` от содержащихся в нём процессов.
+/// Для отдела: свободная клетка рядом с содержащимися в нём процессами на расстоянии `offset`.
+/// Поиск не ограничивается текущими границами dept.rect — отдел растянется под
+/// найденную клетку через fit_departments_to_children на этапе рендера.
 pub fn find_ghost_cell_in_dept(
     geometry: &Geometry,
     dept_id: &str,
@@ -252,11 +254,6 @@ pub fn find_ghost_cell_in_dept(
             (r_child.x, r_child.y - offset - ghost_h),
         ];
         for (cx, cy) in candidates {
-            if cx < dept.rect.x || cx + ghost_w > dept.rect.x + dept.rect.w
-                || cy < dept.rect.y || cy + ghost_h > dept.rect.y + dept.rect.h
-            {
-                continue;
-            }
             let r_ghost = polygram_core::layout::Rect::new(cx, cy, ghost_w, ghost_h);
             if rect_is_free(geometry, &r_ghost, exclude_id) {
                 return Some((cx, cy));
@@ -264,20 +261,18 @@ pub fn find_ghost_cell_in_dept(
         }
     }
 
-    // Fallback: поиск внутри отдела от его краёв наружу.
-    for r in offset..=offset + 12 {
+    // Fallback: спиральный поиск от центра отдела наружу (без ограничения dept.rect).
+    let cx0 = dept.rect.x + dept.rect.w / 2;
+    let cy0 = dept.rect.y + dept.rect.h / 2;
+    let min_r = offset;
+    for r in min_r..=min_r + 24 {
         for dx in -r..=r {
             for dy in -r..=r {
                 if dx.abs() != r && dy.abs() != r {
                     continue;
                 }
-                let cx = dept.rect.x + dx;
-                let cy = dept.rect.y + dy;
-                if cx < dept.rect.x || cx + ghost_w > dept.rect.x + dept.rect.w
-                    || cy < dept.rect.y || cy + ghost_h > dept.rect.y + dept.rect.h
-                {
-                    continue;
-                }
+                let cx = cx0 + dx;
+                let cy = cy0 + dy;
                 let r_ghost = polygram_core::layout::Rect::new(cx, cy, ghost_w, ghost_h);
                 if rect_is_free(geometry, &r_ghost, exclude_id) {
                     return Some((cx, cy));
