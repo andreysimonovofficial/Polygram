@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, NaiveTime, Timelike, Utc};
 use polygram_core::{Command, MetricKind, MetricValue, Published};
 use egui::{Context, Window};
 
@@ -83,28 +83,38 @@ pub fn handle_add_metric_dialog(
                     MetricKind::Date | MetricKind::Deadline
                 );
                 if is_date_kind {
-                    let date_label = app
-                        .dialogs
-                        .add_metric_date
-                        .map(|d| d.format("%d.%m.%Y").to_string())
-                        .unwrap_or_else(|| "дата".to_owned());
+                    let date_label = match (
+                        app.dialogs.add_metric_date,
+                        app.dialogs.add_metric_time,
+                    ) {
+                        (Some(d), Some(t)) => d.format("%d.%m.%Y").to_string()
+                            + " "
+                            + &t.format("%H:%M").to_string(),
+                        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                        (None, Some(t)) => "дата ".to_owned() + &t.format("%H:%M").to_string(),
+                        _ => "дата".to_owned(),
+                    };
                     if ui.button(date_label).clicked() {
                         app.dialogs.add_metric_date_popup_open = true;
                     }
                     if app.dialogs.add_metric_date_popup_open {
-                        let picked = render_date_calendar(
+                        let picked = render_date_time_popup(
                             ui,
                             &mut app.dialogs.add_metric_date,
+                            &mut app.dialogs.add_metric_time,
                         );
                         if picked {
                             app.dialogs.add_metric_date_popup_open = false;
                         }
                     }
-                    app.dialogs.add_metric_value = app
-                        .dialogs
-                        .add_metric_date
-                        .map(|d| d.format("%d.%m.%Y").to_string())
-                        .unwrap_or_default();
+                    app.dialogs.add_metric_value = match (
+                        app.dialogs.add_metric_date,
+                        app.dialogs.add_metric_time,
+                    ) {
+                        (Some(d), Some(t)) => d.format("%d.%m.%Y %H:%M").to_string(),
+                        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                        _ => String::new(),
+                    };
                 } else {
                     ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
                 }
@@ -279,14 +289,18 @@ fn parse_metric_value(s: &str, kind: MetricKind) -> MetricValue {
             .map(|v| MetricValue::Duration(v as i64))
             .unwrap_or(MetricValue::Null),
         MetricKind::Date | MetricKind::Deadline => {
-            if let Ok(d) = NaiveDate::parse_from_str(trimmed, "%d.%m.%Y") {
-                let dt = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
-                match kind {
-                    MetricKind::Deadline => MetricValue::Deadline(dt),
-                    _ => MetricValue::Date(dt),
-                }
-            } else if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(trimmed) {
-                let dt = dt.with_timezone(&Utc);
+            if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d.%m.%Y %H:%M")
+                .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc())
+                .or_else(|_| {
+                    NaiveDate::parse_from_str(trimmed, "%d.%m.%Y").map(|d| {
+                        d.and_hms_opt(0, 0, 0).unwrap().and_utc()
+                    })
+                })
+                .or_else(|_| {
+                    chrono::DateTime::parse_from_rfc3339(trimmed)
+                        .map(|dt| dt.with_timezone(&Utc))
+                })
+            {
                 match kind {
                     MetricKind::Deadline => MetricValue::Deadline(dt),
                     _ => MetricValue::Date(dt),
@@ -305,11 +319,17 @@ fn parse_metric_value(s: &str, kind: MetricKind) -> MetricValue {
     }
 }
 
-/// Рисовать inline-календарь для выбора даты (тип Date / Deadline).
+/// Рисовать popup-календарь с выбором времени для типа Date / Deadline.
+/// Использует egui::Grid, чтобы колонки дней недели и даты были ровно выровнены.
 /// Возвращает true, если в этом кадре была выбрана конкретная дата.
-fn render_date_calendar(ui: &mut egui::Ui, selected: &mut Option<NaiveDate>) -> bool {
-    let now = chrono::Local::now().date_naive();
-    let show = selected.unwrap_or(now);
+fn render_date_time_popup(
+    ui: &mut egui::Ui,
+    selected_date: &mut Option<NaiveDate>,
+    selected_time: &mut Option<NaiveTime>,
+) -> bool {
+    let now = chrono::Local::now();
+    let show_date = selected_date.unwrap_or(now.date_naive());
+    let show_time = selected_time.unwrap_or(now.time());
 
     let month_names = [
         "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
@@ -345,58 +365,87 @@ fn render_date_calendar(ui: &mut egui::Ui, selected: &mut Option<NaiveDate>) -> 
 
     let mut picked = false;
 
-    let first = show.with_day(1).unwrap();
-    let next = next_month(show);
-    let days_in_month = (next - first).num_days() as u32;
-    let start_offset = first.weekday().number_from_monday() as usize - 1;
+    egui::Grid::new("date_time_calendar").num_columns(7).show(ui, |ui| {
+        // навигация месяца (занимает всю ширину сетки)
+        ui.horizontal(|ui| {
+            if ui.button("‹").clicked() {
+                *selected_date = Some(prev_month(show_date));
+            }
+            ui.label(format!(
+                "{} {}",
+                month_names[(show_date.month() - 1) as usize],
+                show_date.year()
+            ));
+            if ui.button("›").clicked() {
+                *selected_date = Some(next_month(show_date));
+            }
+        });
+        ui.end_row();
 
-    // навигация месяца
-    ui.horizontal(|ui| {
-        if ui.button("‹").clicked() {
-            *selected = Some(prev_month(show));
-        }
-        ui.label(format!(
-            "{} {}",
-            month_names[(show.month() - 1) as usize],
-            show.year()
-        ));
-        if ui.button("›").clicked() {
-            *selected = Some(next_month(show));
-        }
-    });
-
-    // заголовки дней недели
-    ui.horizontal(|ui| {
+        // заголовки дней недели
         for wd in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] {
             ui.label(wd);
         }
-    });
+        ui.end_row();
 
-    // сетка дней
-    let total_cells = start_offset + days_in_month as usize;
-    let rows = total_cells.div_ceil(7);
-    for row in 0..rows {
-        ui.horizontal(|ui| {
+        // сетка дней
+        let first = show_date.with_day(1).unwrap();
+        let next = next_month(show_date);
+        let days_in_month = (next - first).num_days() as u32;
+        let start_offset = first.weekday().number_from_monday() as usize - 1;
+        let total_cells = start_offset + days_in_month as usize;
+        let rows = total_cells.div_ceil(7);
+
+        for row in 0..rows {
             for col in 0..7 {
                 let idx = row * 7 + col;
                 if idx < start_offset || idx >= total_cells {
                     ui.label("");
                 } else {
                     let day = (idx - start_offset + 1) as u32;
-                    let date = show.with_day(day).unwrap();
-                    let is_sel = selected.map_or(false, |s| s == date);
+                    let date = show_date.with_day(day).unwrap();
+                    let is_sel = selected_date.map_or(false, |s| s == date);
                     let mut button = egui::Button::new(format!("{}", day));
                     if is_sel {
                         button = button.frame(true);
                     }
                     if ui.add(button).clicked() {
-                        *selected = Some(date);
+                        *selected_date = Some(date);
                         picked = true;
                     }
                 }
             }
-        });
-    }
+            ui.end_row();
+        }
+    });
+
+    // ввод времени (чч:мм)
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.label("Время:");
+        let mut time_str = selected_time
+            .map(|t| t.format("%H:%M").to_string())
+            .unwrap_or_else(|| "00:00".to_owned());
+        let time_response = ui.add(
+            egui::TextEdit::singleline(&mut time_str)
+                .desired_width(50.0)
+                .hint_text("чч:мм"),
+        );
+        if time_response.changed() {
+            if let Ok(t) = NaiveTime::parse_from_str(time_str.trim(), "%H:%M") {
+                *selected_time = Some(t);
+            } else if let Ok(t) = NaiveTime::parse_from_str(time_str.trim(), "%H:%M:%S") {
+                *selected_time = Some(t);
+            } else if time_str.trim().is_empty() {
+                *selected_time = None;
+            }
+        }
+        if ui.button("сегодня").clicked() {
+            *selected_date = Some(now.date_naive());
+            *selected_time = Some(now.time());
+            picked = true;
+        }
+    });
 
     picked
 }
