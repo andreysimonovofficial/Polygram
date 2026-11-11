@@ -136,6 +136,7 @@ pub fn context_menu(
                             }
                         }
                     ui.separator();
+                }
                     // Извлечь объект из отдела (доступно только если объект вложен в отдел).
                     if let Some(o) = published
                         .geometry
@@ -153,7 +154,6 @@ pub fn context_menu(
                             }
                         }
                     }
-                }
                     if ui.button("Переименовать объект").clicked() {
                         let obj_name = published
                             .geometry
