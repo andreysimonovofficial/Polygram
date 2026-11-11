@@ -299,13 +299,67 @@ impl PolygramApp {
                 obj.rect.y = *y;
             }
         }
-        // Растянуть отдел (и родительские отделы по цепочке) под перетаскиваемый
-        // объект «на лету», пока перетаскивание ещё не подтверждено сервером.
+        // Отдел не имеет фиксированного размера: его рамка всегда обтягивает
+        // прямых детей (с отступом под шапку и по бокам). Пересобираем перед
+        // каждой отрисовкой, чтобы рамка актуально следовала за содержимым.
+        Self::fit_departments_to_children(&mut geometry);
+        // Растянуть отдел под перетаскиваемый объект «на лету» (страховка
+        // во время активного перетаскивания, до подтверждения сервером).
         if let Some(dept_id) = &self.drag.drag_department {
             Self::stretch_department_for_drag(&mut geometry, dept_id);
         }
         geometry
     }
+
+/// Вычислить rect каждого отдела как обтягивающую рамку его прямых детей.
+/// Отдел не имеет фиксированного размера: рамка следует за содержимым.
+/// Повторный обход нужен, чтобы вложенные отделы уже имели актуальный размер,
+/// когда считается родительский отдел. Пустой отдел сохраняет текущий размер
+/// (минимальное место под первого ребёнка).
+fn fit_departments_to_children(geometry: &mut polygram_core::geometry::Geometry) {
+    let mut children: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+    for (i, o) in geometry.objects.iter().enumerate() {
+        if let Some(p) = &o.parent {
+            children.entry(p.clone()).or_default().push(i);
+        }
+    }
+    for _ in 0..8 {
+        let mut changed = false;
+        for (dept_id, child_indices) in &children {
+            if child_indices.is_empty() {
+                continue;
+            }
+            let dept_idx = match geometry.objects.iter().position(|o| o.id == *dept_id) {
+                Some(i) => i,
+                None => continue,
+            };
+            let mut min_x = i32::MAX;
+            let mut min_y = i32::MAX;
+            let mut max_x = i32::MIN;
+            let mut max_y = i32::MIN;
+            for &ci in child_indices {
+                let c = &geometry.objects[ci];
+                min_x = min_x.min(c.rect.x);
+                min_y = min_y.min(c.rect.y);
+                max_x = max_x.max(c.rect.x + c.rect.w);
+                max_y = max_y.max(c.rect.y + c.rect.h);
+            }
+            let new_x = (min_x - 1).max(0);
+            let new_y = (min_y - 2).max(0);
+            let new_w = (max_x + 1) - new_x;
+            let new_h = (max_y + 1) - new_y;
+            let new_rect = Rect::new(new_x, new_y, new_w, new_h);
+            let dept = &mut geometry.objects[dept_idx];
+            if dept.rect != new_rect {
+                dept.rect = new_rect;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+}
 
 /// Растянуть рамку отдела под содержащийся в нём перетаскиваемый объект «на лету».
 /// Членство определяется пересечением с текущей рамкой отдела: объект, попадающий

@@ -16,7 +16,11 @@ pub fn handle_add_object(
     _author: Option<String>,
 ) -> Result<Applied> {
     let (w, h) = if kind == NodeKind::Department {
-        (100, 100)
+        // Отдел не имеет фиксированного размера: рамка обтягивается под детей
+        // при каждой отрисовке (fit_departments_to_children). Стартовый размер
+        // задаётся минимально достаточным, чтобы в пустой отдел можно было
+        // поместить первый процесс.
+        (34, 34)
     } else {
         let (w, h) = footprint_for(0, 0);
         (w as i32, h as i32)
