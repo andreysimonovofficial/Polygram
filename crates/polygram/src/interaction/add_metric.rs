@@ -42,87 +42,85 @@ pub fn handle_add_metric_dialog(
             ui.label("Имя показателя:");
             ui.text_edit_singleline(&mut app.dialogs.add_metric_name);
 
+            ui.separator();
+            ui.label("Тип:");
+            egui::ComboBox::new("add_metric_kind", "")
+                .selected_text(format!("{:?}", app.dialogs.add_metric_kind))
+                .show_ui(ui, |ui| {
+                    for kind in [
+                        MetricKind::Number,
+                        MetricKind::Time,
+                        MetricKind::Date,
+                        MetricKind::Deadline,
+                        MetricKind::Percentage,
+                        MetricKind::Binary,
+                        MetricKind::Duration,
+                        MetricKind::Money,
+                        MetricKind::Text,
+                        MetricKind::Formula,
+                    ] {
+                        if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
+                            app.dialogs.add_metric_kind = kind;
+                            app.dialogs.add_metric_value.clear();
+                            app.dialogs.add_metric_date = None;
+                            app.dialogs.add_metric_date_popup_open = false;
+                            app.dialogs.add_metric_time = None;
+                        }
+                    }
+                });
+
             if let Some(md) = &existing_md {
                 ui.label(format!("Найден существующий показатель: {}", md.name));
                 ui.label(format!("Тип: {:?}", md.kind));
                 ui.label(format!("Единица: {}", md.unit));
-                ui.separator();
-                ui.label(value_label);
-                ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
-            } else {
-                ui.separator();
-                ui.label("Тип:");
-                egui::ComboBox::new("add_metric_kind", "")
-                    .selected_text(format!("{:?}", app.dialogs.add_metric_kind))
-                    .show_ui(ui, |ui| {
-                        for kind in [
-                            MetricKind::Number,
-                            MetricKind::Time,
-                            MetricKind::Date,
-                            MetricKind::Deadline,
-                            MetricKind::Percentage,
-                            MetricKind::Binary,
-                            MetricKind::Duration,
-                            MetricKind::Money,
-                            MetricKind::Text,
-                            MetricKind::Formula,
-                        ] {
-                            if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
-                                app.dialogs.add_metric_kind = kind;
-                                app.dialogs.add_metric_value.clear();
-                                app.dialogs.add_metric_date = None;
-                                app.dialogs.add_metric_date_popup_open = false;
-                            }
-                        }
-                    });
-
-                ui.separator();
-                ui.label(value_label);
-                let is_date_kind = matches!(
-                    app.dialogs.add_metric_kind,
-                    MetricKind::Date | MetricKind::Deadline
-                );
-                if is_date_kind {
-                    let date_label = match (
-                        app.dialogs.add_metric_date,
-                        app.dialogs.add_metric_time,
-                    ) {
-                        (Some(d), Some(t)) => d.format("%d.%m.%Y").to_string()
-                            + " "
-                            + &t.format("%H:%M").to_string(),
-                        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
-                        (None, Some(t)) => "дата ".to_owned() + &t.format("%H:%M").to_string(),
-                        _ => "дата".to_owned(),
-                    };
-                    if ui.button(date_label).clicked() {
-                        app.dialogs.add_metric_date_popup_open = true;
-                    }
-                    if app.dialogs.add_metric_date_popup_open {
-                        let picked = render_date_time_popup(
-                            ui,
-                            &mut app.dialogs.add_metric_date,
-                            &mut app.dialogs.add_metric_time,
-                        );
-                        if picked {
-                            app.dialogs.add_metric_date_popup_open = false;
-                        }
-                    }
-                    app.dialogs.add_metric_value = match (
-                        app.dialogs.add_metric_date,
-                        app.dialogs.add_metric_time,
-                    ) {
-                        (Some(d), Some(t)) => d.format("%d.%m.%Y %H:%M").to_string(),
-                        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
-                        _ => String::new(),
-                    };
-                } else {
-                    ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
-                }
-
-                ui.separator();
-                ui.label("Единица измерения:");
-                ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
             }
+
+            ui.separator();
+            ui.label(value_label);
+            let is_date_kind = matches!(
+                app.dialogs.add_metric_kind,
+                MetricKind::Date | MetricKind::Deadline
+            );
+            if is_date_kind {
+                let date_label = match (
+                    app.dialogs.add_metric_date,
+                    app.dialogs.add_metric_time,
+                ) {
+                    (Some(d), Some(t)) => d.format("%d.%m.%Y").to_string()
+                        + " "
+                        + &t.format("%H:%M").to_string(),
+                    (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                    (None, Some(t)) => "дата ".to_owned() + &t.format("%H:%M").to_string(),
+                    _ => "дата".to_owned(),
+                };
+                if ui.button(date_label).clicked() {
+                    app.dialogs.add_metric_date_popup_open = true;
+                }
+                if app.dialogs.add_metric_date_popup_open {
+                    let picked = render_date_time_popup(
+                        ui,
+                        &mut app.dialogs.add_metric_date,
+                        &mut app.dialogs.add_metric_time,
+                    );
+                    if picked {
+                        app.dialogs.add_metric_date_popup_open = false;
+                    }
+                }
+                app.dialogs.add_metric_value = match (
+                    app.dialogs.add_metric_date,
+                    app.dialogs.add_metric_time,
+                ) {
+                    (Some(d), Some(t)) => d.format("%d.%m.%Y %H:%M").to_string(),
+                    (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                    _ => String::new(),
+                };
+            } else {
+                ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+            }
+
+            ui.separator();
+            ui.label("Единица измерения:");
+            ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
 
             ui.separator();
             ui.heading("Синхронизация с API (необязательно)");
@@ -164,6 +162,9 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_target = None;
         app.dialogs.add_metric_name.clear();
         app.dialogs.add_metric_value.clear();
+        app.dialogs.add_metric_date = None;
+        app.dialogs.add_metric_date_popup_open = false;
+        app.dialogs.add_metric_time = None;
         app.dialogs.add_metric_unit.clear();
         app.dialogs.add_metric_api_connector.clear();
         app.dialogs.add_metric_api_cell.clear();
@@ -184,13 +185,21 @@ pub fn handle_add_metric_dialog(
         let object_id_for_cmd = object_id.clone();
         let name_for_cmd = name.clone();
 
-        if let Some(md) = &existing_md {
+        let kind = app.dialogs.add_metric_kind;
+        let unit = app.dialogs.add_metric_unit.trim().to_owned();
+        let (entry_value, entry_required) = match dir {
+            polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
+            polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
+        };
+
+        let reuse_existing = existing_md
+            .as_ref()
+            .map(|md| kind == md.kind)
+            .unwrap_or(false);
+
+        if reuse_existing {
             // Используем существующий показатель — создаём только запись на объекте.
-            // Для запроса вводимое значение — необходимое (required), для выхода — значение (value).
-            let (entry_value, entry_required) = match dir {
-                polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
-                polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
-            };
+            let md = existing_md.as_ref().unwrap();
             app.apply_batch(vec![Command::AddMetricEntry {
                 object: object_id_for_cmd.clone(),
                 dir,
@@ -203,13 +212,6 @@ pub fn handle_add_metric_dialog(
                 fact: MetricValue::Null,
             }]);
         } else {
-            let kind = app.dialogs.add_metric_kind;
-            let unit = app.dialogs.add_metric_unit.trim().to_owned();
-            let (entry_value, entry_required) = match dir {
-                polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
-                polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
-            };
-
             app.apply_batch(vec![
                 Command::AddMetricDef {
                     id: Some(name_for_cmd.clone()),
@@ -262,6 +264,9 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_name.clear();
         app.dialogs.add_metric_kind = MetricKind::Number;
         app.dialogs.add_metric_value.clear();
+        app.dialogs.add_metric_date = None;
+        app.dialogs.add_metric_date_popup_open = false;
+        app.dialogs.add_metric_time = None;
         app.dialogs.add_metric_unit.clear();
         app.dialogs.add_metric_api_connector.clear();
         app.dialogs.add_metric_api_cell.clear();

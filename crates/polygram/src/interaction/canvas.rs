@@ -279,8 +279,17 @@ pub fn handle_canvas_interaction(
                     Direction::Request => format!("request{}", n + 1),
                     Direction::Output => format!("out{}", n + 1),
                 };
-                app.dialogs.add_metric_kind = MetricKind::Number;
+                let existing_kind = published
+                    .metric_defs
+                    .iter()
+                    .find(|md| md.name == app.dialogs.add_metric_name)
+                    .map(|md| md.kind)
+                    .unwrap_or(MetricKind::Number);
+                app.dialogs.add_metric_kind = existing_kind;
                 app.dialogs.add_metric_value = "0".to_owned();
+                app.dialogs.add_metric_date = None;
+                app.dialogs.add_metric_date_popup_open = false;
+                app.dialogs.add_metric_time = None;
                 app.dialogs.add_metric_unit = String::new();
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
