@@ -209,9 +209,9 @@ impl eframe::App for PolygramApp {
         }
 
         // Обновление статусов API-привязок (раз в ~100 кадров ≈ 2 сек).
-        self.api_bindings_tick = self.api_bindings_tick.saturating_sub(1);
-        if self.api_bindings_tick == 0 {
-            self.api_bindings_tick = 100;
+        self.bindings.api_bindings_tick = self.bindings.api_bindings_tick.saturating_sub(1);
+        if self.bindings.api_bindings_tick == 0 {
+            self.bindings.api_bindings_tick = 100;
             self.refresh_api_bindings();
         }
 

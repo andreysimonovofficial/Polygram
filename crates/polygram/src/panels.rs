@@ -294,7 +294,7 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.heading("Коннекторы");
             ui.separator();
 
-            let connectors = app.get_connectors();
+            let connectors = app.connectors.get_connectors();
             if connectors.is_empty() {
                 ui.label("Коннекторы не найдены (проверьте подключение к API).");
                 return;
@@ -304,7 +304,7 @@ pub fn connectors_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                 .id_source("connectors_scroll")
                 .show(ui, |ui| {
                     for connector_id in &connectors {
-                        let config = app.get_connector_config(connector_id);
+                        let config = app.connectors.get_connector_config(connector_id, &app.connection.api_client, &app.connection.api_base);
                         let mut config_value = config
                             .as_ref()
                             .and_then(|c| c.as_object())
@@ -364,7 +364,7 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
             "intervalSecs".to_owned(),
             serde_json::Value::Number(interval.into()),
         );
-        app.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()));
+        app.connectors.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()), &app.connection.api_client, &app.connection.api_base);
     }
 
     ui.horizontal(|ui| {
@@ -378,13 +378,13 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
                     "intervalSecs".to_owned(),
                     serde_json::Value::Number(interval.into()),
                 );
-                app.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()));
+                app.connectors.set_connector_config("google-sheets", serde_json::Value::Object(config.clone()), &app.connection.api_client, &app.connection.api_base);
             }
         }
     });
 
     // Статус подключения.
-    let status = app.connector_status.get("google-sheets").cloned();
+    let status = app.connectors.connector_status.get("google-sheets").cloned();
     let mut check_connection = false;
     ui.horizontal(|ui| {
         if let Some(s) = status {
@@ -409,11 +409,12 @@ fn render_google_sheets_config(ui: &mut egui::Ui, app: &mut PolygramApp, config:
         }
     });
     if check_connection {
-        app.check_connector_status("google-sheets");
+        app.connectors.check_connector_status("google-sheets", &app.connection.api_client);
     }
 
     // Время последнего опроса по привязкам этого коннектора.
     let latest_poll = app
+        .bindings
         .api_bindings
         .values()
         .filter(|b| b.connector == "google-sheets")
@@ -469,7 +470,7 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &mut PolygramApp, conf
             "intervalSecs".to_owned(),
             serde_json::Value::Number(interval.into()),
         );
-        app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
+        app.connectors.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()), &app.connection.api_client, &app.connection.api_base);
     }
 
     ui.label("Channel ID:");
@@ -481,7 +482,7 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &mut PolygramApp, conf
             "intervalSecs".to_owned(),
             serde_json::Value::Number(interval.into()),
         );
-        app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
+        app.connectors.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()), &app.connection.api_client, &app.connection.api_base);
     }
 
     ui.horizontal(|ui| {
@@ -496,7 +497,7 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &mut PolygramApp, conf
                     "intervalSecs".to_owned(),
                     serde_json::Value::Number(interval.into()),
                 );
-                app.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()));
+                app.connectors.set_connector_config("google-analytics", serde_json::Value::Object(config.clone()), &app.connection.api_client, &app.connection.api_base);
             }
         }
     });
@@ -505,7 +506,7 @@ fn render_google_analytics_config(ui: &mut egui::Ui, app: &mut PolygramApp, conf
     ui.heading("Доступные метрики (GA4)");
     ui.label("Нажмите на метрику, чтобы скопировать её в буфер обмена:");
 
-    let metrics = app.get_ga_metrics();
+    let metrics = app.connectors.get_ga_metrics();
     egui::Grid::new("ga_metrics_grid").show(ui, |ui| {
         for (i, metric) in metrics.iter().enumerate() {
             if ui.button(metric).clicked() {

@@ -79,7 +79,7 @@ pub fn handle_add_metric_dialog(
 
             ui.separator();
             ui.heading("Синхронизация с API (необязательно)");
-            let connectors = app.get_connectors();
+            let connectors = app.connectors.get_connectors();
             let current_connector = &mut app.dialogs.add_metric_api_connector;
             egui::ComboBox::new("add_api_connector", "")
                 .selected_text(if current_connector.is_empty() {

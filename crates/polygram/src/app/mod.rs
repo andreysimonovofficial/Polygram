@@ -1,7 +1,6 @@
 use polygram_canvas::Canvas;
 use polygram_core::{layout::Rect, types::NodeKind, Command, Published};
 use reqwest::blocking::Client;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -14,6 +13,8 @@ pub mod dialogs;
 pub mod drag;
 pub mod commands;
 pub mod ui_config;
+pub mod connectors;
+pub mod bindings;
 
 use connection::ConnectionState;
 use connection::ConnectionResult;
@@ -22,6 +23,8 @@ use dialogs::DialogState;
 use drag::DragState;
 use commands::CommandState;
 use ui_config::UiConfig;
+use connectors::ConnectorManager;
+use bindings::BindingManager;
 
 pub struct CommandLogEntry {
     pub cmd: String,
@@ -37,10 +40,8 @@ pub struct PolygramApp {
     pub right_click: Option<(egui::Pos2, Option<String>)>,
     /// Выделенные объекты (ID) — grupповое выделение через Selection Box и Ctrl+клик.
     pub selected_objects: Vec<String>,
-    /// Статусы API-привязок (ключ: "{object_id}:{entry_id}").
-    pub api_bindings: HashMap<String, BindingStatusInfo>,
-    /// Тикер для периодического обновления статусов привязок (каждые ~100 кадров ≈ 2 сек).
-    pub api_bindings_tick: u32,
+    /// Менеджер API-привязок показателей.
+    pub bindings: BindingManager,
     pub show_mcp_panel: bool,
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
@@ -55,41 +56,8 @@ pub struct PolygramApp {
     pub import_requested: bool,
     pub export_department_requested: bool,
     pub import_department_requested: bool,
-    /// Локальный кэш файлов коннекторов из папки connectors/.
-    pub connectors: HashMap<String, ConnectorFile>,
-    /// Статус подключения каждого коннектора.
-    pub connector_status: HashMap<String, ConnectorStatusInfo>,
-}
-
-/// Описание коннектора из файла connectors/{id}.json.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ConnectorFile {
-    pub id: String,
-    pub name: String,
-    pub placeholder: String,
-    #[serde(default)]
-    pub config: serde_json::Value,
-    #[serde(default)]
-    pub cache: serde_json::Value,
-}
-
-/// Статус подключения коннектора.
-#[derive(Clone, Debug, Default)]
-pub struct ConnectorStatusInfo {
-    pub ok: bool,
-    pub last_checked: Option<String>,
-    pub error: Option<String>,
-}
-
-/// Информация о статусе одной API-привязки для отображения в UI.
-#[derive(Clone, Debug, Default)]
-pub struct BindingStatusInfo {
-    pub ok: bool,
-    pub connector: String,
-    pub cell: String,
-    pub last_value: Option<f64>,
-    pub last_updated: Option<String>,
-    pub error: Option<String>,
+    /// Менеджер коннекторов: кэш файлов connectors/ и статус подключения.
+    pub connectors: ConnectorManager,
 }
 
 impl PolygramApp {
@@ -111,8 +79,7 @@ impl PolygramApp {
             drag: DragState::new(),
             right_click: None,
             selected_objects: Vec::new(),
-            api_bindings: HashMap::new(),
-            api_bindings_tick: 0,
+            bindings: BindingManager::new(),
             show_mcp_panel: false,
             show_sidebar: ui_config.show_sidebar,
             show_command_log_panel: ui_config.show_command_log_panel,
@@ -122,12 +89,11 @@ impl PolygramApp {
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,
-            connectors: Self::load_connectors(),
-            connector_status: HashMap::new(),
             export_requested: false,
             import_requested: false,
             export_department_requested: false,
             import_department_requested: false,
+            connectors: ConnectorManager::new(),
         }
     }
 
@@ -507,69 +473,45 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
 
     // ----- API-привязки показателей -----
 
-    pub fn post_binding(&mut self, object_id: String, entry_id: String, connector: String, cell: String, interval_secs: u64) {
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        std::thread::spawn(move || {
-            let result = client
-                .post(format!("{api_base}/api/bindings"))
-                .json(&serde_json::json!({
-                    "object_id": object_id,
-                    "entry_id": entry_id,
-                    "connector": connector,
-                    "cell": cell,
-                    "interval_secs": interval_secs,
-                }))
-                .send();
-            match result {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        eprintln!("API-привязка создана: {object_id}:{entry_id} -> {connector}:{cell}");
-                    } else {
-                        eprintln!("Ошибка создания API-привязки: HTTP {}", resp.status());
-                    }
-                }
-                Err(e) => eprintln!("Не удалось создать API-привязку: {e}"),
-            }
-        });
+    pub fn post_binding(
+        &mut self,
+        object_id: String,
+        entry_id: String,
+        connector: String,
+        cell: String,
+        interval_secs: u64,
+    ) {
+        self.bindings.post_binding(
+            object_id,
+            entry_id,
+            connector,
+            cell,
+            interval_secs,
+            &self.connection.api_client,
+            &self.connection.api_base,
+        );
     }
 
     pub fn delete_binding(&mut self, object_id: String, entry_id: String) {
-        let id = format!("{object_id}:{entry_id}");
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        std::thread::spawn(move || {
-            let result = client.delete(format!("{api_base}/api/bindings/{id}")).send();
-            match result {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        eprintln!("API-привязка удалена: {id}");
-                    } else {
-                        eprintln!("Ошибка удаления API-привязки: HTTP {}", resp.status());
-                    }
-                }
-                Err(e) => eprintln!("Не удалось удалить API-привязку: {e}"),
-            }
-        });
+        self.bindings
+            .delete_binding(object_id, entry_id, &self.connection.api_client, &self.connection.api_base);
     }
 
-    pub fn get_connectors(&self) -> Vec<String> {
-        // Источник истины — файлы в папке connectors/. Пересканируем при каждом вызове,
-        // чтобы только что положительный файл коннектора подхватился без перезапуска.
-        let mut ids: Vec<String> = Vec::new();
-        let dir = Self::connectors_dir();
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().map_or(false, |e| e == "json") {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        ids.push(stem.to_owned());
-                    }
-                }
-            }
-        }
-        ids.sort();
-        ids
+    pub fn get_binding_statuses(&self) -> Value {
+        self.bindings
+            .get_binding_statuses(&self.connection.api_client, &self.connection.api_base)
+    }
+
+    /// Получить список всех API-привязок с сервера.
+    pub fn get_bindings(&self) -> Vec<Value> {
+        self.bindings
+            .get_bindings(&self.connection.api_client, &self.connection.api_base)
+    }
+
+    /// Обновить кэш статусов API-привязок из сервера.
+    pub fn refresh_api_bindings(&mut self) {
+        self.bindings
+            .refresh_api_bindings(&self.connection.api_client, &self.connection.api_base);
     }
 
     /// Сгруппировать выделенные объекты в новый отдел.
@@ -619,225 +561,5 @@ fn stretch_department_for_drag(geometry: &mut polygram_core::geometry::Geometry,
         self.apply_batch(batch);
         // Очищаем выделение.
         self.selected_objects.clear();
-    }
-
-    pub fn get_binding_statuses(&self) -> serde_json::Value {
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        match client.get(format!("{api_base}/api/bindings/status")).send() {
-            Ok(resp) => resp.json().unwrap_or_default(),
-            Err(_) => serde_json::json!({}),
-        }
-    }
-
-    /// Получить список всех API-привязок с сервера.
-    pub fn get_bindings(&self) -> Vec<serde_json::Value> {
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        match client.get(format!("{api_base}/api/bindings")).send() {
-            Ok(resp) => {
-                let body: serde_json::Value = resp.json().unwrap_or_default();
-                body.get("bindings")
-                    .and_then(|v| v.as_array())
-                    .cloned()
-                    .unwrap_or_default()
-            }
-            Err(_) => Vec::new(),
-        }
-    }
-
-    /// Обновить кэш статусов API-привязок из сервера.
-    pub fn refresh_api_bindings(&mut self) {
-        let statuses = self.get_binding_statuses();
-        let bindings = self.get_bindings();
-        let statuses_map = statuses.get("statuses").and_then(|v| v.as_object());
-        if let Some(map) = statuses_map {
-            for (id, status) in map {
-                let ok = status.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-                let last_value = status.get("last_value").and_then(|v| v.as_f64());
-                let last_updated = status.get("last_updated").and_then(|v| v.as_str()).map(|s| s.to_owned());
-                let error = status.get("error").and_then(|v| v.as_str()).map(|s| s.to_owned());
-                let (connector, cell) = bindings.iter().find_map(|b| {
-                    if b.get("id").and_then(|v| v.as_str()) == Some(id) {
-                        Some((
-                            b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
-                            b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
-                        ))
-                    } else {
-                        None
-                    }
-                }).unwrap_or_default();
-                self.api_bindings.insert(id.clone(), BindingStatusInfo {
-                    ok,
-                    connector,
-                    cell,
-                    last_value,
-                    last_updated,
-                    error,
-                });
-            }
-        }
-    }
-
-    /// Получить конфиг коннектора по ID (из файла + кэш + сервер).
-    pub fn get_connector_config(&mut self, connector_id: &str) -> Option<serde_json::Value> {
-        // Сначала локальный кэш (загружен из файла при старте).
-        if let Some(cf) = self.connectors.get(connector_id) {
-            return Some(cf.config.clone());
-        }
-        // Затем пробуем сервер.
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        let id = connector_id.to_owned();
-        if let Ok(resp) = client.get(format!("{api_base}/api/connectors/{id}/config")).send() {
-            if let Ok(body) = resp.json::<serde_json::Value>() {
-                if let Some(config) = body.get("config").cloned() {
-                    return Some(config);
-                }
-            }
-        }
-        None
-    }
-
-    /// Обновить все конфиги коннекторов с сервера (поддержка совместимости).
-    pub fn refresh_connector_configs(&mut self, _connector_ids: &[String]) {
-        // Конфиги загружаются из файлов при старте; сервер синхронизируется при записи.
-    }
-
-    /// Сохранить конфиг коннектора по ID (в файл + на сервер + в кэш).
-    pub fn set_connector_config(&mut self, connector_id: &str, config: serde_json::Value) {
-        let mut cf = self
-            .connectors
-            .get(connector_id)
-            .cloned()
-            .unwrap_or(ConnectorFile {
-                id: connector_id.to_owned(),
-                ..Default::default()
-            });
-        cf.id = connector_id.to_owned();
-        cf.config = config.clone();
-        let _ = Self::save_connector_file(&cf);
-        self.connectors.insert(connector_id.to_owned(), cf);
-
-        // Синхронизируем на API-сервер (если запущен).
-        let api_base = self.connection.api_base.clone();
-        let client = self.connection.api_client.clone();
-        let id = connector_id.to_owned();
-        std::thread::spawn(move || {
-            let _ = client
-                .post(format!("{api_base}/api/connectors/{id}/config"))
-                .json(&config)
-                .send();
-        });
-    }
-
-    /// Получить список метрик Google Analytics.
-    pub fn get_ga_metrics(&self) -> Vec<String> {
-        vec![
-            "ga:sessions".to_owned(),
-            "ga:users".to_owned(),
-            "ga:pageviews".to_owned(),
-            "ga:bounceRate".to_owned(),
-            "ga:avgSessionDuration".to_owned(),
-            "ga:goalCompletionsAll".to_owned(),
-            "ga:transactions".to_owned(),
-            "ga:transactionRevenue".to_owned(),
-            "ga4:ga:sessions".to_owned(),
-            "ga4:ga:users".to_owned(),
-            "ga4:ga:screenviews".to_owned(),
-            "ga4:ga:conversions".to_owned(),
-        ]
-    }
-
-    /// Проверить подключение к Apps Script URL (для Google Таблиц).
-    pub fn check_connector_status(&mut self, connector_id: &str) {
-        let config = match self.connectors.get(connector_id) {
-            Some(c) => c.config.clone(),
-            None => return,
-        };
-        let url = match connector_id {
-            "google-sheets" => config
-                .get("url")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_owned(),
-            _ => return,
-        };
-
-        if url.is_empty() || !url.starts_with("http") {
-            self.connector_status.insert(
-                connector_id.to_owned(),
-                ConnectorStatusInfo {
-                    ok: false,
-                    last_checked: Some(chrono::Local::now().format("%H:%M:%S").to_string()),
-                    error: Some("URL не задан".to_owned()),
-                },
-            );
-            return;
-        }
-
-        let api_client = self.connection.api_client.clone();
-        let id = connector_id.to_owned();
-        std::thread::spawn(move || {
-            let result = api_client.get(&url).query(&[("cell", "status")]).send();
-            let ok = result.as_ref().map_or(false, |resp| resp.status().is_success());
-            let error = result.err().map(|e| e.to_string());
-            let _ = ok;
-            let _ = error;
-            let _ = id;
-        });
-
-        self.connector_status.insert(
-            connector_id.to_owned(),
-            ConnectorStatusInfo {
-                ok: false,
-                last_checked: Some(chrono::Local::now().format("%H:%M:%S").to_string()),
-                error: Some("проверка...".to_owned()),
-            },
-        );
-    }
-
-    // ----- Персистентность коннекторов (папка connectors/) -----
-
-    fn connectors_dir() -> std::path::PathBuf {
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-            .join("connectors")
-    }
-
-    fn load_connectors() -> HashMap<String, ConnectorFile> {
-        let mut map: HashMap<String, ConnectorFile> = HashMap::new();
-        let dir = Self::connectors_dir();
-        let _ = std::fs::create_dir_all(&dir);
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().map_or(false, |e| e == "json") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(mut cf) = serde_json::from_str::<ConnectorFile>(&content) {
-                            if cf.id.is_empty() {
-                                cf.id = path
-                                    .file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .unwrap_or_default()
-                                    .to_owned();
-                            }
-                            map.insert(cf.id.clone(), cf);
-                        }
-                    }
-                }
-            }
-        }
-        map
-    }
-
-    fn save_connector_file(cf: &ConnectorFile) -> std::io::Result<()> {
-        let dir = Self::connectors_dir();
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join(format!("{}.json", cf.id));
-        let json = serde_json::to_string_pretty(cf)?;
-        std::fs::write(path, json)
     }
 }

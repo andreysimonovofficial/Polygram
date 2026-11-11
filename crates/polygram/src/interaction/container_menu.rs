@@ -159,7 +159,7 @@ pub fn handle_container_menu_dialog(
 
                         // Статус привязки и время последнего опроса для этой записи.
                         let binding_id = format!("{}:{}", object_id, entry.name);
-                        if let Some(info) = app.api_bindings.get(&binding_id) {
+                        if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
                             let icon_color = if info.ok {
                                 egui::Color32::from_rgb(0, 200, 80)
                             } else {
@@ -292,7 +292,7 @@ fn render_entry_api_settings(
     let binding_id = format!("{}:{}", object_id, entry.name);
 
     // Неизменяемые чтения из API (клонируем, заимствование освобождается).
-    let connectors: Vec<String> = app.get_connectors();
+    let connectors: Vec<String> = app.connectors.get_connectors();
     let bindings: Vec<serde_json::Value> = app.get_bindings();
     let current = bindings.iter().find(|b| {
         b.get("id").and_then(|v| v.as_str()) == Some(&binding_id)

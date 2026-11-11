@@ -481,7 +481,7 @@ pub fn handle_canvas_interaction(
     // Собрать привязки по ключу (object_id, entry_name) для отрисовки иконки + времени
     // последнего опроса внутри строк показателя (масштабируются с zoom).
     let mut bindings: HashMap<(String, String), MetricBinding> = HashMap::new();
-    for (id, info) in &app.api_bindings {
+    for (id, info) in &app.bindings.api_bindings {
         if let Some((object_id, entry_name)) = id.split_once(':') {
             bindings.insert(
                 (object_id.to_owned(), entry_name.to_owned()),
