@@ -379,7 +379,7 @@ fn render_date_calendar(ui: &mut egui::Ui, selected: &mut Option<NaiveDate>) -> 
         ui.horizontal(|ui| {
             for col in 0..7 {
                 let idx = row * 7 + col;
-                if idx < start_offset {
+                if idx < start_offset || idx >= total_cells {
                     ui.label("");
                 } else {
                     let day = (idx - start_offset + 1) as u32;
