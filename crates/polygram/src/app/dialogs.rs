@@ -1,5 +1,6 @@
 use polygram_core::{Direction, MetricKind};
 use polygram_core::types::MAX_UI_METRICS_PER_SIDE;
+use chrono::NaiveDate;
 use std::collections::HashMap;
 
 /// API binding settings being edited for a single metric entry.
@@ -19,6 +20,8 @@ pub struct DialogState {
     pub add_metric_name: String,
     pub add_metric_kind: MetricKind,
     pub add_metric_value: String,
+    pub add_metric_date: Option<NaiveDate>,
+    pub add_metric_date_popup_open: bool,
     pub add_metric_unit: String,
     pub add_metric_api_connector: String,
     pub add_metric_api_cell: String,
@@ -43,6 +46,8 @@ impl DialogState {
             add_metric_name: String::new(),
             add_metric_kind: MetricKind::Number,
             add_metric_value: String::new(),
+            add_metric_date: None,
+            add_metric_date_popup_open: false,
             add_metric_unit: String::new(),
             add_metric_api_connector: String::new(),
             add_metric_api_cell: String::new(),
@@ -70,6 +75,8 @@ impl DialogState {
         self.add_metric_target = None;
         self.add_metric_name.clear();
         self.add_metric_value.clear();
+        self.add_metric_date = None;
+        self.add_metric_date_popup_open = false;
         self.add_metric_unit.clear();
         self.add_metric_api_connector.clear();
         self.add_metric_api_cell.clear();
@@ -111,6 +118,8 @@ impl DialogState {
         };
         self.add_metric_kind = MetricKind::Number;
         self.add_metric_value = "0".to_owned();
+        self.add_metric_date = None;
+        self.add_metric_date_popup_open = false;
         self.add_metric_unit = String::new();
     }
 

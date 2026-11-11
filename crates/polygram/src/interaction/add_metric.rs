@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use chrono::{NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use polygram_core::{Command, MetricKind, MetricValue, Published};
 use egui::{Context, Window};
 
@@ -70,13 +70,44 @@ pub fn handle_add_metric_dialog(
                             if ui.selectable_label(app.dialogs.add_metric_kind == kind, format!("{:?}", kind)).clicked() {
                                 app.dialogs.add_metric_kind = kind;
                                 app.dialogs.add_metric_value.clear();
+                                app.dialogs.add_metric_date = None;
+                                app.dialogs.add_metric_date_popup_open = false;
                             }
                         }
                     });
 
                 ui.separator();
                 ui.label(value_label);
-                ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+                let is_date_kind = matches!(
+                    app.dialogs.add_metric_kind,
+                    MetricKind::Date | MetricKind::Deadline
+                );
+                if is_date_kind {
+                    let date_label = app
+                        .dialogs
+                        .add_metric_date
+                        .map(|d| d.format("%d.%m.%Y").to_string())
+                        .unwrap_or_else(|| "дата".to_owned());
+                    if ui.button(date_label).clicked() {
+                        app.dialogs.add_metric_date_popup_open = true;
+                    }
+                    if app.dialogs.add_metric_date_popup_open {
+                        let picked = render_date_calendar(
+                            ui,
+                            &mut app.dialogs.add_metric_date,
+                        );
+                        if picked {
+                            app.dialogs.add_metric_date_popup_open = false;
+                        }
+                    }
+                    app.dialogs.add_metric_value = app
+                        .dialogs
+                        .add_metric_date
+                        .map(|d| d.format("%d.%m.%Y").to_string())
+                        .unwrap_or_default();
+                } else {
+                    ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+                }
 
                 ui.separator();
                 ui.label("Единица измерения:");
@@ -272,4 +303,100 @@ fn parse_metric_value(s: &str, kind: MetricKind) -> MetricValue {
         MetricKind::Text => MetricValue::Text(trimmed.to_owned()),
         _ => MetricValue::Null,
     }
+}
+
+/// Рисовать inline-календарь для выбора даты (тип Date / Deadline).
+/// Возвращает true, если в этом кадре была выбрана конкретная дата.
+fn render_date_calendar(ui: &mut egui::Ui, selected: &mut Option<NaiveDate>) -> bool {
+    let now = chrono::Local::now().date_naive();
+    let show = selected.unwrap_or(now);
+
+    let month_names = [
+        "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
+    ];
+
+    let prev_month = |d: NaiveDate| -> NaiveDate {
+        let (y, m) = if d.month() == 1 {
+            (d.year() - 1, 12)
+        } else {
+            (d.year(), d.month() - 1)
+        };
+        d.with_day(1)
+            .unwrap()
+            .with_year(y)
+            .unwrap()
+            .with_month(m as u32)
+            .unwrap()
+    };
+    let next_month = |d: NaiveDate| -> NaiveDate {
+        let (y, m) = if d.month() == 12 {
+            (d.year() + 1, 1)
+        } else {
+            (d.year(), d.month() + 1)
+        };
+        d.with_day(1)
+            .unwrap()
+            .with_year(y)
+            .unwrap()
+            .with_month(m as u32)
+            .unwrap()
+    };
+
+    let mut picked = false;
+
+    let first = show.with_day(1).unwrap();
+    let next = next_month(show);
+    let days_in_month = (next - first).num_days() as u32;
+    let start_offset = first.weekday().number_from_monday() as usize - 1;
+
+    // навигация месяца
+    ui.horizontal(|ui| {
+        if ui.button("‹").clicked() {
+            *selected = Some(prev_month(show));
+        }
+        ui.label(format!(
+            "{} {}",
+            month_names[(show.month() - 1) as usize],
+            show.year()
+        ));
+        if ui.button("›").clicked() {
+            *selected = Some(next_month(show));
+        }
+    });
+
+    // заголовки дней недели
+    ui.horizontal(|ui| {
+        for wd in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] {
+            ui.label(wd);
+        }
+    });
+
+    // сетка дней
+    let total_cells = start_offset + days_in_month as usize;
+    let rows = total_cells.div_ceil(7);
+    for row in 0..rows {
+        ui.horizontal(|ui| {
+            for col in 0..7 {
+                let idx = row * 7 + col;
+                if idx < start_offset {
+                    ui.label("");
+                } else {
+                    let day = (idx - start_offset + 1) as u32;
+                    let date = show.with_day(day).unwrap();
+                    let is_sel = selected.map_or(false, |s| s == date);
+                    let mut button = egui::Button::new(format!("{}", day));
+                    if is_sel {
+                        button = button.frame(true);
+                    }
+                    if ui.add(button).clicked() {
+                        *selected = Some(date);
+                        picked = true;
+                    }
+                }
+            }
+        });
+    }
+
+    picked
 }
