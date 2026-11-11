@@ -186,11 +186,13 @@ pub fn handle_canvas_interaction(
         {
             if canvas_response.dragged_by(egui::PointerButton::Primary) {
                 if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    let delta = cur - start_screen;
                     let cell_px = app.canvas.cell_px();
-                    let dx = (delta.x / cell_px).round() as i32;
-                    let dy = (delta.y / cell_px).round() as i32;
-                    let target = (start_x + dx, start_y + dy);
+                    let offset = app.canvas.camera.offset;
+                    let zoom = app.canvas.camera.zoom;
+                    // Позиция курсора в клетках мира (левый верхний угол объекта привязывается к клетке под курсором).
+                    let target_x = ((cur.x / zoom - offset.x) / app.canvas.cell_size).round() as i32;
+                    let target_y = ((cur.y / zoom - offset.y) / app.canvas.cell_size).round() as i32;
+                    let target = (target_x, target_y);
                     // Что сейчас занимает целевую клетку (кроме перетаскиваемого объекта).
                     let occupant = object_at_cell(&geometry, target.0, target.1, object_id);
                     let target_kind = occupant
