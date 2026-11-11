@@ -11,16 +11,12 @@ pub fn paint_department_frame(
     zoom: f32,
     theme: &Theme,
 ) {
-    // Внешняя рамка отдела
+    // Контур отдела (аура) — только обводка, без заливки, чтобы отдел не выглядел
+    // как материальный объект. Он следует за дочерними процессами.
     painter.rect_stroke(rect_px, theme.object_corner_radius * zoom, Stroke::new(theme.object_border_width * zoom, theme.card_border));
-    painter.rect_filled(rect_px, theme.object_corner_radius * zoom, theme.card_bg);
 
-    // Шапка отдела
+    // Шапка отдела — только текст, без заливки фона.
     let header_h = cell_px * theme.object_header_height_cells;
-    let header_rect = Rect::from_min_size(rect_px.min, Vec2::new(rect_px.width(), header_h));
-    painter.rect_filled(header_rect, 0.0, theme.card_header);
-    painter.rect_stroke(header_rect, 0.0, Stroke::new(1.0_f32 * zoom, theme.card_border));
-
     let title = format!("Отдел '{}'", object.name);
     painter.text(
         rect_px.min + Vec2::new(12.0 * zoom, header_h / 2.0),
