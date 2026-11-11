@@ -5,7 +5,7 @@
 //! Всё считается из констант: нет наложения статики и динамики, нет двойной отрисовки.
 
 use crate::theme::Theme;
-use egui::{Painter, Pos2, Rect, Stroke, Vec2};
+use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 use std::collections::HashMap;
@@ -188,6 +188,28 @@ pub fn paint_drag_preview(
     binding: Option<&MetricBinding>,
 ) {
     paint_metric_row(painter, rect, entry, dynamic, zoom, theme, false, dir, binding, &mut Vec::new());
+}
+
+/// Пустая пунктирная рамка ("призрачная копия") размером с объект.
+/// Рисуется только обводка пунктиром без заливки и содержимого.
+pub fn paint_dashed_rect(painter: &Painter, rect: Rect, zoom: f32, color: Color32) {
+    let dash = (6.0 * zoom).max(1.0);
+    let gap = (4.0 * zoom).max(1.0);
+    let stroke = Stroke::new((2.0 * zoom).max(1.0), color);
+    let mut x = rect.min.x;
+    while x < rect.max.x {
+        let x2 = (x + dash).min(rect.max.x);
+        painter.line_segment([Pos2::new(x, rect.min.y), Pos2::new(x2, rect.min.y)], stroke);
+        painter.line_segment([Pos2::new(x, rect.max.y), Pos2::new(x2, rect.max.y)], stroke);
+        x = x2 + gap;
+    }
+    let mut y = rect.min.y;
+    while y < rect.max.y {
+        let y2 = (y + dash).min(rect.max.y);
+        painter.line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.min.x, y2)], stroke);
+        painter.line_segment([Pos2::new(rect.max.x, y), Pos2::new(rect.max.x, y2)], stroke);
+        y = y2 + gap;
+    }
 }
 
 /// Рисовать строку "+ Добавить показатель" (центрированная, кликабельная).

@@ -18,6 +18,10 @@ pub struct DragState {
     /// Отдел, под которым началось перетаскивание объекта. Его рамка растягивается
     /// под перетаскиваемый объект «на лету» (до подтверждения сервером).
     pub drag_department: Option<String>,
+    /// Свободная клетка, куда объект уедет при Drop (призрачная копия / пунктирная рамка).
+    pub drag_ghost: Option<(i32, i32)>,
+    /// Объект или отдел, под которым сейчас нависает перетаскиваемый процесс.
+    pub drag_over: Option<String>,
 }
 
 impl DragState {
@@ -33,6 +37,8 @@ impl DragState {
             drag_metric: None,
             drag_metric_start_screen: None,
             drag_department: None,
+            drag_ghost: None,
+            drag_over: None,
         }
     }
 
@@ -45,6 +51,8 @@ impl DragState {
     pub fn end_drag(&mut self) -> Option<(String, (i32, i32), Option<(i32, i32)>)> {
         let object_id = self.drag_object.take()?;
         self.drag_department = None;
+        self.drag_ghost = None;
+        self.drag_over = None;
         let start_cell = self.drag_start_cell.take()?;
         self.drag_start_screen = None;
         let target = self.predicted_positions.get(&object_id).copied();

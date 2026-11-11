@@ -116,3 +116,71 @@ fn world_to_screen(p: Pos2, cell_size: f32, offset: egui::Vec2, zoom: f32) -> Po
         (p.y * cell_size + offset.y) * zoom,
     )
 }
+
+/// Возвращает объект, чей rect содержит клетку (cx, cy), исключая exclude_id.
+pub fn object_at_cell<'a>(
+    geometry: &'a Geometry,
+    cx: i32,
+    cy: i32,
+    exclude_id: &str,
+) -> Option<&'a str> {
+    for object in &geometry.objects {
+        if object.id == exclude_id {
+            continue;
+        }
+        if object.rect.x <= cx
+            && cx < object.rect.x + object.rect.w
+            && object.rect.y <= cy
+            && cy < object.rect.y + object.rect.h
+        {
+            return Some(&object.id);
+        }
+    }
+    None
+}
+
+/// Свободна ли клетка (cx, cy) (нет объектов, кроме exclude_id).
+pub fn is_cell_free(geometry: &Geometry, cx: i32, cy: i32, exclude_id: &str) -> bool {
+    object_at_cell(geometry, cx, cy, exclude_id).is_none()
+}
+
+/// Вернута ли клетка внутри отдела dept_id.
+fn inside_dept(geometry: &Geometry, dept_id: &str, cx: i32, cy: i32) -> bool {
+    geometry.objects.iter().find(|o| o.id == dept_id).map_or(false, |d| {
+        d.rect.x <= cx && cx < d.rect.x + d.rect.w && d.rect.y <= cy && cy < d.rect.y + d.rect.h
+    })
+}
+
+/// Ближайшая свободная клетка рядом со start (спиралью по кольцам Manhattan).
+/// exclude_id — объект, которого игнорируют при проверке занятости.
+/// dept_id — если Some, ищет только внутри отдела dept_id.
+pub fn find_free_cell_near(
+    geometry: &Geometry,
+    start: (i32, i32),
+    max_radius: i32,
+    exclude_id: &str,
+    dept_id: Option<&str>,
+) -> Option<(i32, i32)> {
+    if is_cell_free(geometry, start.0, start.1, exclude_id)
+        && dept_id.map_or(true, |d| inside_dept(geometry, d, start.0, start.1))
+    {
+        return Some(start);
+    }
+    for r in 1..=max_radius {
+        for dx in -r..=r {
+            for dy in -r..=r {
+                if dx.abs() != r && dy.abs() != r {
+                    continue;
+                }
+                let cx = start.0 + dx;
+                let cy = start.1 + dy;
+                if is_cell_free(geometry, cx, cy, exclude_id)
+                    && dept_id.map_or(true, |d| inside_dept(geometry, d, cx, cy))
+                {
+                    return Some((cx, cy));
+                }
+            }
+        }
+    }
+    None
+}

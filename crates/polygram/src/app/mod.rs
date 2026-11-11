@@ -299,10 +299,38 @@ impl PolygramApp {
                 obj.rect.y = *y;
             }
         }
+        // Если процесс нависает над отделом и есть клетка призрачной копии,
+        // временно считаем объект ребёнком отдела в позиции копии, чтобы
+        // fit_departments_to_children растянул отдел и охватил копию на этапе предпросмотра.
+        let dragged_id = self.drag.drag_object.as_deref().unwrap_or("");
+        let over_is_dept = self.drag.drag_over.as_ref().map_or(false, |id| {
+            geometry.objects.iter().any(|o| o.id == *id && o.kind == NodeKind::Department)
+        });
+        let ghost = self.drag.drag_ghost;
+        let mut temp_reparent: Option<(String, Option<String>)> = None;
+        if over_is_dept && ghost.is_some() {
+            if let Some(dept_id) = &self.drag.drag_over {
+                if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == dragged_id) {
+                    temp_reparent = Some((obj.id.clone(), obj.parent.clone()));
+                    obj.parent = Some(dept_id.clone());
+                    if let Some((gx, gy)) = ghost {
+                        obj.rect.x = gx;
+                        obj.rect.y = gy;
+                    }
+                }
+            }
+        }
         // Отдел не имеет фиксированного размера: его рамка всегда обтягивает
         // прямых детей (с отступом под шапку и по бокам). Пересобираем перед
         // каждой отрисовкой, чтобы рамка актуально следовала за содержимым.
         Self::fit_departments_to_children(&mut geometry);
+        // Вернуть родителя перетаскиваемого объекта: реальная иерархия меняется
+        // только на сервере по команде SetObjectParent при Drop.
+        if let Some((id, parent)) = temp_reparent {
+            if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == id) {
+                obj.parent = parent;
+            }
+        }
         // Растянуть отдел под перетаскиваемый объект «на лету» (страховка
         // во время активного перетаскивания, до подтверждения сервером).
         if let Some(dept_id) = &self.drag.drag_department {

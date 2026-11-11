@@ -1,5 +1,8 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{department_at, object_at, MetricBinding, paint_drag_preview};
+use polygram_canvas::{
+    department_at, object_at, object_at_cell, find_free_cell_near, MetricBinding, paint_dashed_rect,
+    paint_drag_preview,
+};
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Command, Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
@@ -187,10 +190,39 @@ pub fn handle_canvas_interaction(
                     let cell_px = app.canvas.cell_px();
                     let dx = (delta.x / cell_px).round() as i32;
                     let dy = (delta.y / cell_px).round() as i32;
-                    let target = [start_x + dx, start_y + dy];
-                    // Клиентская предсказание: объект двигается мгновенно, без ожидания сервера.
-                    // Отдел растягивается под объект «на лету» через geometry_with_predictions.
-                    app.drag.predicted_positions.insert(object_id.clone(), (target[0], target[1]));
+                    let target = (start_x + dx, start_y + dy);
+                    // Что сейчас занимает целевую клетку (кроме перетаскиваемого объекта).
+                    let occupant = object_at_cell(&geometry, target.0, target.1, object_id);
+                    let target_kind = occupant
+                        .and_then(|id| geometry.objects.iter().find(|o| o.id == id).map(|o| o.kind));
+                    // Визуальная позиция объекта, клетка призрачной копии и цель, под которой нависаем.
+                    let (visual_cell, ghost, over) = match (occupant, target_kind) {
+                        (Some(id), Some(NodeKind::Department)) => {
+                            // Отдел: призрачная копия внутри отдела, объект следует за ней.
+                            let dept_id = id;
+                            let g = find_free_cell_near(
+                                &geometry,
+                                target,
+                                8,
+                                object_id,
+                                Some(&dept_id),
+                            )
+                            .or_else(|| {
+                                find_free_cell_near(&geometry, target, 8, object_id, None)
+                            })
+                            .unwrap_or(target);
+                            (g, Some(g), Some(dept_id))
+                        }
+                        (Some(id), None) => {
+                            // Чужий процесс: объект накладывается поверх, копия — в свободной клетке рядом.
+                            let g = find_free_cell_near(&geometry, target, 8, object_id, None);
+                            (g.unwrap_or(target), g, Some(id))
+                        }
+                        _ => (target, None, None),
+                    };
+                    app.drag.predicted_positions.insert(object_id.clone(), visual_cell);
+                    app.drag.drag_ghost = ghost;
+                    app.drag.drag_over = over.map(|s| s.to_owned());
                 }
             }
         }
@@ -205,64 +237,65 @@ pub fn handle_canvas_interaction(
             // drag_department не сбрасываем здесь: если объект отпущен внутри отдела,
             // оставим его, чтобы отдел продолжал растягиваться под объект до подтверждения сервера.
             if let (Some(object_id), Some((start_x, start_y))) = (drag_object, drag_start_cell) {
-                let target = app.drag.predicted_positions.get(&object_id).copied().unwrap_or((start_x, start_y));
-                let pos_changed = (target.0, target.1) != (start_x, start_y);
-                // Если над целью находится отдел — перемещаем объект в отдел (SetObjectParent),
-                // иначе — просто перемещаем (MoveObject).
-                let dropped_on_dept = if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    if let Some(target_id) = object_at(
-                        &geometry,
-                        cur,
-                        app.canvas.camera.offset,
-                        app.canvas.camera.zoom,
-                        app.canvas.cell_size,
-                    ) {
-                        let target_kind = geometry
-                            .objects
-                            .iter()
-                            .find(|o| o.id == target_id)
-                            .map(|o| o.kind);
-                        target_id != object_id
-                            && target_kind == Some(polygram_core::types::NodeKind::Department)
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                if dropped_on_dept {
-                    // Сначала переводим объект в отдел (отдел растянется под текущую позицию),
-                    // затем перемещаем на позицию отпускания. Отдел растянется повторно под неё.
-                    if let Some(cur) = canvas_response.interact_pointer_pos() {
-                        if let Some(target_id) = object_at(
+                let predicted = app
+                    .drag
+                    .predicted_positions
+                    .get(&object_id)
+                    .copied()
+                    .unwrap_or((start_x, start_y));
+                // Если цель была занята — объект уезжает в клетку призрачной копии,
+                // иначе — туда, куда наводили (предсказанная позиция).
+                let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
+                let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
+                // Отдел под курсором на момент отпускания (department_at игнорирует не-отделы,
+                // поэтому перетаскиваемый объект не затеняет отдел под собой).
+                let dropped_on_dept = canvas_response
+                    .interact_pointer_pos()
+                    .and_then(|cur| {
+                        department_at(
                             &geometry,
                             cur,
                             app.canvas.camera.offset,
                             app.canvas.camera.zoom,
                             app.canvas.cell_size,
-                        ) {
-                            app.drag.pending_move =
-                                Some((object_id.clone(), app.connection.last_rev));
-                            app.apply_batch(vec![
-                                Command::SetObjectParent {
-                                    object: object_id.clone(),
-                                    parent: Some(target_id.to_owned()),
-                                },
-                                Command::MoveObject {
-                                    object: object_id.clone(),
-                                    at: [target.0, target.1],
-                                },
-                            ]);
-                            app.selected_objects = vec![object_id.clone()];
-                        }
-                    }
+                        )
+                    })
+                    .map_or(false, |dept_id| dept_id != object_id);
+
+                if dropped_on_dept {
+                    // Поместить процесс в отдел: SetObjectParent + переместить на клетку копии.
+                    let dept_id = canvas_response
+                        .interact_pointer_pos()
+                        .and_then(|cur| {
+                            department_at(
+                                &geometry,
+                                cur,
+                                app.canvas.camera.offset,
+                                app.canvas.camera.zoom,
+                                app.canvas.cell_size,
+                            )
+                        })
+                        .unwrap();
+                    app.drag.pending_move =
+                        Some((object_id.clone(), app.connection.last_rev));
+                    app.apply_batch(vec![
+                        Command::SetObjectParent {
+                            object: object_id.clone(),
+                            parent: Some(dept_id.to_owned()),
+                        },
+                        Command::MoveObject {
+                            object: object_id.clone(),
+                            at: [drop_cell.0, drop_cell.1],
+                        },
+                    ]);
+                    app.selected_objects = vec![object_id.clone()];
                 } else {
                     app.drag.drag_department = None;
                     if pos_changed {
                         app.drag.pending_move = Some((object_id.clone(), app.connection.last_rev));
                         app.apply_cmd(Command::MoveObject {
                             object: object_id,
-                            at: [target.0, target.1],
+                            at: [drop_cell.0, drop_cell.1],
                         });
                     }
                 }
@@ -520,6 +553,31 @@ pub fn handle_canvas_interaction(
                     2.0,
                     Stroke::new(2.0_f32 * zoom, Color32::WHITE),
                 );
+            }
+        }
+    }
+
+    // Перетаскивание объекта: нарисовать пустую пунктирную рамку ("призрачная копия")
+    // в клетке, куда объект уедет при Drop, если цель занята другим объектом или отделом.
+    if app.drag.drag_ghost.is_some()
+        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    {
+        if let Some((gx, gy)) = app.drag.drag_ghost {
+            if let Some(dragged) = geometry.objects.iter().find(|o| {
+                o.id == app.drag.drag_object.as_deref().unwrap_or("")
+            }) {
+                let cell_px = app.canvas.cell_px();
+                let offset = app.canvas.camera.offset;
+                let zoom = app.canvas.camera.zoom;
+                let rect_px = Rect::from_min_size(
+                    Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
+                    Vec2::new(
+                        dragged.rect.w as f32 * cell_px,
+                        dragged.rect.h as f32 * cell_px,
+                    ),
+                );
+                let painter = ui.painter();
+                paint_dashed_rect(painter, rect_px, zoom, Color32::from_rgb(0, 217, 255));
             }
         }
     }
