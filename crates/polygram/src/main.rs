@@ -9,6 +9,9 @@ mod menu;
 mod palette;
 mod panels;
 mod document;
+mod command_log_panel;
+mod connection_panel;
+mod connectors_panel;
 mod status;
 
 use app::PolygramApp;
