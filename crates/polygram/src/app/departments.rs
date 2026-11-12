@@ -1,5 +1,7 @@
-use polygram_core::{geometry::Geometry, types::NodeKind, Published};
+use crate::app::PolygramApp;
+use polygram_core::{geometry::Geometry, types::NodeKind, Published, Command};
 use crate::app::drag::DragState;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Построить геометрию с учётом неотправленных на сервер предсказаний позиций (drag).
 /// Используется для hit-testing, чтобы клик по визуальной позиции объекта попадал
@@ -155,5 +157,50 @@ pub fn stretch_department_for_drag(geometry: &mut Geometry, dept_id: &str) {
             Some(p) => p,
             None => break,
         };
+    }
+}
+
+impl PolygramApp {
+    /// Сгруппировать выделенные объекты в новый отдел.
+    /// Вычисляет ограничивающий прямоугольник выделения, создаёт отдел,
+    /// размещает его вокруг объектов и переводит каждого выбранного объекта в отдел.
+    pub fn group_selected_into_department(&mut self, published: &Published) {
+        if self.selected_objects.len() < 2 {
+            return;
+        }
+        let geometry = &published.geometry;
+        let mut selected_ids: Vec<String> = Vec::new();
+        for id in &self.selected_objects {
+            if geometry.objects.iter().any(|o| o.id == *id) {
+                selected_ids.push(id.clone());
+            }
+        }
+        if selected_ids.is_empty() {
+            return;
+        }
+
+        let dept_id = format!("dept_{}", SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0));
+
+        let mut batch: Vec<Command> = Vec::new();
+        batch.push(Command::AddObject {
+            id: Some(dept_id.clone()),
+            name: "Отдел".to_owned(),
+            kind: NodeKind::Department,
+            at: None,
+            parent: None,
+            author: None,
+        });
+        for obj_id in &selected_ids {
+            batch.push(Command::SetObjectParent {
+                object: obj_id.clone(),
+                parent: Some(dept_id.clone()),
+            });
+        }
+
+        self.apply_batch(batch);
+        self.selected_objects.clear();
     }
 }

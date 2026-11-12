@@ -1,0 +1,17 @@
+[
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep1",
+        "parent":  "dep0"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep2",
+        "parent":  "dep1"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep3",
+        "parent":  "dep2"
+    }
+]
