@@ -84,7 +84,6 @@ fn paint_metric_row(
     error_hotspots: &mut Vec<(Rect, String)>,
 ) {
     let status = dynamic.status[entry.ix as usize];
-    let dot_radius = theme.port_radius.max(2.0) * zoom;
     let cy = rect.center().y;
 
     // Контур всей строки
@@ -94,17 +93,28 @@ fn paint_metric_row(
         Stroke::new(ROW_BORDER_WIDTH * zoom, theme.card_border),
     );
 
-    // Точки сцепления слева и справа внутри тела строки (круг, не символ), цвет статуса с учётом направления
+    // Символы сцепления слева и справа внутри тела строки.
+    // Запрос: слева ▶, справа ◀. Выход: слева ◀, справа ▶.
+    let dot_color = super::status_dot_color(status, dir, theme);
     let dot_r = CONNECTION_DOT_RADIUS * zoom;
-    painter.circle_filled(
+    let symbol_font = egui::FontId::new((theme.text_size * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
+    let (left_sym, right_sym) = match dir {
+        Direction::Request => ("▶", "◀"),
+        Direction::Output => ("◀", "▶"),
+    };
+    painter.text(
         Pos2::new(rect.min.x + dot_r, cy),
-        dot_r,
-        super::status_dot_color(status, dir, theme),
+        egui::Align2::LEFT_CENTER,
+        left_sym,
+        symbol_font.clone(),
+        dot_color,
     );
-    painter.circle_filled(
+    painter.text(
         Pos2::new(rect.max.x - dot_r, cy),
-        dot_r,
-        super::status_dot_color(status, dir, theme),
+        egui::Align2::RIGHT_CENTER,
+        right_sym,
+        symbol_font,
+        dot_color,
     );
 
     // Имя записи

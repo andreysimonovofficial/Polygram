@@ -143,12 +143,38 @@ impl Layout {
     ) -> Vec<Point> {
         let a = self.rect_of(src);
         let b = self.rect_of(dst);
-        let s = self.out_port(src, ks);
-        let d = self.request_port(dst, kd);
+
+        // Оба кандидата порта источника (правая и левая граница, та же строка).
+        let s_right = self.out_port(src, ks);
+        let s_left = Point { x: a.x * Q, y: s_right.y };
+        // Оба кандидата порта приёмника (левая и правая граница, та же строка).
+        let d_left = self.request_port(dst, kd);
+        let d_right = Point { x: (b.x + b.w) * Q, y: d_left.y };
+
+        // Выход источника: сторона, ближе к центру приёмника по X.
+        let dst_cx = (b.x + b.x + b.w) * Q / 2;
+        let s = if (s_right.x - dst_cx).abs() <= (s_left.x - dst_cx).abs() {
+            s_right
+        } else {
+            s_left
+        };
+        let s_exits_right = s.x == s_right.x;
+
+        // Вход приёмника: сторона, ближе к центру источника по X.
+        let src_cx = (a.x + a.x + a.w) * Q / 2;
+        let d = if (d_left.x - src_cx).abs() <= (d_right.x - src_cx).abs() {
+            d_left
+        } else {
+            d_right
+        };
+        let d_enters_left = d.x == d_left.x;
+
         let srow = a.y + 1 + ks as i32;
         let drow = b.y + 1 + kd as i32;
-        let sc = a.x + a.w; // первая клетка справа от источника
-        let dc = b.x - 1; // последняя клетка слева от приёмника
+
+        // Границы канала в клетках: от границы источника к границе приёмника.
+        let sc = if s_exits_right { a.x + a.w } else { a.x };
+        let dc = if d_enters_left { b.x - 1 } else { b.x + b.w };
 
         if dc >= sc {
             // Прямая линия, если строки совпадают и путь свободен.
@@ -158,13 +184,11 @@ impl Layout {
                 return vec![s, d];
             }
             let mid = (sc + dc) / 2;
-            // Допустимый диапазон колонок: горизонтали у источника и у приёмника не должны
-            // упираться в чужие карточки. Если диапазон пуст — ищем лучшее из плохого.
             let (lo, hi) = self.channel_range(src, dst, srow, drow, sc, dc);
             let (lo, hi) = if lo <= hi { (lo, hi) } else { (sc, dc) };
             let center = mid.clamp(lo, hi);
             let span = hi - lo + 1;
-            let mut best: Option<(usize, i32, i32)> = None; // (цена, расстояние до центра, колонка)
+            let mut best: Option<(usize, i32, i32)> = None;
             let mut tried = 0;
             let mut k = 0i32;
             while tried < 12 && k <= 2 * span + 2 {

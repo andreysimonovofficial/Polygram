@@ -14,12 +14,14 @@ fn cell_size_from_px(cell_px: f32, camera_zoom: f32) -> f32 {
 
 /// Вычислить экранную позицию точки сцепления строки показателя.
 /// Логика идентична paint_process: одинаковая высота строки, зазоры между строками.
-/// Точка находится внутри тела строки: слева для ЗАПРОСА, справа для ВЫХОДА.
+/// Точка находится внутри тела строки: слева или справа в зависимости от `exit_right`.
+/// `is_output` определяет контейнер (запрос — выше, выход — ниже), `exit_right` — сторону X.
 fn visual_port_screen(
     object_rect: &CoreRect,
     entries: &[polygram_core::EntryGeom],
     target_ix: polygram_core::EntryIx,
     is_output: bool,
+    exit_right: bool,
     cell_px: f32,
     camera_offset: Vec2,
     camera_zoom: f32,
@@ -69,7 +71,7 @@ fn visual_port_screen(
     let row_center_y = row_y + row_h / 2.0;
 
     let dot_r = CONNECTION_DOT_RADIUS * camera_zoom;
-    if is_output {
+    if exit_right {
         let object_max_x = object_min_x + object_w_px - pad;
         Some(Pos2::new(object_max_x - dot_r, row_center_y))
     } else {
@@ -126,34 +128,92 @@ pub fn paint_edge(
     // Визуальные позиции точек сцепления (источник и приёмник).
     // Считаются той же пропорциональной логикой, что и отрисовка строк в paint_process,
     // поэтому концы линии точно ложатся в центры точек сцепления.
+    // Сторона выбирается ближайшая к другому объекту: выход источника — ближе к центру цели,
+    // вход приёмника — ближе к центру источника.
+    let cell_size = cell_size_from_px(cell_px, camera_zoom);
+
+    let fo_center_x = from_obj.map(|fo| {
+        (fo.rect.x + fo.rect.x + fo.rect.w) as f32 * cell_size / 2.0 + camera_offset.x * camera_zoom
+    });
+    let to_center_x = to_obj.map(|to| {
+        (to.rect.x + to.rect.x + to.rect.w) as f32 * cell_size / 2.0 + camera_offset.x * camera_zoom
+    });
+
     let from_port = from_obj.and_then(|fo| {
-        visual_port_screen(
+        let from_right = visual_port_screen(
             &fo.rect,
             &fo.outputs,
             polygram_core::EntryIx(edge.from),
             true,
+            true,
             cell_px,
             camera_offset,
             camera_zoom,
-        )
-    });
-
-    let to_port = to_obj.and_then(|to| {
-        visual_port_screen(
-            &to.rect,
-            &to.requests,
-            polygram_core::EntryIx(edge.to),
+        );
+        let from_left = visual_port_screen(
+            &fo.rect,
+            &fo.outputs,
+            polygram_core::EntryIx(edge.from),
+            true,
             false,
             cell_px,
             camera_offset,
             camera_zoom,
-        )
+        );
+        match (from_right, from_left, to_center_x) {
+            (Some(r), Some(l), Some(tcx)) => {
+                if (r.x - tcx).abs() <= (l.x - tcx).abs() {
+                    Some(r)
+                } else {
+                    Some(l)
+                }
+            }
+            (Some(r), None, _) => Some(r),
+            (None, Some(l), _) => Some(l),
+            (Some(r), Some(_), None) => Some(r),
+            (None, None, _) => None,
+        }
+    });
+
+    let to_port = to_obj.and_then(|to| {
+        let to_right = visual_port_screen(
+            &to.rect,
+            &to.requests,
+            polygram_core::EntryIx(edge.to),
+            false,
+            true,
+            cell_px,
+            camera_offset,
+            camera_zoom,
+        );
+        let to_left = visual_port_screen(
+            &to.rect,
+            &to.requests,
+            polygram_core::EntryIx(edge.to),
+            false,
+            false,
+            cell_px,
+            camera_offset,
+            camera_zoom,
+        );
+        match (to_right, to_left, fo_center_x) {
+            (Some(r), Some(l), Some(fcx)) => {
+                if (l.x - fcx).abs() <= (r.x - fcx).abs() {
+                    Some(l)
+                } else {
+                    Some(r)
+                }
+            }
+            (Some(r), None, _) => Some(r),
+            (None, Some(l), _) => Some(l),
+            (Some(_), Some(l), None) => Some(l),
+            (None, None, _) => None,
+        }
     });
 
     // Промежуточные точки маршрута из edge.points (кванты → экран).
     // Исправлен подсчёт зума: cell_px уже содержит camera_zoom, поэтому
     // используется cell_size (без зума), а зум применяется один раз в конце.
-    let cell_size = cell_size_from_px(cell_px, camera_zoom);
     let mut route_pts: Vec<Pos2> = Vec::new();
     for p in &edge.points {
         route_pts.push(Pos2::new(

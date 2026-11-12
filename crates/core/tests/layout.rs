@@ -146,8 +146,19 @@ fn backward_edge_goes_around() {
     let h = e.hierarchy();
     let a = h.find_object("a").unwrap();
     let b = h.find_object("b").unwrap();
-    assert_eq!(pts[0], l.out_port(a, 0));
-    assert_eq!(*pts.last().unwrap(), l.request_port(b, 0));
+    let ar = l.rect_of(a);
+    let br = l.rect_of(b);
+    // Ближайшая сторона: выход источника — влево (к dest слева), вход приёмника — вправо (к src справа).
+    let expected_s = polygram_core::layout::Point {
+        x: ar.x * polygram_core::layout::Q,
+        y: (ar.y + 1) * polygram_core::layout::Q + polygram_core::layout::Q / 2,
+    };
+    let expected_d = polygram_core::layout::Point {
+        x: (br.x + br.w) * polygram_core::layout::Q,
+        y: (br.y + 1) * polygram_core::layout::Q + polygram_core::layout::Q / 2,
+    };
+    assert_eq!(pts[0], expected_s);
+    assert_eq!(*pts.last().unwrap(), expected_d);
 }
 
 #[test]
