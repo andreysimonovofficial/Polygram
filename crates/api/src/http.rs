@@ -50,6 +50,10 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/commands/batch", post(post_batch))
         .route("/api/document", get(get_document))
         .route("/api/document/import", post(post_document_import))
+        .route(
+            "/api/document/import-department",
+            post(post_document_import_department),
+        )
         .route("/api/chat/messages", get(get_chat_messages).post(post_chat_message))
         // Коннекторы и привязки API.
         .route("/api/connectors", get(get_connectors))
@@ -166,6 +170,30 @@ async fn post_document_import(
         Ok(_) => Json(json!({"ok": true})),
         Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
     }
+}
+
+/// POST /api/document/import-department — импортировать документ как новый отдел.
+/// Тело: { document: <JSON документа .pg>, name?: <имя отдела> }.
+async fn post_document_import_department(
+    State(api): State<Arc<ApiService>>,
+    Json(req): Json<ImportDepartmentRequest>,
+) -> Json<serde_json::Value> {
+    let json_str = serde_json::to_string(&req.document).unwrap_or_default();
+    match api.import_document_as_department(&json_str, &req.name) {
+        Ok(dept_id) => Json(json!({"ok": true, "department": dept_id})),
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ImportDepartmentRequest {
+    pub document: serde_json::Value,
+    #[serde(default = "default_import_department_name")]
+    pub name: String,
+}
+
+fn default_import_department_name() -> String {
+    "Импортированный отдел".to_owned()
 }
 
 // ----- Коннекторы -----

@@ -247,7 +247,8 @@ pub fn export_graph(app: &mut PolygramApp) {
     }
 }
 
-/// Импортировать граф из .pg файла через API.
+/// Импортировать граф из .pg файла как новый отдел (подграф) в текущий граф.
+/// ID объектов и показателей переназначаются сервером, чтобы избежать конфликтов.
 pub fn import_graph(app: &mut PolygramApp) {
     if !app.import_requested {
         return;
@@ -256,13 +257,49 @@ pub fn import_graph(app: &mut PolygramApp) {
     if let Some(path) = FileDialog::new().pick_file() {
         match std::fs::read_to_string(&path) {
             Ok(content) => {
+                let dept_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("отдел")
+                    .to_owned();
                 let api_base = app.connection.api_base.clone();
                 let client = Client::new();
-                let result = client.post(format!("{api_base}/api/document/import")).json(&content).send();
+                let request = serde_json::json!({
+                    "document": serde_json::from_str::<serde_json::Value>(&content).unwrap_or_default(),
+                    "name": format!("Отдел: {}", dept_name),
+                });
+                let result = client
+                    .post(format!("{api_base}/api/document/import-department"))
+                    .json(&request)
+                    .send();
                 match result {
-                    Ok(_) => {
-                        app.last_status = format!("Граф импортирован из {}", path.display());
-                        app.try_connect_once();
+                    Ok(resp) => {
+                        let status = resp.status();
+                        let body: serde_json::Value = resp.json().unwrap_or_default();
+                        let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+                        if ok {
+                            let dept = body
+                                .get("department")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_owned();
+                            app.last_status = if dept.is_empty() {
+                                format!("Граф импортирован как отдел из {}", path.display())
+                            } else {
+                                format!(
+                                    "Граф импортирован как отдел «{dept}» из {}",
+                                    path.display()
+                                )
+                            };
+                            app.try_connect_once();
+                        } else {
+                            let error = body
+                                .get("error")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("неизвестная ошибка");
+                            app.last_status =
+                                format!("Ошибка импорта графа: {error} (HTTP {status})");
+                        }
                     }
                     Err(e) => {
                         app.last_status = format!("Ошибка импорта графа: {e}");
