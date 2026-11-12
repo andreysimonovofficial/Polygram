@@ -26,6 +26,11 @@ pub const ROW_GAP_PX: f32 = 4.0;
 /// Радиус точки сцепления строки показателя (круг, не символ).
 pub const CONNECTION_DOT_RADIUS: f32 = 4.0;
 
+/// Отступ от края строки показателя до символа сцепления (▶/◀).
+const SYMBOL_X_PAD: f32 = 8.0;
+/// Отступ от края строки показателя до текста (имя / значение + единицы).
+const TEXT_X_PAD: f32 = 20.0;
+
 /// Минимальная высота строки показателя (пиксели при zoom = 1).
 pub const MIN_ROW_H_PX: f32 = 27.0;
 
@@ -96,21 +101,20 @@ fn paint_metric_row(
     // Символы сцепления слева и справа внутри тела строки.
     // Запрос: слева ▶, справа ◀. Выход: слева ◀, справа ▶.
     let dot_color = super::status_dot_color(status, dir, theme);
-    let dot_r = CONNECTION_DOT_RADIUS * zoom;
     let symbol_font = egui::FontId::new((theme.text_size * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
     let (left_sym, right_sym) = match dir {
         Direction::Request => ("▶", "◀"),
         Direction::Output => ("◀", "▶"),
     };
     painter.text(
-        Pos2::new(rect.min.x + dot_r, cy),
+        Pos2::new(rect.min.x + SYMBOL_X_PAD * zoom, cy),
         egui::Align2::LEFT_CENTER,
         left_sym,
         symbol_font.clone(),
         dot_color,
     );
     painter.text(
-        Pos2::new(rect.max.x - dot_r, cy),
+        Pos2::new(rect.max.x - SYMBOL_X_PAD * zoom, cy),
         egui::Align2::RIGHT_CENTER,
         right_sym,
         symbol_font,
@@ -120,7 +124,7 @@ fn paint_metric_row(
     // Имя записи
     let name_color = if is_hovered { theme.text } else { theme.text_muted };
     painter.text(
-        Pos2::new(rect.min.x + 16.0 * zoom, cy),
+        Pos2::new(rect.min.x + TEXT_X_PAD * zoom, cy),
         egui::Align2::LEFT_CENTER,
         &entry.name,
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
@@ -136,7 +140,7 @@ fn paint_metric_row(
         };
         let icon_text = if b.ok { "🌐" } else { "⚠" };
         let name_w_est = entry.name.len() as f32 * 7.0 * zoom;
-        let icon_x = rect.min.x + 16.0 * zoom + name_w_est + 8.0 * zoom;
+        let icon_x = rect.min.x + TEXT_X_PAD * zoom + name_w_est + 8.0 * zoom;
         painter.text(
             Pos2::new(icon_x, cy),
             egui::Align2::LEFT_CENTER,
@@ -177,7 +181,7 @@ fn paint_metric_row(
     };
     let value_text = format!("{:.0}{}", displayed_value, unit);
     painter.text(
-        Pos2::new(rect.max.x - 8.0 * zoom, cy),
+        Pos2::new(rect.max.x - TEXT_X_PAD * zoom, cy),
         egui::Align2::RIGHT_CENTER,
         &value_text,
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
