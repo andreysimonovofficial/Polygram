@@ -9,4 +9,4 @@ cargo run --release -p polygram-cli -- bench 10000 # замер скорости
 cargo run --release -p polygram-cli -- run examples/demo.jsonl
 ```
 
-Начни с `START_HERE.md`, затем `docs/VISION.md` и `docs/ARCHITECTURE.md`.
+Начни с `docs/VISION.md` и `docs/ARCHITECTURE.md`.
