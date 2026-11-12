@@ -17,9 +17,6 @@ or offering a PaaS, IaaS, SaaS, or other cloud-based service, or otherwise makin
 functionality of the Software available to users or customers for a fee or as part of a
 commercial offering.
 
-"Change Date" means the date four (4) years after the first public release of the
-Software under this license.
-
 "You" or "Your" means the individual or legal entity exercising rights under this
 license.
 
@@ -52,9 +49,8 @@ c) remove, obscure, or alter any copyright, license, trademark, or attribution n
 d) use the Software, or any part of it, to build a competing product or service that
    offers the same or substantially similar functionality as Polygram.
 
-These limitations apply until the Change Date. On and after the Change Date, the
-limitations in this Section 3 expire and the Software becomes fully open source under
-the terms of Section 6.
+These limitations remain in effect indefinitely until the Licensor explicitly
+re-licenses the Software under different terms.
 
 4. Additional Commercial License Grants
 
@@ -81,12 +77,15 @@ In no event shall the Licensor be liable for any claim, damages, or other liabil
 whether in an action of contract, tort, or otherwise, arising from, out of, or in
 connection with the Software or the use or other dealings in the Software.
 
-6. Change Date and Open Source Transition
+6. License Duration and Future Re-Licensing
 
-On and after the Change Date, this license automatically converts to the Apache License,
-Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0), and the Software may be used,
-modified, and distributed freely under those terms, including for Production Use and
-commercial purposes, without further permission from the Licensor.
+The limitations in Section 3 remain in effect indefinitely, until the Licensor
+explicitly decides to re-license the Software under a different license (such as
+Apache License, Version 2.0 or a similar open source license) and publishes that
+decision in writing. There is no automatic expiration of the commercial
+restrictions, and no automatic transition to another license. Commercial
+monetization of the Software remains reserved to the Licensor until such time as
+the Licensor chooses to change the license terms.
 
 7. Miscellaneous
 
