@@ -99,10 +99,28 @@ pub fn handle_drag(
                         match o.kind {
                             NodeKind::Department => {
                                 over = Some(under_id.to_owned());
+                                // Призрак — у ближайшего к курсу ребёнка отдела, ограниченный рамкой отдела.
+                                let cursor_cell = (
+                                    ((cur.x / zoom - offset.x) / app.canvas.cell_size).round() as i32,
+                                    ((cur.y / zoom - offset.y) / app.canvas.cell_size).round() as i32,
+                                );
+                                let nearest_child = geometry.objects.iter()
+                                    .filter(|c| c.parent.as_deref() == Some(under_id) && c.id.as_str() != object_id.as_str())
+                                    .min_by_key(|c| {
+                                        let dx = c.rect.x + c.rect.w / 2 - cursor_cell.0;
+                                        let dy = c.rect.y + c.rect.h / 2 - cursor_cell.1;
+                                        dx.abs() + dy.abs()
+                                    });
                                 if let Some((w, h)) = dragged_size {
-                                    ghost = polygram_canvas::find_ghost_cell_in_dept(
-                                        &geometry, &under_id, w, h, 2, object_id,
-                                    );
+                                    if let Some(child) = nearest_child {
+                                        ghost = polygram_canvas::find_ghost_cell(
+                                            &geometry, child, w, h, 2, object_id, Some(under_id),
+                                        );
+                                    } else {
+                                        ghost = polygram_canvas::find_ghost_cell_in_dept(
+                                            &geometry, under_id, w, h, 2, object_id,
+                                        );
+                                    }
                                 }
                             }
                             NodeKind::Process => {
@@ -113,19 +131,17 @@ pub fn handle_drag(
                                 });
                                 if let Some(dept_id) = in_dept {
                                     over = Some(dept_id.clone());
+                                    // Призрак — у процесса под курсором, внутри его отдела.
                                     if let Some((w, h)) = dragged_size {
-                                        ghost = polygram_canvas::find_ghost_cell_in_dept(
-                                            &geometry, &dept_id, w, h, 2, object_id,
+                                        ghost = polygram_canvas::find_ghost_cell(
+                                            &geometry, o, w, h, 2, object_id, Some(&dept_id),
                                         );
                                     }
                                 } else {
                                     over = Some(under_id.to_owned());
                                     if let Some((w, h)) = dragged_size {
-                                        let obj_b = geometry.objects.iter()
-                                            .find(|o| o.id == under_id)
-                                            .expect("under object must exist");
                                         ghost = polygram_canvas::find_ghost_cell(
-                                            &geometry, obj_b, w, h, 2, object_id, None,
+                                            &geometry, o, w, h, 2, object_id, None,
                                         );
                                     }
                                 }
