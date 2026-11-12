@@ -22,6 +22,11 @@ pub fn geometry_with_predictions(
     // отдел и все родительские отделы, охватывая копию ещё до события Drop.
     // Реальная иерархия меняется только на сервере по команде SetObjectParent при Drop.
     let dragged_id = drag.drag_object.as_deref().unwrap_or("");
+    // Рамка отдела должна обхватывать только призрачную копию (клетку, куда
+    // объект встанет при дропе), а не карточку под курсором. Когда мы не
+    // нависаем над отделом, исключаем перетаскиваемый объект из расчёта рамки,
+    // чтобы отдел не растягивался за собой при выводе из отдела.
+    let exclude_for_fit = drag.drag_over.is_none().then_some(dragged_id);
     let mut temp_reparent: Option<(String, Option<String>)> = None;
     if let Some(dept_id) = &drag.drag_over {
         if geometry.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
@@ -35,21 +40,13 @@ pub fn geometry_with_predictions(
             }
         }
     }
-    // Отдел не имеет фиксированного размера: его рамка всегда обтягивает
-    // прямых детей (с отступом под шапку и по бокам). Пересобираем перед
-    // каждой отрисовкой, чтобы рамка актуально следовала за содержимым.
-    fit_departments_to_children(&mut geometry);
+    fit_departments_to_children(&mut geometry, exclude_for_fit.as_deref());
     // Вернуть родителя перетаскиваемого объекта: реальная иерархия меняется
     // только на сервере по команде SetObjectParent при Drop.
     if let Some((id, parent)) = temp_reparent {
         if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == id) {
             obj.parent = parent;
         }
-    }
-    // Растянуть отдел под перетаскиваемый объект «на лету» (страховка
-    // во время активного перетаскивания, до подтверждения сервера).
-    if let Some(dept_id) = &drag.drag_department {
-        stretch_department_for_drag(&mut geometry, dept_id);
     }
     geometry
 }
@@ -59,10 +56,15 @@ pub fn geometry_with_predictions(
 /// Повторный обход нужен, чтобы вложенные отделы уже имели актуальный размер,
 /// когда считается родительский отдел. Пустой отдел сохраняет текущий размер
 /// (минимальное место под первого ребёнка).
-pub fn fit_departments_to_children(geometry: &mut Geometry) {
+/// `exclude_id` — объект, который не учитывается при построении рамки отделов
+/// (перетаскиваемая карточка, чтобы отдел не «захватывал» её на лету).
+pub fn fit_departments_to_children(geometry: &mut Geometry, exclude_id: Option<&str>) {
     use polygram_core::layout::Rect;
     let mut children: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
     for (i, o) in geometry.objects.iter().enumerate() {
+        if exclude_id.is_some_and(|e| e == o.id) {
+            continue;
+        }
         if let Some(p) = &o.parent {
             children.entry(p.clone()).or_default().push(i);
         }

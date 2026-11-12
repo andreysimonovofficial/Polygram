@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{department_at, object_at};
+use polygram_canvas::object_at;
 use polygram_core::geometry::Geometry;
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
@@ -55,11 +55,6 @@ pub fn handle_drag(
                     app.drag.drag_object = Some(object_id.to_owned());
                     app.drag.drag_start_screen = Some(pos);
                     app.drag.drag_start_cell = Some((o.rect.x, o.rect.y));
-                    if o.kind != NodeKind::Department {
-                        app.drag.drag_department =
-                            department_at(geometry, pos, app.canvas.camera.offset, app.canvas.camera.zoom, app.canvas.cell_size)
-                                .map(|s| s.to_owned());
-                    }
                 }
             } else {
                 app.drag.selection_box_start = Some(pos);
@@ -92,21 +87,47 @@ pub fn handle_drag(
                         o.id != *object_id && o.rect.overlaps(&pr)
                     }).map(|o| (o.id.clone(), o.kind))
                 });
-                let (ghost, over) = match overlap_obj {
-                    Some((dept_id, NodeKind::Department)) => {
-                        let (w, h) = dragged_size.expect("dragged_size must be Some");
-                        let g = polygram_canvas::find_ghost_cell_in_dept(&geometry, &dept_id, w, h, 2, object_id);
-                        (g, Some(dept_id))
+                // Определяем цель перетаскивания: отдел (прямой или через вложенный процесс),
+                // отдельный объект (корень) или пустое место. При наведении на процесс,
+                // который состоит в отделе, целью становится отдел — при дропе объект
+                // репарентится в этот отдел и встаёт на свободную клетку внутри него.
+                let mut over: Option<String> = None;
+                let mut ghost: Option<(i32, i32)> = None;
+                if let Some((overlap_id, overlap_kind)) = overlap_obj {
+                    let (w, h) = dragged_size.expect("dragged_size must be Some");
+                    match overlap_kind {
+                        NodeKind::Department => {
+                            over = Some(overlap_id.clone());
+                            ghost = polygram_canvas::find_ghost_cell_in_dept(
+                                &geometry, &overlap_id, w, h, 2, object_id,
+                            );
+                        }
+                        NodeKind::Process => {
+                            let in_dept = geometry.objects.iter()
+                                .find(|o| o.id == overlap_id)
+                                .and_then(|o| o.parent.clone())
+                                .filter(|p| {
+                                    geometry.objects.iter().any(|oo| {
+                                        oo.id == *p && oo.kind == NodeKind::Department
+                                    })
+                                });
+                            if let Some(dept_id) = in_dept {
+                                over = Some(dept_id.clone());
+                                ghost = polygram_canvas::find_ghost_cell_in_dept(
+                                    &geometry, &dept_id, w, h, 2, object_id,
+                                );
+                            } else {
+                                over = Some(overlap_id.clone());
+                                let obj_b = geometry.objects.iter().find(|o| o.id == overlap_id)
+                                    .expect("overlap object must exist");
+                            ghost = polygram_canvas::find_ghost_cell(
+                                &geometry, obj_b, w, h, 2, object_id, None,
+                            );
+                            }
+                        }
+                        _ => {}
                     }
-                    Some((id, _)) => {
-                        let obj_b = geometry.objects.iter().find(|o| o.id == id)
-                            .expect("overlap object must exist");
-                        let (w, h) = dragged_size.expect("dragged_size must be Some");
-                        let g = polygram_canvas::find_ghost_cell(&geometry, obj_b, w, h, 2, object_id, None);
-                        (g, Some(id))
-                    }
-                    None => (None, None),
-                };
+                }
                 let can_move = ghost.is_some() || over.is_none();
                 if can_move {
                     let settle = ghost.unwrap_or(target);
@@ -167,7 +188,6 @@ pub fn handle_drag(
                     ]);
                     app.selected_objects = vec![object_id.clone()];
                 } else {
-                    app.drag.drag_department = None;
                     app.drag.drag_over = None;
                     if pos_changed {
                         app.drag.pending_move =
@@ -181,7 +201,6 @@ pub fn handle_drag(
             } else {
                 app.drag.predicted_positions.remove(&object_id);
             }
-            app.drag.drag_department = None;
             app.drag.drag_ghost = None;
             app.drag.drag_over = None;
         }

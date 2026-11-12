@@ -43,7 +43,6 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
-                app.drag.drag_department = None;
                 app.dialogs.edit_target = Some(object_id.to_owned());
                 app.dialogs.edit_input = obj_name;
             }
@@ -294,7 +293,6 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
-                app.drag.drag_department = None;
                 break;
             }
         }
@@ -311,7 +309,6 @@ pub fn handle_canvas_interaction(
                 app.drag.drag_object = None;
                 app.drag.drag_start_screen = None;
                 app.drag.drag_start_cell = None;
-                app.drag.drag_department = None;
                 break;
             }
         }
