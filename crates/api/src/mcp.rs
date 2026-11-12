@@ -150,12 +150,12 @@ impl McpServer {
                 },
                 {
                     "name": "add_object",
-                    "description": "Создать объект на холсте (процесс, отдел или портал). Имя пишите латиницей.",
+                    "description": "Создать объект на холсте (процесс, отдел). Имя пишите латиницей.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "name": { "type": "string", "description": "Имя объекта (латиницей), например \"Claude\"" },
-                            "kind": { "type": "string", "description": "Тип: process (процесс), department (отдел), portal (портал). По умолчанию process." },
+                            "kind": { "type": "string", "description": "Тип: process (процесс), department (отдел). По умолчанию process." },
                             "id": { "type": "string", "description": "Идентификатор объекта. Если не указан, сгенерируется автоматически." },
                             "at": { "type": "array", "description": "Позиция [x, y]. Если не указана, подбирается автоматически." },
                             "parent": { "type": "string", "description": "ID родительского отдела. null — корень." }
@@ -237,7 +237,7 @@ impl McpServer {
         match name {
             "get_commands" => mcp_tool_result(&serde_json::to_string(&json!({
                 "commands": [
-                    {"cmd": "add_object", "example": "{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}", "description": "Создать объект (процесс/отдел/портал)"},
+                    {"cmd": "add_object", "example": "{\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}", "description": "Создать объект (процесс/отдел)"},
                     {"cmd": "rename_object", "example": "{\"cmd\":\"rename_object\",\"object\":\"claude\",\"name\":\"Новое имя\"}", "description": "Переименовать объект"},
                     {"cmd": "remove_object", "example": "{\"cmd\":\"remove_object\",\"object\":\"claude\"}", "description": "Удалить объект"},
                     {"cmd": "move_object", "example": "{\"cmd\":\"move_object\",\"object\":\"claude\",\"at\":[100,200]}", "description": "Переместить объект"},
@@ -259,7 +259,6 @@ impl McpServer {
                     name,
                     kind: match kind {
                         "department" => NodeKind::Department,
-                        "portal" => NodeKind::Portal,
                         _ => NodeKind::Process,
                     },
                     at: args.get("at").and_then(|v| v.as_array()).map(|arr| {

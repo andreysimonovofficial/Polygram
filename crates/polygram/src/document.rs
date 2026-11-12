@@ -146,7 +146,6 @@ pub fn import_department(app: &mut PolygramApp) {
                             let parent = o.get("parent").and_then(|v| v.as_str()).map(|s| s.to_string());
                             let kind_enum = match kind.as_str() {
                                 "department" => NodeKind::Department,
-                                "portal" => NodeKind::Portal,
                                 _ => NodeKind::Process,
                             };
                             cmds.push(Command::AddObject {

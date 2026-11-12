@@ -1,7 +1,7 @@
-//! Генератор файла стресс-теста `examples/stress_1000.pg`.
-//! 1000 объектов (отделы / процессы / порталы), показатели всех типов и статусов,
-//! иерархия отделов и связи между объектами.
-//! Запуск: cargo run -p polygram --example gen_stress
+//! Р“РµРЅРµСЂР°С‚РѕСЂ С„Р°Р№Р»Р° СЃС‚СЂРµСЃСЃ-С‚РµСЃС‚Р° `examples/stress_1000.pg`.
+//! 1000 РѕР±СЉРµРєС‚РѕРІ (РѕС‚РґРµР»С‹ / РїСЂРѕС†РµСЃСЃС‹ / РїРѕСЂС‚Р°Р»С‹), РїРѕРєР°Р·Р°С‚РµР»Рё РІСЃРµС… С‚РёРїРѕРІ Рё СЃС‚Р°С‚СѓСЃРѕРІ,
+//! РёРµСЂР°СЂС…РёСЏ РѕС‚РґРµР»РѕРІ Рё СЃРІСЏР·Рё РјРµР¶РґСѓ РѕР±СЉРµРєС‚Р°РјРё.
+//! Р—Р°РїСѓСЃРє: cargo run -p polygram --example gen_stress
 
 use polygram_core::{
     document::{Document, DocEdge, DocObject, DocObjectMetric, DocMetricDef},
@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::fs;
 
-/// Простой xorshift64 PRNG (без внешней зависимости rand).
+/// РџСЂРѕСЃС‚РѕР№ xorshift64 PRNG (Р±РµР· РІРЅРµС€РЅРµР№ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё rand).
 struct Rng(u64);
 impl Rng {
     fn new(seed: u64) -> Self {
@@ -108,8 +108,8 @@ fn main() {
         });
     };
 
-    // ---------- Иерархический поддерево (зарезервированный регион x >= 2200) ----------
-    // dep000/dep001/dep002 — отделы #0..#2; proc000/proc001/proc002 — процессы #0..#2.
+    // ---------- РРµСЂР°СЂС…РёС‡РµСЃРєРёР№ РїРѕРґРґРµСЂРµРІРѕ (Р·Р°СЂРµР·РµСЂРІРёСЂРѕРІР°РЅРЅС‹Р№ СЂРµРіРёРѕРЅ x >= 2200) ----------
+    // dep000/dep001/dep002 вЂ” РѕС‚РґРµР»С‹ #0..#2; proc000/proc001/proc002 вЂ” РїСЂРѕС†РµСЃСЃС‹ #0..#2.
     let dmet = |v: f64, r: f64| {
         (
             vec![entry("i1", "dem", Direction::Request, nul(), num(r))],
@@ -124,31 +124,31 @@ fn main() {
     };
 
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep000", "Центральный офис", NodeKind::Department, [2200, 0], None, reqs, outs);
+    add(&mut objects, "dep000", "Р¦РµРЅС‚СЂР°Р»СЊРЅС‹Р№ РѕС„РёСЃ", NodeKind::Department, [2200, 0], None, reqs, outs);
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep001", "Цех А", NodeKind::Department, [2200, 40], Some("dep000"), reqs, outs);
+    add(&mut objects, "dep001", "Р¦РµС… Рђ", NodeKind::Department, [2200, 40], Some("dep000"), reqs, outs);
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep002", "Цех Б", NodeKind::Department, [2200, 80], Some("dep000"), reqs, outs);
+    add(&mut objects, "dep002", "Р¦РµС… Р‘", NodeKind::Department, [2200, 80], Some("dep000"), reqs, outs);
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc000", "Процесс 000", NodeKind::Process, [2240, 0], Some("dep000"), reqs, outs);
+    add(&mut objects, "proc000", "РџСЂРѕС†РµСЃСЃ 000", NodeKind::Process, [2240, 0], Some("dep000"), reqs, outs);
     proc_index.insert("proc000".to_owned(), objects.len() - 1);
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc001", "Процесс 001", NodeKind::Process, [2240, 40], Some("dep001"), reqs, outs);
+    add(&mut objects, "proc001", "РџСЂРѕС†РµСЃСЃ 001", NodeKind::Process, [2240, 40], Some("dep001"), reqs, outs);
     proc_index.insert("proc001".to_owned(), objects.len() - 1);
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc002", "Процесс 002", NodeKind::Process, [2240, 80], Some("dep002"), reqs, outs);
+    add(&mut objects, "proc002", "РџСЂРѕС†РµСЃСЃ 002", NodeKind::Process, [2240, 80], Some("dep002"), reqs, outs);
     proc_index.insert("proc002".to_owned(), objects.len() - 1);
 
-    // ---------- Остальные отделы (147) на сетке ----------
+    // ---------- РћСЃС‚Р°Р»СЊРЅС‹Рµ РѕС‚РґРµР»С‹ (147) РЅР° СЃРµС‚РєРµ ----------
     for i in 3..150 {
         let id = format!("dep{:03}", i);
         let v = rng.range(40.0, 160.0);
         let r = rng.range(40.0, 160.0);
         let (reqs, outs) = dmet(v, r);
-        add(&mut objects, &id, &format!("Отдел {:03}", i), NodeKind::Department, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
+        add(&mut objects, &id, &format!("РћС‚РґРµР» {:03}", i), NodeKind::Department, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
     }
 
-    // ---------- Процессы (747) на сетке ----------
+    // ---------- РџСЂРѕС†РµСЃСЃС‹ (747) РЅР° СЃРµС‚РєРµ ----------
     for i in 3..750 {
         let id = format!("proc{:03}", i);
         let mut v = rng.range(40.0, 160.0);
@@ -158,32 +158,13 @@ fn main() {
             r = 100.0;
         }
         let (reqs, outs) = pmet(v, r);
-        add(&mut objects, &id, &format!("Процесс {:03}", i), NodeKind::Process, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
+        add(&mut objects, &id, &format!("РџСЂРѕС†РµСЃСЃ {:03}", i), NodeKind::Process, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
         proc_index.insert(id, objects.len() - 1);
     }
 
-    // ---------- Порталы (100) на сетке ----------
-    for j in 0..100 {
-        let id = format!("port{:03}", j);
-        let at = grid_pos(&mut grid_idx, grid_pitch, grid_cols);
-        let entry = match j % 10 {
-            0 => entry("m1", "bin", Direction::Output, bin(false), nul()),   // Invalid
-            1 => entry("m1", "bin", Direction::Output, bin(true), nul()),    // Ok
-            2 => entry("m1", "dl", Direction::Output, dl("2026-10-01T00:00:00Z"), nul()), // Deficit (просрочено)
-            3 => entry("m1", "dl", Direction::Output, dl("2026-11-12T23:00:00Z"), nul()), // Warning (<1 день)
-            4 => entry("m1", "dl", Direction::Output, dl("2026-12-31T23:59:59Z"), nul()), // Ok
-            5 => entry("m1", "dt", Direction::Output, nul(), nul()),         // Unknown
-            6 => entry("m1", "dt", Direction::Output, dt("2026-11-12T00:00:00Z"), nul()), // Ok
-            7 => entry("m1", "txt", Direction::Output, txt("заметка"), nul()), // Unknown (Text)
-            8 => entry("m1", "dur", Direction::Output, MetricValue::Duration(3600000), nul()), // Unconnected (Duration)
-            _ => entry("m1", "pct", Direction::Output, pct(75.0), nul()),    // Unconnected (Percentage)
-        };
-        add(&mut objects, &id, &format!("Портал {:03}", j), NodeKind::Portal, at, None, vec![], vec![entry]);
-    }
-
-    // ---------- Связи ----------
+    // ---------- РЎРІСЏР·Рё ----------
     let mut edges: Vec<DocEdge> = Vec::new();
-    // Кольцевая цепь процессов: proc[i].o1 -> proc[(i+1)%750].i1 (через одно => ~75% связано)
+    // РљРѕР»СЊС†РµРІР°СЏ С†РµРїСЊ РїСЂРѕС†РµСЃСЃРѕРІ: proc[i].o1 -> proc[(i+1)%750].i1 (С‡РµСЂРµР· РѕРґРЅРѕ => ~75% СЃРІСЏР·Р°РЅРѕ)
     for i in 0..750 {
         if i % 4 == 0 {
             continue;
@@ -198,7 +179,7 @@ fn main() {
             throughput: 100.0,
         });
     }
-    // Отделы -> свободные входы процессов (proc[i].i1 без кольцевой связи, i%4==1)
+    // РћС‚РґРµР»С‹ -> СЃРІРѕР±РѕРґРЅС‹Рµ РІС…РѕРґС‹ РїСЂРѕС†РµСЃСЃРѕРІ (proc[i].i1 Р±РµР· РєРѕР»СЊС†РµРІРѕР№ СЃРІСЏР·Рё, i%4==1)
     for k in 0..38 {
         let from = format!("dep{:03}", k);
         let to = format!("proc{:03}", 4 * k + 1);
@@ -210,7 +191,7 @@ fn main() {
             throughput: 100.0,
         });
     }
-    // Связь внутри отдела: proc000.o1 -> proc001.i1 (кольцевая связь proc000->proc001 пропущена, т.к. 0%4==0)
+    // РЎРІСЏР·СЊ РІРЅСѓС‚СЂРё РѕС‚РґРµР»Р°: proc000.o1 -> proc001.i1 (РєРѕР»СЊС†РµРІР°СЏ СЃРІСЏР·СЊ proc000->proc001 РїСЂРѕРїСѓС‰РµРЅР°, С‚.Рє. 0%4==0)
     edges.push(DocEdge {
         from_object: "proc000".to_owned(),
         from_entry: "o1".to_owned(),
@@ -219,16 +200,16 @@ fn main() {
         throughput: 100.0,
     });
 
-    // ---------- Явные случаи Deficit / Surplus / Ok ----------
-    // Выход proc[i].o1 и связанный с ним вход proc[(i+1)%750].i1 (кроме i%4==0).
+    // ---------- РЇРІРЅС‹Рµ СЃР»СѓС‡Р°Рё Deficit / Surplus / Ok ----------
+    // Р’С‹С…РѕРґ proc[i].o1 Рё СЃРІСЏР·Р°РЅРЅС‹Р№ СЃ РЅРёРј РІС…РѕРґ proc[(i+1)%750].i1 (РєСЂРѕРјРµ i%4==0).
     for i in 0..750 {
         if i % 4 == 0 {
             continue;
         }
         let val = match i % 60 {
-            0 => 10.0,   // Deficit: спрос > значение
-            1 => 200.0,  // Surplus: значение > спрос
-            2 => 100.0,  // Ok: сбалансировано
+            0 => 10.0,   // Deficit: СЃРїСЂРѕСЃ > Р·РЅР°С‡РµРЅРёРµ
+            1 => 200.0,  // Surplus: Р·РЅР°С‡РµРЅРёРµ > СЃРїСЂРѕСЃ
+            2 => 100.0,  // Ok: СЃР±Р°Р»Р°РЅСЃРёСЂРѕРІР°РЅРѕ
             _ => continue,
         };
         let from_out = objects
@@ -262,20 +243,20 @@ fn main() {
     }
 
     let metric_defs = vec![
-        DocMetricDef { id: "num".to_owned(), name: "Выработка".to_owned(), kind: MetricKind::Number, unit: "шт.".to_owned(), api: None },
-        DocMetricDef { id: "dem".to_owned(), name: "Потребность".to_owned(), kind: MetricKind::Number, unit: "шт.".to_owned(), api: None },
-        DocMetricDef { id: "pct".to_owned(), name: "Загрузка".to_owned(), kind: MetricKind::Percentage, unit: "%".to_owned(), api: None },
-        DocMetricDef { id: "bin".to_owned(), name: "Готовность".to_owned(), kind: MetricKind::Binary, unit: "".to_owned(), api: None },
-        DocMetricDef { id: "mon".to_owned(), name: "Бюджет".to_owned(), kind: MetricKind::Money, unit: "₽".to_owned(), api: None },
-        DocMetricDef { id: "dl".to_owned(), name: "Срок".to_owned(), kind: MetricKind::Deadline, unit: "дд.мм.гггг чч:мм".to_owned(), api: None },
-        DocMetricDef { id: "dt".to_owned(), name: "Дата".to_owned(), kind: MetricKind::Date, unit: "дд.мм.гггг".to_owned(), api: None },
-        DocMetricDef { id: "txt".to_owned(), name: "Примечание".to_owned(), kind: MetricKind::Text, unit: "".to_owned(), api: None },
-        DocMetricDef { id: "dur".to_owned(), name: "Длительность".to_owned(), kind: MetricKind::Duration, unit: "чч:мм".to_owned(), api: None },
+        DocMetricDef { id: "num".to_owned(), name: "Р’С‹СЂР°Р±РѕС‚РєР°".to_owned(), kind: MetricKind::Number, unit: "С€С‚.".to_owned(), api: None },
+        DocMetricDef { id: "dem".to_owned(), name: "РџРѕС‚СЂРµР±РЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Number, unit: "С€С‚.".to_owned(), api: None },
+        DocMetricDef { id: "pct".to_owned(), name: "Р—Р°РіСЂСѓР·РєР°".to_owned(), kind: MetricKind::Percentage, unit: "%".to_owned(), api: None },
+        DocMetricDef { id: "bin".to_owned(), name: "Р“РѕС‚РѕРІРЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Binary, unit: "".to_owned(), api: None },
+        DocMetricDef { id: "mon".to_owned(), name: "Р‘СЋРґР¶РµС‚".to_owned(), kind: MetricKind::Money, unit: "в‚Ѕ".to_owned(), api: None },
+        DocMetricDef { id: "dl".to_owned(), name: "РЎСЂРѕРє".to_owned(), kind: MetricKind::Deadline, unit: "РґРґ.РјРј.РіРіРіРі С‡С‡:РјРј".to_owned(), api: None },
+        DocMetricDef { id: "dt".to_owned(), name: "Р”Р°С‚Р°".to_owned(), kind: MetricKind::Date, unit: "РґРґ.РјРј.РіРіРіРі".to_owned(), api: None },
+        DocMetricDef { id: "txt".to_owned(), name: "РџСЂРёРјРµС‡Р°РЅРёРµ".to_owned(), kind: MetricKind::Text, unit: "".to_owned(), api: None },
+        DocMetricDef { id: "dur".to_owned(), name: "Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Duration, unit: "С‡С‡:РјРј".to_owned(), api: None },
     ];
 
     let doc = Document {
         format: polygram_core::document::FORMAT.to_owned(),
-        name: "Сtresstest 1000 объектов".to_owned(),
+        name: "РЎtresstest 1000 РѕР±СЉРµРєС‚РѕРІ".to_owned(),
         metric_defs,
         objects,
         edges,

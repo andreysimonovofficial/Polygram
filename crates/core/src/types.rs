@@ -135,7 +135,7 @@ pub enum Direction {
     Output,
 }
 
-/// Вид объекта: Процесс, Отдел или Портал.
+/// Вид объекта: Процесс или Отдел.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -143,7 +143,6 @@ pub enum NodeKind {
     #[default]
     Process,
     Department,
-    Portal,
 }
 
 impl NodeKind {
@@ -151,7 +150,6 @@ impl NodeKind {
         match self {
             Self::Process => "Процесс",
             Self::Department => "Отдел",
-            Self::Portal => "Портал",
         }
     }
 }
