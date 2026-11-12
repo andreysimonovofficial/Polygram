@@ -1,10 +1,10 @@
+use crate::app::drag::DragInteractionState;
 use crate::app::PolygramApp;
 use polygram_canvas::{
-    department_at, object_at, find_ghost_cell, find_ghost_cell_in_dept,
     MetricBinding, paint_dashed_rect, paint_drag_preview,
 };
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
-use polygram_core::{Command, Published};
+use polygram_core::{Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
 use std::collections::HashMap;
 
@@ -40,9 +40,7 @@ pub fn handle_canvas_interaction(
                     .find(|o| o.id == object_id)
                     .map(|o| o.name.clone())
                     .unwrap_or_else(|| object_id.to_string());
-                app.drag.drag_object = None;
-                app.drag.drag_start_screen = None;
-                app.drag.drag_start_cell = None;
+                app.drag.state = DragInteractionState::Idle;
                 app.dialogs.edit_target = Some(object_id.to_owned());
                 app.dialogs.edit_input = obj_name;
             }
@@ -94,11 +92,11 @@ pub fn handle_canvas_interaction(
     app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.show_grid, &bindings);
 
     // Перетаскивание показателя: графическая копия строки у курсора и подсветка целевого объекта (рисуется поверх холста).
-    if app.drag.drag_metric.is_some()
+    if app.drag.drag_metric().is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
         if let Some(cur) = canvas_response.interact_pointer_pos() {
-            if let Some((source_object, source_dir, entry)) = &app.drag.drag_metric {
+            if let Some((source_object, source_dir, entry)) = &app.drag.drag_metric() {
                 let painter = ui.painter();
                 let preview_w = 220.0 * app.canvas.camera.zoom;
                 let preview_h = 27.0 * app.canvas.camera.zoom;
@@ -162,11 +160,11 @@ pub fn handle_canvas_interaction(
 
     // Перетаскивание объекта: подсветить отдел под курсором (как процесс подсвечивается,
     // когда в него перетаскивают показатель).
-    if app.drag.drag_object.is_some()
+    if app.drag.drag_object().is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
         if let Some(cur) = canvas_response.interact_pointer_pos() {
-            let dragged_id = app.drag.drag_object.as_deref().unwrap_or("");
+            let dragged_id = app.drag.drag_object().map(|s| s.to_string()).unwrap_or_default();
             let cell_px = app.canvas.cell_px();
             let offset = app.canvas.camera.offset;
             let zoom = app.canvas.camera.zoom;
@@ -198,7 +196,7 @@ pub fn handle_canvas_interaction(
     {
         if let Some((gx, gy)) = app.drag.drag_ghost {
             if let Some(dragged) = geometry.objects.iter().find(|o| {
-                o.id == app.drag.drag_object.as_deref().unwrap_or("")
+                o.id == app.drag.drag_object().as_deref().unwrap_or("")
             }) {
                 let cell_px = app.canvas.cell_px();
                 let offset = app.canvas.camera.offset;
@@ -217,10 +215,10 @@ pub fn handle_canvas_interaction(
     }
 
     // Selection Box: рисуем резиновый прямоугольник поверх холста.
-    if app.drag.selection_box_start.is_some()
+    if app.drag.selection_box_start().is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
-        if let (Some(start), Some(cur)) = (app.drag.selection_box_start, canvas_response.interact_pointer_pos()) {
+        if let (Some(start), Some(cur)) = (app.drag.selection_box_start(), canvas_response.interact_pointer_pos()) {
             let painter = ui.painter();
             let x = start.x.min(cur.x);
             let y = start.y.min(cur.y);
@@ -290,9 +288,7 @@ pub fn handle_canvas_interaction(
                 app.dialogs.add_metric_date_popup_open = false;
                 app.dialogs.add_metric_time = None;
                 app.dialogs.add_metric_unit = String::new();
-                app.drag.drag_object = None;
-                app.drag.drag_start_screen = None;
-                app.drag.drag_start_cell = None;
+                app.drag.state = DragInteractionState::Idle;
                 break;
             }
         }
@@ -306,9 +302,7 @@ pub fn handle_canvas_interaction(
         for (object_id, dir, rect) in &app.canvas.container_menu_hotspots {
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
                 app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
-                app.drag.drag_object = None;
-                app.drag.drag_start_screen = None;
-                app.drag.drag_start_cell = None;
+                app.drag.state = DragInteractionState::Idle;
                 break;
             }
         }

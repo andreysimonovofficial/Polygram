@@ -10,6 +10,7 @@ pub mod command;
 pub mod commands;
 pub mod commit;
 pub mod document;
+pub mod drag_domain;
 pub mod edges;
 pub mod engine;
 pub mod engine_internal;

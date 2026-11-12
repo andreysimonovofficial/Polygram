@@ -21,7 +21,7 @@ pub fn geometry_with_predictions(
     // ребёнком отдела в позиции копии, чтобы fit_departments_to_children растянул
     // отдел и все родительские отделы, охватывая копию ещё до события Drop.
     // Реальная иерархия меняется только на сервере по команде SetObjectParent при Drop.
-    let dragged_id = drag.drag_object.as_deref().unwrap_or("");
+    let dragged_id = drag.drag_object().map(|s| s.to_string()).unwrap_or_default();
     // Рамка отдела всегда обтягивает всех прямых детей, включая перетаскиваемый
     // объект — так при выводе карточки из отдела рамка тянется за ней (DoD п.3),
     // а при наведении на отдел тянется под призрачную копию.

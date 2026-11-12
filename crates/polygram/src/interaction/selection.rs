@@ -10,9 +10,9 @@ pub fn handle_click_selection(
     ctx: &egui::Context,
 ) {
     if !canvas_response.clicked()
-        || app.drag.drag_object.is_some()
-        || app.drag.drag_metric.is_some()
-        || app.drag.selection_box_start.is_some()
+        || app.drag.drag_object().is_some()
+        || app.drag.drag_metric().is_some()
+        || app.drag.selection_box_start().is_some()
     {
         return;
     }
