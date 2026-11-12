@@ -109,7 +109,8 @@ pub fn handle_drag(
                 };
                 let can_move = ghost.is_some() || over.is_none();
                 if can_move {
-                    app.drag.predicted_positions.insert(object_id.clone(), target);
+                    let settle = ghost.unwrap_or(target);
+                    app.drag.predicted_positions.insert(object_id.clone(), settle);
                 }
                 app.drag.drag_ghost = ghost;
                 app.drag.drag_over = over;
@@ -147,26 +148,17 @@ pub fn handle_drag(
             let skip_move = app.drag.drag_over.is_some() && app.drag.drag_ghost.is_none();
             if !skip_move && !target_overlaps {
                 let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
-                let dropped_on_dept = canvas_response
-                    .interact_pointer_pos()
-                    .and_then(|cur| {
-                        department_at(geometry, cur, app.canvas.camera.offset, app.canvas.camera.zoom, app.canvas.cell_size)
-                    })
-                    .map_or(false, |dept_id| dept_id != object_id);
-
-                if dropped_on_dept {
-                    let dept_id = canvas_response
-                        .interact_pointer_pos()
-                        .and_then(|cur| {
-                            department_at(geometry, cur, app.canvas.camera.offset, app.canvas.camera.zoom, app.canvas.cell_size)
-                        })
-                        .unwrap();
+                let drop_in_dept = app.drag.drag_over.as_deref().map_or(false, |dept_id| {
+                    geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department)
+                });
+                if drop_in_dept {
+                    let dept_id = app.drag.drag_over.take().expect("drop_in_dept requires drag_over");
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
                     app.apply_batch(vec![
                         Command::SetObjectParent {
                             object: object_id.clone(),
-                            parent: Some(dept_id.to_owned()),
+                            parent: Some(dept_id.clone()),
                         },
                         Command::MoveObject {
                             object: object_id.clone(),
@@ -176,6 +168,7 @@ pub fn handle_drag(
                     app.selected_objects = vec![object_id.clone()];
                 } else {
                     app.drag.drag_department = None;
+                    app.drag.drag_over = None;
                     if pos_changed {
                         app.drag.pending_move =
                             Some((object_id.clone(), app.connection.last_rev));
@@ -188,6 +181,9 @@ pub fn handle_drag(
             } else {
                 app.drag.predicted_positions.remove(&object_id);
             }
+            app.drag.drag_department = None;
+            app.drag.drag_ghost = None;
+            app.drag.drag_over = None;
         }
     }
 
