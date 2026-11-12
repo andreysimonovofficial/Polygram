@@ -150,7 +150,7 @@ pub fn handle_drag(
                         }
                     }
                 }
-                let can_move = ghost.is_some() || over.is_none();
+                let can_move = true;
                 if can_move {
                     let settle = ghost.unwrap_or(target);
                     app.drag.predicted_positions.insert(object_id.clone(), settle);

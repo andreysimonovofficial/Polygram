@@ -22,11 +22,9 @@ pub fn geometry_with_predictions(
     // отдел и все родительские отделы, охватывая копию ещё до события Drop.
     // Реальная иерархия меняется только на сервере по команде SetObjectParent при Drop.
     let dragged_id = drag.drag_object.as_deref().unwrap_or("");
-    // Рамка отдела должна обхватывать только призрачную копию (клетку, куда
-    // объект встанет при дропе), а не карточку под курсором. Когда мы не
-    // нависаем над отделом, исключаем перетаскиваемый объект из расчёта рамки,
-    // чтобы отдел не растягивался за собой при выводе из отдела.
-    let exclude_for_fit = drag.drag_over.is_none().then_some(dragged_id);
+    // Рамка отдела всегда обтягивает всех прямых детей, включая перетаскиваемый
+    // объект — так при выводе карточки из отдела рамка тянется за ней (DoD п.3),
+    // а при наведении на отдел тянется под призрачную копию.
     let mut temp_reparent: Option<(String, Option<String>)> = None;
     if let Some(dept_id) = &drag.drag_over {
         if geometry.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
@@ -40,7 +38,7 @@ pub fn geometry_with_predictions(
             }
         }
     }
-    fit_departments_to_children(&mut geometry, exclude_for_fit.as_deref());
+    fit_departments_to_children(&mut geometry, None);
     // Вернуть родителя перетаскиваемого объекта: реальная иерархия меняется
     // только на сервере по команде SetObjectParent при Drop.
     if let Some((id, parent)) = temp_reparent {
