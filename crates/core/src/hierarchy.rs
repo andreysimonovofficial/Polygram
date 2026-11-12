@@ -11,6 +11,8 @@ use crate::{
 #[derive(Clone, Debug, Default)]
 pub struct Hierarchy {
     pub(crate) objects: Vec<ObjectData>,
+    /// Дети каждого отдела, по индексу объекта. Поддерживается синхронно с `objects[*].parent`.
+    pub(crate) children: Vec<Vec<ObjectIx>>,
     pub(crate) metric_defs: Vec<MetricDefData>,
     pub(crate) object_metrics: Vec<ObjectMetricData>,
     pub(crate) edges: Vec<EdgeData>,
@@ -38,6 +40,7 @@ impl Hierarchy {
     pub fn with_capacity(objects: usize, edges: usize) -> Self {
         Self {
             objects: Vec::with_capacity(objects),
+            children: Vec::with_capacity(objects),
             metric_defs: Vec::with_capacity(objects),
             object_metrics: Vec::with_capacity(objects * 4),
             edges: Vec::with_capacity(edges),
@@ -207,12 +210,7 @@ impl Hierarchy {
     }
 
     pub fn children_of(&self, dept: ObjectIx) -> Vec<ObjectIx> {
-        self.objects
-            .iter()
-            .enumerate()
-            .filter(|(_, o)| o.alive && o.parent == Some(dept))
-            .map(|(i, _)| ObjectIx(i as u32))
-            .collect()
+        self.children[dept.idx()].clone()
     }
 
     pub fn ancestors_of(&self, object: ObjectIx) -> Vec<ObjectIx> {

@@ -168,6 +168,13 @@ pub fn handle_set_object_parent(
 
     // Обновляем поле parent в иерархии.
     engine.hier.objects[object_ix.idx()].parent = parent_ix;
+    // Переносим объект между списками детей отделов.
+    if let Some(old_p) = old_parent {
+        engine.hier.children[old_p.idx()].retain(|&c| c != object_ix);
+    }
+    if let Some(p) = parent_ix {
+        engine.hier.children[p.idx()].push(object_ix);
+    }
 
     // Если объект перемещён в отдел — растягиваем отдел под него.
     if let Some(p) = parent_ix {

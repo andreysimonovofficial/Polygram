@@ -60,14 +60,23 @@ impl Hierarchy {
             ObjectIx(slot)
         } else {
             self.objects.push(data);
+            self.children.push(Vec::new());
             ObjectIx((self.objects.len() - 1) as u32)
         };
+        if let Some(p) = parent {
+            self.children[p.idx()].push(ix);
+        }
         self.by_ext_object.insert(ext_id, ix);
         self.live_objects += 1;
         Ok(ix)
     }
 
     pub fn remove_object_slot(&mut self, ix: ObjectIx) {
+        let parent = self.objects[ix.idx()].parent;
+        if let Some(p) = parent {
+            self.children[p.idx()].retain(|&c| c != ix);
+        }
+        self.children[ix.idx()].clear();
         let o = &self.objects[ix.idx()];
         debug_assert!(o.requests.is_empty() && o.outputs.is_empty());
         self.by_ext_object.remove(&o.ext_id);

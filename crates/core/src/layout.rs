@@ -71,6 +71,8 @@ pub fn footprint_for(n_req: usize, n_out: usize) -> (u16, u16) {
 #[derive(Clone, Debug, Default)]
 struct SpatialGrid {
     buckets: HashMap<(i32, i32), Vec<u32>>,
+    /// id -> vec of (bucket, index_in_bucket) для O(1) удаления.
+    positions: HashMap<u32, Vec<((i32, i32), usize)>>,
 }
 
 fn bucket_range(r: &Rect) -> (i32, i32, i32, i32) {
@@ -85,25 +87,47 @@ fn bucket_range(r: &Rect) -> (i32, i32, i32, i32) {
 impl SpatialGrid {
     fn insert(&mut self, id: u32, r: &Rect) {
         let (bx0, by0, bx1, by1) = bucket_range(r);
+        let mut recs = Vec::with_capacity(((bx1 - bx0 + 1) * (by1 - by0 + 1)) as usize);
         for by in by0..=by1 {
             for bx in bx0..=bx1 {
-                self.buckets.entry((bx, by)).or_default().push(id);
+                let key = (bx, by);
+                let v = self.buckets.entry(key).or_default();
+                let idx = v.len();
+                v.push(id);
+                recs.push((key, idx));
             }
         }
+        self.positions.insert(id, recs);
     }
 
-    fn remove(&mut self, id: u32, r: &Rect) {
-        let (bx0, by0, bx1, by1) = bucket_range(r);
-        for by in by0..=by1 {
-            for bx in bx0..=bx1 {
-                if let Some(v) = self.buckets.get_mut(&(bx, by)) {
-                    if let Some(p) = v.iter().position(|&x| x == id) {
-                        v.swap_remove(p);
-                    }
-                    if v.is_empty() {
-                        self.buckets.remove(&(bx, by));
+    fn remove(&mut self, id: u32, _r: &Rect) {
+        let recs = match self.positions.remove(&id) {
+            Some(r) => r,
+            None => return,
+        };
+        for (key, idx) in recs {
+            let last = {
+                let v = self.buckets.get_mut(&key).expect("bucket exists");
+                let last = v.len() - 1;
+                if idx != last {
+                    let moved = v[last];
+                    if let Some(mrecs) = self.positions.get_mut(&moved) {
+                        for rec in mrecs.iter_mut() {
+                            if rec.0 == key && rec.1 == last {
+                                rec.1 = idx;
+                                break;
+                            }
+                        }
                     }
                 }
+                last
+            };
+            {
+                let v = self.buckets.get_mut(&key).expect("bucket exists");
+                v.swap_remove(idx);
+            }
+            if self.buckets.get(&key).map_or(true, |v| v.is_empty()) {
+                self.buckets.remove(&key);
             }
         }
     }
