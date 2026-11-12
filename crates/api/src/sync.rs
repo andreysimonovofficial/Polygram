@@ -396,7 +396,8 @@ impl SyncService {
     fn save_bindings(dir: &PathBuf, bindings: &[ApiBinding]) -> std::io::Result<()> {
         let path = Self::bindings_path(dir);
         let json = serde_json::to_string_pretty(bindings)?;
-        fs::write(path, json)
+        crate::atomic_save_with_backup(&path, &json)?;
+        Ok(())
     }
 
     fn ensure_default_connectors(dir: &PathBuf) -> std::io::Result<()> {
@@ -519,7 +520,8 @@ impl SyncService {
         cf.id = config.id.clone();
         let config_value = config.config.clone();
         cf.config = config_value.clone();
-        let _ = fs::write(&path, serde_json::to_string_pretty(&cf).unwrap_or_default());
+        let json = serde_json::to_string_pretty(&cf).unwrap_or_default();
+        let _ = crate::atomic_save_with_backup(&path, &json);
 
         if let Ok(mut cfgs) = self.connector_configs.lock() {
             cfgs.retain(|c| c.id != config.id);
@@ -560,7 +562,8 @@ impl SyncService {
         let mut cache = cf.cache.as_object().cloned().unwrap_or_default();
         cache.insert(cell.to_owned(), serde_json::to_value(value).unwrap_or(Value::Null));
         cf.cache = serde_json::Value::Object(cache);
-        let _ = fs::write(&path, serde_json::to_string_pretty(&cf).unwrap_or_default());
+        let json = serde_json::to_string_pretty(&cf).unwrap_or_default();
+        let _ = crate::atomic_save_with_backup(&path, &json);
         if let Ok(mut cfgs) = self.connector_configs.lock() {
             if let Some(c) = cfgs.iter_mut().find(|c| c.id == id) {
                 c.cache = cf.cache.clone();
