@@ -230,83 +230,180 @@ pub fn paint_edge(
         }
     });
 
-    // Промежуточные точки маршрута из edge.points (кванты → экран).
-    let mut route_pts: Vec<Pos2> = Vec::new();
-    for p in &edge.points {
-        route_pts.push(Pos2::new(
-            (p.x as f32 / polygram_core::layout::Q as f32 * cell_size + camera_offset.x) * camera_zoom,
-            (p.y as f32 / polygram_core::layout::Q as f32 * cell_size + camera_offset.y) * camera_zoom,
-        ));
-    }
+    // Линия строится только во фронтенде от визуального порта источника к визуальному порту приёмника.
+    // edge.points / route.rs не используются для отрисовки.
 
-    /// Привязать координату X к следующей вертикальной линии сетки (округление вверх).
-    fn snap_grid_x_right(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
-        let world = screen / zoom - offset;
+    /// Привязать экранную координату X к следующей вертикальной линии сетки (вверх/вправо).
+    fn snap_grid_x_ceil(screen_x: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+        let world = screen_x / zoom - offset;
         let cell = (world / cell_size).ceil() * cell_size;
         (cell + offset) * zoom
     }
 
-    /// Привязать координату X к предыдущей вертикальной линии сетки (округление вниз).
-    fn snap_grid_x_left(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
-        let world = screen / zoom - offset;
+    /// Привязать экранную координату X к предыдущей вертикальной линии сетки (вниз/влево).
+    fn snap_grid_x_floor(screen_x: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
+        let world = screen_x / zoom - offset;
         let cell = (world / cell_size).floor() * cell_size;
         (cell + offset) * zoom
     }
 
-    /// Привязать координату к узлу сетки (округление к ближайшему).
-    fn snap_to_grid_node(screen: f32, offset: f32, zoom: f32, cell_size: f32) -> f32 {
-        let world = screen / zoom - offset;
-        let cell = (world / cell_size).round() * cell_size;
-        (cell + offset) * zoom
+    /// Экранный прямоугольник карточки в пикселях.
+    fn obj_screen_rect(
+        o: &polygram_core::ObjectGeom,
+        cell_size: f32,
+        offset: Vec2,
+        zoom: f32,
+    ) -> egui::Rect {
+        egui::Rect::from_min_size(
+            Pos2::new(
+                (o.rect.x as f32 * cell_size + offset.x) * zoom,
+                (o.rect.y as f32 * cell_size + offset.y) * zoom,
+            ),
+            egui::Vec2::new(
+                o.rect.w as f32 * cell_size * zoom,
+                o.rect.h as f32 * cell_size * zoom,
+            ),
+        )
+    }
+
+    /// Проверяет, пересекает ли вертикальный отрезок в x от y0 до y1 тела карточек (кроме исключённых).
+    fn vertical_blocked(
+        x: f32,
+        y0: f32,
+        y1: f32,
+        geometry: &Geometry,
+        exclude_from: &str,
+        exclude_to: &str,
+        cell_size: f32,
+        offset: Vec2,
+        zoom: f32,
+    ) -> bool {
+        let (y_min, y_max) = (y0.min(y1), y0.max(y1));
+        for o in &geometry.objects {
+            if o.id == exclude_from || o.id == exclude_to {
+                continue;
+            }
+            let r = obj_screen_rect(o, cell_size, offset, zoom);
+            if x >= r.min.x && x <= r.max.x && y_max >= r.min.y && y_min <= r.max.y {
+                return true;
+            }
+        }
+        false
     }
 
     // Построить ортогональную ломаную:
-    // 1-й сегмент от порта источника — горизонталь в сторону выхода объекта
-    // (вправо если порт справа, влево если порт слева), на 1 клетку за границу,
-    // x привязан к линии сетки, y на уровне порта.
-    // Далее — ступеньками через промежуточные точки маршрута,
-    // углы привязаны к узлам сетки (и x, и y).
-    // Последний сегмент к порту приёмника — горизонталь со стороны входа объекта
-    // (слева если порт слева, справа если порт справа), на 1 клетку за границу,
-    // затем вертикально к y порта, затем горизонтально к самому порту.
-    // Все сегменты строго горизонтальные или вертикальные, без диагоналей.
+    // 1-й сегмент — горизонталь от fp к вертикальной линии сетки V1 вне карточки источника.
+    // 2-й сегмент — вертикаль по V1 от fp.y до уровня обхода (или tp.y если прямой путь свободен).
+    // 3-й сегмент — горизонталь от V1 к V2 на уровне обхода (только если V1 != V2).
+    // 4-й сегмент — вертикаль по V2 от уровня обхода до tp.y.
+    // 5-й сегмент — горизонталь от V2 к tp.
+    // Все вертикальные линии привязаны к сетке. Первый и последний сегменты строго горизонтальные.
     let mut pts: Vec<Pos2> = Vec::new();
     if let (Some((fp, from_exits_right)), Some((tp, to_enters_left))) = (from_port_side, to_port_side) {
         pts.push(fp);
 
-        // Первый сегмент от порта источника — в сторону выхода.
-        let from_elbow_x = if from_exits_right {
-            snap_grid_x_right(fp.x + cell_px, camera_offset.x, camera_zoom, cell_size)
-        } else {
-            snap_grid_x_left(fp.x - cell_px, camera_offset.x, camera_zoom, cell_size)
-        };
-        pts.push(Pos2::new(from_elbow_x, fp.y));
+        let cell_px_screen = cell_size * camera_zoom;
+        let gap = 2.0 * cell_px_screen; // минимум 2 клетки от тела карточки
 
-        // Ступеньки через промежуточные точки маршрута.
-        let mut cur = Pos2::new(from_elbow_x, fp.y);
-        for wp in &route_pts {
-            let wp_y = snap_to_grid_node(wp.y, camera_offset.y, camera_zoom, cell_size);
-            if (cur.y - wp_y).abs() > 1.0 {
-                pts.push(Pos2::new(cur.x, wp_y));
-            }
-            let wp_x = snap_to_grid_node(wp.x, camera_offset.x, camera_zoom, cell_size);
-            if (cur.x - wp_x).abs() > 1.0 {
-                pts.push(Pos2::new(wp_x, wp_y));
-            }
-            cur = Pos2::new(wp_x, wp_y);
-        }
+        let src_rect = from_obj.map(|o| obj_screen_rect(o, cell_size, camera_offset, camera_zoom));
+        let dst_rect = to_obj.map(|o| obj_screen_rect(o, cell_size, camera_offset, camera_zoom));
 
-        // Последний сегмент к порту приёмника — со стороны входа.
-        let to_elbow_x = if to_enters_left {
-            snap_grid_x_left(tp.x - cell_px, camera_offset.x, camera_zoom, cell_size)
+        let from_id = from_obj.map_or("", |o| o.id.as_str());
+        let to_id = to_obj.map_or("", |o| o.id.as_str());
+
+        // V1: вертикальная линия сетки вне карточки источника со стороны выхода.
+        let v1_x = if from_exits_right {
+            let card_right = src_rect.map_or(fp.x, |r| r.max.x);
+            let target = (card_right + gap).max(fp.x + gap);
+            snap_grid_x_ceil(target, camera_offset.x, camera_zoom, cell_size)
         } else {
-            snap_grid_x_right(tp.x + cell_px, camera_offset.x, camera_zoom, cell_size)
+            let card_left = src_rect.map_or(fp.x, |r| r.min.x);
+            let target = (card_left - gap).min(fp.x - gap);
+            snap_grid_x_floor(target, camera_offset.x, camera_zoom, cell_size)
         };
-        if (cur.x - to_elbow_x).abs() > 1.0 {
-            pts.push(Pos2::new(to_elbow_x, cur.y));
-        }
-        if (cur.y - tp.y).abs() > 1.0 {
-            pts.push(Pos2::new(to_elbow_x, tp.y));
+
+        // V2: вертикальная линия сетки вне карточки приёмника со стороны входа.
+        let v2_x = if to_enters_left {
+            let card_left = dst_rect.map_or(tp.x, |r| r.min.x);
+            let target = (card_left - gap).min(tp.x - gap);
+            snap_grid_x_floor(target, camera_offset.x, camera_zoom, cell_size)
+        } else {
+            let card_right = dst_rect.map_or(tp.x, |r| r.max.x);
+            let target = (card_right + gap).max(tp.x + gap);
+            snap_grid_x_ceil(target, camera_offset.x, camera_zoom, cell_size)
+        };
+
+        let same_vertical = (v1_x - v2_x).abs() < 1.0;
+        let vertical_free = same_vertical
+            && !vertical_blocked(v1_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
+
+        if same_vertical && vertical_free {
+            // H-V-H: fp → (V1, fp.y) → (V1, tp.y) → tp
+            if (fp.x - v1_x).abs() > 1.0 {
+                pts.push(Pos2::new(v1_x, fp.y));
+            }
+            if (fp.y - tp.y).abs() > 1.0 {
+                pts.push(Pos2::new(v1_x, tp.y));
+            }
+            if (v1_x - tp.x).abs() > 1.0 {
+                pts.push(Pos2::new(tp.x, tp.y));
+            }
+        } else {
+            // H-V-H-V-H: обход или разные вертикали.
+            // Если вертикали совпали но путь заблокирован — сдвигаем V2 на одну клетку в сторону.
+            let mut v2_x = v2_x;
+            if same_vertical && !vertical_free {
+                if from_exits_right {
+                    v2_x = v1_x + cell_px_screen;
+                } else {
+                    v2_x = v1_x - cell_px_screen;
+                }
+            }
+
+            // Уровень обхода: над или под карточками, которые пересекают вертикальную полосу между V1 и V2.
+            let x_lo = v1_x.min(v2_x);
+            let x_hi = v1_x.max(v2_x);
+            let y_lo = fp.y.min(tp.y);
+            let y_hi = fp.y.max(tp.y);
+
+            let mut y_over = y_lo - gap;
+            let mut y_under = y_hi + gap;
+            for o in &geometry.objects {
+                if o.id == from_id || o.id == to_id {
+                    continue;
+                }
+                let r = obj_screen_rect(o, cell_size, camera_offset, camera_zoom);
+                // Карточка пересекает вертикальную полосу [x_lo, x_hi] по x и диапазон [y_lo, y_hi] по y.
+                if r.max.x >= x_lo && r.min.x <= x_hi && r.max.y >= y_lo && r.min.y <= y_hi {
+                    y_over = y_over.min(r.min.y - gap);
+                    y_under = y_under.max(r.max.y + gap);
+                }
+            }
+
+            let over_cost = (fp.y - y_over).abs() + (tp.y - y_over).abs() + (v1_x - v2_x).abs();
+            let under_cost = (fp.y - y_under).abs() + (tp.y - y_under).abs() + (v1_x - v2_x).abs();
+            let y_mid = if over_cost <= under_cost { y_over } else { y_under };
+
+            // fp → (v1_x, fp.y)
+            if (fp.x - v1_x).abs() > 1.0 {
+                pts.push(Pos2::new(v1_x, fp.y));
+            }
+            // (v1_x, fp.y) → (v1_x, y_mid)
+            if (fp.y - y_mid).abs() > 1.0 {
+                pts.push(Pos2::new(v1_x, y_mid));
+            }
+            // (v1_x, y_mid) → (v2_x, y_mid)
+            if (v1_x - v2_x).abs() > 1.0 {
+                pts.push(Pos2::new(v2_x, y_mid));
+            }
+            // (v2_x, y_mid) → (v2_x, tp.y)
+            if (y_mid - tp.y).abs() > 1.0 {
+                pts.push(Pos2::new(v2_x, tp.y));
+            }
+            // (v2_x, tp.y) → tp
+            if (v2_x - tp.x).abs() > 1.0 {
+                pts.push(Pos2::new(tp.x, tp.y));
+            }
         }
         pts.push(tp);
     }
