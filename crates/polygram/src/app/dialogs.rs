@@ -34,6 +34,10 @@ pub struct DialogState {
     pub container_menu_api_expanded: Option<String>,
     /// Объекты, ожидающие подтверждения удаления ("Удалить?").
     pub delete_confirm: Option<Vec<String>>,
+    /// Ожидает подтверждения переноса процесса в отдел при дропе
+    /// ("Добавить процесс в отдел?"): (id объекта, id отдела,
+    /// целевая клетка, стартовая клетка).
+    pub reparent_confirm: Option<(String, String, (i32, i32), (i32, i32))>,
 }
 
 impl DialogState {
@@ -58,6 +62,7 @@ impl DialogState {
             container_menu_api_settings: HashMap::new(),
             container_menu_api_expanded: None,
             delete_confirm: None,
+            reparent_confirm: None,
         }
     }
 }
@@ -91,6 +96,10 @@ impl DialogState {
         self.container_menu_edits.clear();
         self.container_menu_api_settings.clear();
         self.container_menu_api_expanded = None;
+    }
+
+    pub fn reset_reparent_confirm(&mut self) {
+        self.reparent_confirm = None;
     }
 
     pub fn can_add_metric(&self, object_id: &str, dir: Direction, published: &polygram_core::Published) -> bool {

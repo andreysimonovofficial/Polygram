@@ -147,19 +147,13 @@ pub fn handle_drag(
             });
             if drop_in_dept {
                 let dept_id = app.drag.drag_over.take().expect("drop_in_dept requires drag_over");
-                app.drag.pending_move =
-                    Some((object_id.clone(), app.connection.last_rev));
-                app.apply_batch(vec![
-                    Command::SetObjectParent {
-                        object: object_id.clone(),
-                        parent: Some(dept_id.clone()),
-                    },
-                    Command::MoveObject {
-                        object: object_id.clone(),
-                        at: [drop_cell.0, drop_cell.1],
-                    },
-                ]);
-                app.selected_objects = vec![object_id.clone()];
+                // Требуется подтверждение пользователя перед переносом процесса в отдел.
+                app.dialogs.reparent_confirm = Some((
+                    object_id.clone(),
+                    dept_id,
+                    drop_cell,
+                    (start_x, start_y),
+                ));
             } else {
                 app.drag.drag_over = None;
                 if pos_changed {
