@@ -114,6 +114,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                         cmd: "{\"cmd\":\"restart_server\"}".to_owned(),
                                         result: "Команда отправлена".to_owned(),
                                     });
+                                    app.add_event_log("warn", "command", "Перезапуск API-сервера", None);
                                 }
                                 if ui.button("Остановить сервер").clicked() {
                                     app.apply_cmd(Command::Shutdown);
@@ -121,6 +122,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                         cmd: "{\"cmd\":\"shutdown\"}".to_owned(),
                                         result: "Команда отправлена".to_owned(),
                                     });
+                                    app.add_event_log("warn", "command", "Остановка API-сервера", None);
                                 }
                             });
 
@@ -131,11 +133,13 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                 if ui.text_edit_singleline(&mut port_str).lost_focus() {
                                     if let Ok(new_port) = port_str.parse::<u16>() {
                                         app.apply_cmd(Command::ChangePort { port: new_port });
+                                        app.add_event_log("info", "command", &format!("Смена порта API на {new_port}"), None);
                                     }
                                 }
                                 if ui.button("Применить порт").clicked() {
                                     if let Ok(new_port) = port_str.parse::<u16>() {
                                         app.apply_cmd(Command::ChangePort { port: new_port });
+                                        app.add_event_log("info", "command", &format!("Смена порта API на {new_port}"), None);
                                     }
                                 }
                             });

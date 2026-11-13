@@ -43,6 +43,12 @@ pub fn handle_canvas_interaction(
                 app.drag.state = DragInteractionState::Idle;
                 app.dialogs.edit_target = Some(object_id.to_owned());
                 app.dialogs.edit_input = obj_name;
+                app.add_event_log(
+                    "info",
+                    "ui",
+                    &format!("Открыто инлайн-редактирование названия объекта «{object_id}»"),
+                    None,
+                );
             }
         }
     }
@@ -58,6 +64,15 @@ pub fn handle_canvas_interaction(
             if let Some(pos) = canvas_response.interact_pointer_pos() {
                 let object_id = app.canvas.object_at(&geometry, pos);
                 app.right_click = Some((pos, object_id.map(|s| s.to_owned())));
+                app.add_event_log(
+                    "info",
+                    "ui",
+                    &format!(
+                        "Открыто контекстное меню на {}",
+                        object_id.map(|id| format!("объекте «{id}»")).unwrap_or_else(|| "пустом месте холста".to_owned())
+                    ),
+                    None,
+                );
             }
         }
     }
@@ -289,6 +304,12 @@ pub fn handle_canvas_interaction(
                 app.dialogs.add_metric_time = None;
                 app.dialogs.add_metric_unit = String::new();
                 app.drag.state = DragInteractionState::Idle;
+                app.add_event_log(
+                    "info",
+                    "ui",
+                    &format!("Открыт диалог добавления показателя в объект «{object_id}» ({dir:?})"),
+                    None,
+                );
                 break;
             }
         }
@@ -303,6 +324,12 @@ pub fn handle_canvas_interaction(
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
                 app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
                 app.drag.state = DragInteractionState::Idle;
+                app.add_event_log(
+                    "info",
+                    "ui",
+                    &format!("Открыто меню показателей объекта «{object_id}» ({dir:?})"),
+                    None,
+                );
                 break;
             }
         }

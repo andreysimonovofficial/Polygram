@@ -246,21 +246,33 @@ pub fn handle_container_menu_dialog(
             match dir {
                 polygram_core::types::Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
                     object: object_id.clone(),
-                    entry: entry_name,
+                    entry: entry_name.clone(),
                     required: MetricValue::Number(value),
                 }),
                 polygram_core::types::Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
                     object: object_id.clone(),
-                    entry: entry_name,
+                    entry: entry_name.clone(),
                     value: MetricValue::Number(value),
                 }),
             }
+            app.add_event_log(
+                "info",
+                "command",
+                &format!("Объект «{object_id}»: запись «{entry_name}» установлена в {value}"),
+                None,
+            );
         }
         for (metric_def, unit) in unit_cmds {
             app.apply_cmd(polygram_core::Command::SetMetricDefUnit {
-                metric_def,
-                unit,
+                metric_def: metric_def.clone(),
+                unit: unit.clone(),
             });
+            app.add_event_log(
+                "info",
+                "command",
+                &format!("Показатель «{metric_def}»: единица измерения изменена на «{unit}»"),
+                None,
+            );
         }
     }
 
@@ -268,8 +280,14 @@ pub fn handle_container_menu_dialog(
     if let Some(entry_name) = delete_entry {
         app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
             object: object_id.clone(),
-            entry: entry_name,
+            entry: entry_name.clone(),
         });
+        app.add_event_log(
+            "warn",
+            "command",
+            &format!("Объект «{object_id}»: удалена запись «{entry_name}»"),
+            None,
+        );
     }
 
     if close_dialog {
@@ -390,13 +408,25 @@ fn render_entry_api_settings(
         app.post_binding(
             object_id.to_owned(),
             entry.name.clone(),
-            bind_connector,
-            bind_cell,
+            bind_connector.clone(),
+            bind_cell.clone(),
             bind_interval,
+        );
+        app.add_event_log(
+            "info",
+            "command",
+            &format!("Объект «{object_id}»: запись «{}» привязана к {}:{}", entry.name, bind_connector, bind_cell),
+            None,
         );
     }
     if do_unbind {
         app.delete_binding(object_id.to_owned(), entry.name.clone());
+        app.add_event_log(
+            "warn",
+            "command",
+            &format!("Объект «{object_id}»: запись «{}» отвязана от API", entry.name),
+            None,
+        );
     }
     if do_close {
         app.dialogs.container_menu_api_expanded = None;

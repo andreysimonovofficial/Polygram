@@ -39,11 +39,18 @@ pub fn handle_drag(
                     })
                     .cloned();
                 if let Some(entry) = entry {
+                    let entry_name = entry.name.clone();
                     app.drag.start_drag_metric(
                         object_id.clone(),
                         *dir,
                         entry,
                         pos,
+                    );
+                    app.add_event_log(
+                        "info",
+                        "drag",
+                        &format!("Начат перетаскивание показателя «{entry_name}» из объекта «{object_id}»"),
+                        None,
                     );
                 }
             } else if let Some(object_id) = object_at(
@@ -63,9 +70,16 @@ pub fn handle_drag(
                         pos,
                         (o.rect.x, o.rect.y),
                     );
+                    app.add_event_log(
+                        "info",
+                        "drag",
+                        &format!("Начат перетаскивание объекта «{object_id}» с клетки ({}, {})", o.rect.x, o.rect.y),
+                        None,
+                    );
                 }
             } else {
                 app.drag.start_selection_box(pos);
+                app.add_event_log("info", "drag", "Начато выделение рамкой", None);
             }
         }
     }
@@ -174,11 +188,26 @@ pub fn handle_drag(
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
                     app.apply_cmd(Command::MoveObject {
-                        object: object_id,
+                        object: object_id.clone(),
                         at: [drop_cell.0, drop_cell.1],
                     });
+                    app.add_event_log(
+                        "info",
+                        "drag",
+                        &format!(
+                            "Объект «{object_id}» перемещён с ({start_x}, {start_y}) на ({}, {}) в отделе «{}»",
+                            drop_cell.0, drop_cell.1, dept_id
+                        ),
+                        None,
+                    );
                 } else {
                     app.drag.predicted_positions.remove(&object_id);
+                    app.add_event_log(
+                        "warn",
+                        "drag",
+                        &format!("Перетаскивание объекта «{object_id}» отменено (позиция не изменилась или цель занята)"),
+                        None,
+                    );
                 }
             } else {
                 // Открыть модальное подтверждение переноса в отдел.
@@ -197,12 +226,27 @@ pub fn handle_drag(
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
                     app.apply_cmd(Command::MoveObject {
-                        object: object_id,
+                        object: object_id.clone(),
                         at: [drop_cell.0, drop_cell.1],
                     });
+                    app.add_event_log(
+                        "info",
+                        "drag",
+                        &format!(
+                            "Объект «{object_id}» перемещён с ({start_x}, {start_y}) на ({}, {})",
+                            drop_cell.0, drop_cell.1
+                        ),
+                        None,
+                    );
                 }
             } else {
                 app.drag.predicted_positions.remove(&object_id);
+                app.add_event_log(
+                    "warn",
+                    "drag",
+                    &format!("Перетаскивание объекта «{object_id}» отменено (цель занята или отсутствует призрачная копия)"),
+                    None,
+                );
             }
         }
         app.drag.drag_ghost = None;
@@ -229,14 +273,22 @@ pub fn handle_drag(
             {
                 let ctx = polygram_core::drag_domain::MetricDropContext {
                     geometry: geometry.clone(),
-                    source_object,
+                    source_object: source_object.clone(),
                     source_dir,
                     entry_name: metric_name.clone(),
-                    target_id,
+                    target_id: target_id.clone(),
                 };
                 let cmds = polygram_core::drag_domain::compute_metric_drop(&ctx);
                 if !cmds.is_empty() {
                     app.apply_batch(cmds);
+                    app.add_event_log(
+                        "info",
+                        "drag",
+                        &format!(
+                            "Показатель «{metric_name}» соединён: «{source_object}» → «{target_id}»"
+                        ),
+                        None,
+                    );
                 }
             }
         }

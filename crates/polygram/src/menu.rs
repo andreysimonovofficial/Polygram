@@ -33,14 +33,16 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
             });
 
             ui.menu_button("Вид", |ui| {
-                if ui.button("Автораскладка").clicked() {
-                    app.apply_cmd(Command::AutoLayout);
-                    ui.close_menu();
-                }
-                if ui.button("Перемаршрутизировать").clicked() {
-                    app.apply_cmd(Command::RerouteAll);
-                    ui.close_menu();
-                }
+            if ui.button("Автораскладка").clicked() {
+                app.apply_cmd(Command::AutoLayout);
+                app.add_event_log("info", "command", "Запущена автораскладка графа (меню)", None);
+                ui.close_menu();
+            }
+            if ui.button("Перемаршрутизировать").clicked() {
+                app.apply_cmd(Command::RerouteAll);
+                app.add_event_log("info", "command", "Запущена перемаршрутизация связей (меню)", None);
+                ui.close_menu();
+            }
                 ui.separator();
                 if ui.button("Сброс камеры").clicked() {
                     app.canvas.camera = Camera::new();
@@ -59,6 +61,9 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                 changed = true;
             }
             if ui.checkbox(&mut app.show_command_log_panel, "Лог команд").changed() {
+                changed = true;
+            }
+            if ui.checkbox(&mut app.show_frontend_log_panel, "Лог событий фронтенда").changed() {
                 changed = true;
             }
             if ui.checkbox(&mut app.show_chat_panel, "Чат").changed() {

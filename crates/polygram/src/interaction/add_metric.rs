@@ -270,6 +270,12 @@ pub fn handle_add_metric_dialog(
         app.dialogs.add_metric_unit.clear();
         app.dialogs.add_metric_api_connector.clear();
         app.dialogs.add_metric_api_cell.clear();
+        app.add_event_log(
+            "info",
+            "command",
+            &format!("Показатель «{name_for_cmd}» добавлен в объект «{object_id_for_cmd}» ({dir:?})"),
+            None,
+        );
     }
 }
 

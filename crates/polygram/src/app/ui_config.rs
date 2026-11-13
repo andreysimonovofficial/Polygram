@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub struct UiConfig {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
+    pub show_frontend_log_panel: bool,
     pub show_chat_panel: bool,
     pub show_connectors_panel: bool,
     pub show_grid: bool,

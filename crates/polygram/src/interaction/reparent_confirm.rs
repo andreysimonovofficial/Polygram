@@ -37,6 +37,12 @@ pub fn handle_reparent_confirm(app: &mut PolygramApp, ctx: &Context) {
         // Возврат на прежние координаты: отменяем клиентское предсказание,
         // команды не отправляются — процесс остаётся на своём месте.
         app.drag.predicted_positions.remove(&object_id);
+        app.add_event_log(
+            "warn",
+            "drag",
+            &format!("Перенос процесса «{object_id}» в отдел «{dept_id}» отменён пользователем"),
+            None,
+        );
         app.dialogs.reparent_confirm = None;
         return;
     }
@@ -54,6 +60,12 @@ pub fn handle_reparent_confirm(app: &mut PolygramApp, ctx: &Context) {
                 at: [drop_cell.0, drop_cell.1],
             },
         ]);
+        app.add_event_log(
+            "info",
+            "drag",
+            &format!("Процесс «{object_id}» добавлен в отдел «{dept_id}» и перемещён на клетку ({}, {})", drop_cell.0, drop_cell.1),
+            None,
+        );
         app.selected_objects = vec![object_id.clone()];
         app.dialogs.reparent_confirm = None;
     }

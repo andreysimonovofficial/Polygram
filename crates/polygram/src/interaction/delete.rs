@@ -44,6 +44,12 @@ pub fn handle_delete_confirm(app: &mut PolygramApp, ctx: &Context) {
         for id in &targets {
             app.apply_cmd(polygram_core::Command::RemoveObject { object: id.clone() });
         }
+        app.add_event_log(
+            "warn",
+            "command",
+            &format!("Удалены объекты: {}", targets.join(", ")),
+            None,
+        );
         // Удаляем удалённые объекты из выделения.
         app.selected_objects.retain(|s| !targets.iter().any(|t| t == s));
         app.dialogs.delete_confirm = None;

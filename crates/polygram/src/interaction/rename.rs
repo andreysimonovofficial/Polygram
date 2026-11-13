@@ -30,6 +30,12 @@ pub fn handle_rename_dialog(app: &mut PolygramApp, ctx: &Context) {
             object: rename_target.unwrap(),
             name: app.dialogs.rename_input.clone(),
         });
+        app.add_event_log(
+            "info",
+            "command",
+            &format!("Объект переименован в «{}»", app.dialogs.rename_input),
+            None,
+        );
         app.dialogs.rename_target = None;
         app.dialogs.rename_input.clear();
     }

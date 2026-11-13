@@ -20,14 +20,26 @@ pub fn context_menu(
                 if let Some(object_id) = object_id {
                     if ui.button(format!("Удалить объект: {object_id}")).clicked() {
                         app.dialogs.delete_confirm = Some(vec![object_id.clone()]);
+                        app.add_event_log(
+                            "warn",
+                            "dialog",
+                            &format!("Запрошено удаление объекта «{object_id}» (подтверждение)"),
+                            None,
+                        );
                         *close_menu = true;
                     }
                     // Групповое удаление выделенных объектов (если выбрано несколько)
                     if app.selected_objects.len() > 1 {
-                        if ui.button(format!("Удалить выделенные ({})", app.selected_objects.len())).clicked() {
-                            app.dialogs.delete_confirm = Some(app.selected_objects.clone());
-                            *close_menu = true;
-                        }
+                    if ui.button(format!("Удалить выделенные ({})", app.selected_objects.len())).clicked() {
+                        app.dialogs.delete_confirm = Some(app.selected_objects.clone());
+                        app.add_event_log(
+                            "warn",
+                            "dialog",
+                            &format!("Запрошено удаление {} выделенных объектов (подтверждение)", app.selected_objects.len()),
+                            None,
+                        );
+                        *close_menu = true;
+                    }
                     }
                     if ui.button("Добавить показатель в запрос").clicked()
                     {
@@ -50,6 +62,12 @@ pub fn context_menu(
                             fact: MetricValue::Null,
                         };
                         app.apply_cmd(cmd);
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Добавлен показатель «request{}» в объект «{object_id}» (запрос)", n_req + 1),
+                            None,
+                        );
                         *close_menu = true;
                     }
                     if ui.button("Добавить показатель в выход").clicked() {
@@ -72,6 +90,12 @@ pub fn context_menu(
                             fact: MetricValue::Null,
                         };
                         app.apply_cmd(cmd);
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Добавлен показатель «out{}» в объект «{object_id}» (выход)", n_out + 1),
+                            None,
+                        );
                         *close_menu = true;
                     }
                     ui.separator();
@@ -98,6 +122,12 @@ pub fn context_menu(
                                 author: None,
                             };
                             app.apply_cmd(cmd);
+                            app.add_event_log(
+                                "info",
+                                "command",
+                                &format!("Создан объект «Новый процесс» в отделе «{object_id}» в позиции ({}, {})", world_pos.x.round() as i32, world_pos.y.round() as i32),
+                                None,
+                            );
                             *close_menu = true;
                         }
                         if ui.button("Добавить отдел в отдел").clicked() {
@@ -114,6 +144,12 @@ pub fn context_menu(
                                 author: None,
                             };
                             app.apply_cmd(cmd);
+                            app.add_event_log(
+                                "info",
+                                "command",
+                                &format!("Создан отдел «Новый отдел» в отделе «{object_id}» в позиции ({}, {})", world_pos.x.round() as i32, world_pos.y.round() as i32),
+                                None,
+                            );
                             *close_menu = true;
                         }
                         // Переместить выделенные объекты в этот отдел.
@@ -131,6 +167,12 @@ pub fn context_menu(
                                     });
                                 }
                                 app.apply_batch(cmds);
+                                app.add_event_log(
+                                    "info",
+                                    "command",
+                                    &format!("{} выделенных объектов перемещены в отдел «{dept_id}»", selected.len()),
+                                    None,
+                                );
                                 app.selected_objects.clear();
                                 *close_menu = true;
                             }
@@ -150,6 +192,12 @@ pub fn context_menu(
                                     object: object_id.clone(),
                                     parent: None,
                                 });
+                                app.add_event_log(
+                                    "info",
+                                    "command",
+                                    &format!("Объект «{object_id}» извлечён из отдела"),
+                                    None,
+                                );
                                 *close_menu = true;
                             }
                         }
@@ -164,6 +212,12 @@ pub fn context_menu(
                             .unwrap_or_else(|| object_id.to_string());
                         app.dialogs.rename_target = Some(object_id.clone());
                         app.dialogs.rename_input = obj_name;
+                        app.add_event_log(
+                            "info",
+                            "dialog",
+                            &format!("Открыт диалог переименования объекта «{object_id}»"),
+                            None,
+                        );
                         *close_menu = true;
                     }
                 }
@@ -172,16 +226,24 @@ pub fn context_menu(
                 if app.selected_objects.len() > 1 {
                     if ui.button("Сгруппировать в отдел").clicked() {
                         app.group_selected_into_department(&published);
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("{} выделенных объектов сгруппированы в отдел", app.selected_objects.len()),
+                            None,
+                        );
                         *close_menu = true;
                     }
                     ui.separator();
                 }
                 if ui.button("Автораскладка").clicked() {
                     app.apply_cmd(Command::AutoLayout);
+                    app.add_event_log("info", "command", "Запущена автораскладка графа", None);
                     *close_menu = true;
                 }
                 if ui.button("Перемаршрутизировать").clicked() {
                     app.apply_cmd(Command::RerouteAll);
+                    app.add_event_log("info", "command", "Запущена перемаршрутизация связей", None);
                     *close_menu = true;
                 }
                 if object_id.is_none() {
@@ -199,6 +261,12 @@ pub fn context_menu(
                             author: None,
                         };
                         app.apply_cmd(cmd);
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Создан процесс «Процесс» в позиции ({}, {})", world_pos.x.round() as i32, world_pos.y.round() as i32),
+                            None,
+                        );
                         *close_menu = true;
                     }
                     if ui.button("Создать отдел").clicked() {
@@ -215,6 +283,12 @@ pub fn context_menu(
                             author: None,
                         };
                         app.apply_cmd(cmd);
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Создан отдел «Новый отдел» в позиции ({}, {})", world_pos.x as i32, world_pos.y as i32),
+                            None,
+                        );
                         *close_menu = true;
                     }
                 }

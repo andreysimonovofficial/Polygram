@@ -13,6 +13,7 @@ mod document_io;
 mod command_log_panel;
 mod connection_panel;
 mod connectors_panel;
+mod frontend_log_panel;
 mod status;
 
 use app::PolygramApp;
@@ -265,6 +266,10 @@ impl eframe::App for PolygramApp {
 
         if self.show_command_log_panel {
             panels::command_log_panel(self, ctx);
+        }
+
+        if self.show_frontend_log_panel {
+            panels::frontend_log_panel(self, ctx);
         }
 
         panels::connection_panel(self, ctx);
