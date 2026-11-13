@@ -1,7 +1,46 @@
 use crate::app::PolygramApp;
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::{Command, MetricValue, Published};
+use polygram_core::layout::{footprint_for, Rect};
 use egui::{Context, Window};
+
+/// Поиск ближайшей свободной позиции для прямоугольника w×h около точки (cx, cy)
+/// по кольцам. Координаты в клетках. Не перекрывает существующие объекты (буфер 2 кванта).
+fn find_free_near(
+    objects: &[polygram_core::ObjectGeom],
+    w: i32,
+    h: i32,
+    cx: i32,
+    cy: i32,
+    max_radius: i32,
+) -> Option<(i32, i32)> {
+    let is_free = |x: i32, y: i32| {
+        let r = Rect::new(x, y, w, h);
+        objects.iter().all(|o| !r.overlaps_with_buffer(&o.rect, 2))
+    };
+    if is_free(cx, cy) {
+        return Some((cx, cy));
+    }
+    for r in 1..=max_radius {
+        for dx in -r..=r {
+            if is_free(cx + dx, cy - r) {
+                return Some((cx + dx, cy - r));
+            }
+            if is_free(cx + dx, cy + r) {
+                return Some((cx + dx, cy + r));
+            }
+        }
+        for dy in (-r + 1)..r {
+            if is_free(cx - r, cy + dy) {
+                return Some((cx - r, cy + dy));
+            }
+            if is_free(cx + r, cy + dy) {
+                return Some((cx + r, cy + dy));
+            }
+        }
+    }
+    None
+}
 
 /// Контекстное меню по правой кнопке на объекте или на пустом месте холста.
 pub fn context_menu(
@@ -252,11 +291,24 @@ pub fn context_menu(
                             .canvas
                             .camera
                             .screen_to_world(*pos, app.canvas.cell_px());
+                        let wx = world_pos.x.round() as i32;
+                        let wy = world_pos.y.round() as i32;
+                        let (pw, ph) = footprint_for(0, 0);
+                        let (pw, ph) = (pw as i32, ph as i32);
+                        let (fx, fy) = find_free_near(
+                            &published.geometry.objects,
+                            pw,
+                            ph,
+                            wx,
+                            wy,
+                            200,
+                        )
+                        .unwrap_or((wx, wy));
                         let cmd = Command::AddObject {
                             id: None,
                             name: "Процесс".to_owned(),
                             kind: NodeKind::Process,
-                            at: Some([world_pos.x.round() as i32, world_pos.y.round() as i32]),
+                            at: Some([fx, fy]),
                             parent: None,
                             author: None,
                         };
@@ -264,7 +316,7 @@ pub fn context_menu(
                         app.add_event_log(
                             "info",
                             "command",
-                            &format!("Создан процесс «Процесс» в позиции ({}, {})", world_pos.x.round() as i32, world_pos.y.round() as i32),
+                            &format!("Создан процесс «Процесс» в позиции ({}, {})", fx, fy),
                             None,
                         );
                         *close_menu = true;
