@@ -290,7 +290,7 @@ pub fn context_menu(
                         let world_pos = app
                             .canvas
                             .camera
-                            .screen_to_world(*pos, app.canvas.cell_px());
+                            .screen_to_world(*pos, app.canvas.cell_size);
                         let wx = world_pos.x.round() as i32;
                         let wy = world_pos.y.round() as i32;
                         let (pw, ph) = footprint_for(0, 0);
