@@ -308,6 +308,7 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
             let mut app = PolygramApp::new(snapshot_rx);
+            app.start_api_process();
             app.try_connect_once();
             Ok(Box::new(app))
         }),
