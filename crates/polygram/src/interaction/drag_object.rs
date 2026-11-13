@@ -148,14 +148,33 @@ pub fn handle_drag(
         });
 
         if drop_in_dept {
-            // Открыть модальное подтверждение переноса в отдел.
             let dept_id = drag_over.expect("drop_in_dept requires drag_over");
-            app.dialogs.reparent_confirm = Some((
-                object_id.clone(),
-                dept_id,
-                drop_cell,
-                (start_x, start_y),
-            ));
+            // Если процесс уже состоит в этом отделе — это перемещение
+            // внутри отдела, а не добавление в отдел. Модальное окно не показываем.
+            let already_in_dept = geometry.objects.iter().any(|o| {
+                o.id == object_id && o.parent.as_deref() == Some(&dept_id)
+            });
+            if already_in_dept {
+                let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
+                if pos_changed && !target_overlaps {
+                    app.drag.pending_move =
+                        Some((object_id.clone(), app.connection.last_rev));
+                    app.apply_cmd(Command::MoveObject {
+                        object: object_id,
+                        at: [drop_cell.0, drop_cell.1],
+                    });
+                } else {
+                    app.drag.predicted_positions.remove(&object_id);
+                }
+            } else {
+                // Открыть модальное подтверждение переноса в отдел.
+                app.dialogs.reparent_confirm = Some((
+                    object_id.clone(),
+                    dept_id,
+                    drop_cell,
+                    (start_x, start_y),
+                ));
+            }
         } else {
             let skip_move = drag_over.is_some() && drag_ghost.is_none();
             if !skip_move && !target_overlaps {
