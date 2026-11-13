@@ -137,14 +137,28 @@ pub fn handle_drag(
             .find(|o| o.id == object_id)
             .map(|o| (o.rect.w, o.rect.h));
         let drop_cell = drag_ghost.unwrap_or(predicted);
+        let drop_in_dept = drag_over.as_deref().map_or(false, |dept_id| {
+            geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department)
+        });
+        // Отдел тянется под своих детей (fit_departments_to_children), поэтому
+        // его rect охватывает перетаскиваемый ребёнка и не должен считаться
+        // занятым местом при перемещении внутри отдела.
+        let exclude_overlap = if drop_in_dept {
+            drag_over.as_deref()
+        } else {
+            None
+        };
         let target_overlaps = dragged_size.is_some_and(|(w, h)| {
             let pr = CoreRect::new(drop_cell.0, drop_cell.1, w, h);
             geometry.objects.iter().any(|o| {
-                o.id != object_id && o.rect.overlaps(&pr)
+                if o.id == object_id {
+                    return false;
+                }
+                if exclude_overlap.map_or(false, |d| o.id == d) {
+                    return false;
+                }
+                o.rect.overlaps(&pr)
             })
-        });
-        let drop_in_dept = drag_over.as_deref().map_or(false, |dept_id| {
-            geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department)
         });
 
         if drop_in_dept {
