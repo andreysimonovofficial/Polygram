@@ -110,6 +110,10 @@ pub fn handle_drag(
     if matches!(app.drag.state, DragInteractionState::DraggingObject { .. } | DragInteractionState::DroppingObject { .. })
         && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
     {
+        // Захватить состояние наведения до очистки в end_drag_object.
+        let drag_over = app.drag.drag_over.clone();
+        let drag_ghost = app.drag.drag_ghost;
+
         app.drag.begin_drop_object(None);
         let (drag_object, drag_start_cell, _target) =
             match app.drag.end_drag_object() {
@@ -132,30 +136,30 @@ pub fn handle_drag(
             .iter()
             .find(|o| o.id == object_id)
             .map(|o| (o.rect.w, o.rect.h));
-        let drop_cell = app.drag.drag_ghost.unwrap_or(predicted);
+        let drop_cell = drag_ghost.unwrap_or(predicted);
         let target_overlaps = dragged_size.is_some_and(|(w, h)| {
             let pr = CoreRect::new(drop_cell.0, drop_cell.1, w, h);
             geometry.objects.iter().any(|o| {
                 o.id != object_id && o.rect.overlaps(&pr)
             })
         });
-        let skip_move = app.drag.drag_over.is_some() && app.drag.drag_ghost.is_none();
-        if !skip_move && !target_overlaps {
-            let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
-            let drop_in_dept = app.drag.drag_over.as_deref().map_or(false, |dept_id| {
-                geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department)
-            });
-            if drop_in_dept {
-                let dept_id = app.drag.drag_over.take().expect("drop_in_dept requires drag_over");
-                // Требуется подтверждение пользователя перед переносом процесса в отдел.
-                app.dialogs.reparent_confirm = Some((
-                    object_id.clone(),
-                    dept_id,
-                    drop_cell,
-                    (start_x, start_y),
-                ));
-            } else {
-                app.drag.drag_over = None;
+        let drop_in_dept = drag_over.as_deref().map_or(false, |dept_id| {
+            geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department)
+        });
+
+        if drop_in_dept {
+            // Открыть модальное подтверждение переноса в отдел.
+            let dept_id = drag_over.expect("drop_in_dept requires drag_over");
+            app.dialogs.reparent_confirm = Some((
+                object_id.clone(),
+                dept_id,
+                drop_cell,
+                (start_x, start_y),
+            ));
+        } else {
+            let skip_move = drag_over.is_some() && drag_ghost.is_none();
+            if !skip_move && !target_overlaps {
+                let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
                 if pos_changed {
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
@@ -164,9 +168,9 @@ pub fn handle_drag(
                         at: [drop_cell.0, drop_cell.1],
                     });
                 }
+            } else {
+                app.drag.predicted_positions.remove(&object_id);
             }
-        } else {
-            app.drag.predicted_positions.remove(&object_id);
         }
         app.drag.drag_ghost = None;
         app.drag.drag_over = None;
