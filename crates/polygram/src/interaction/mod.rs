@@ -3,6 +3,7 @@
 //! Разбито на узкие модули по одной ответственности каждому.
 
 mod add_metric;
+mod api_settings;
 mod camera;
 mod canvas;
 mod context_menu;

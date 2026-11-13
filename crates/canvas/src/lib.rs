@@ -4,19 +4,17 @@
 
 mod camera;
 mod hit_test;
+mod paint;
 mod paint_department;
-mod paint_edge;
 mod paint_object;
-mod paint_process;
+mod routing;
 mod theme;
 
 pub use camera::Camera;
 pub use hit_test::{header_at, object_at, object_at_cell, department_at, find_ghost_cell, find_ghost_cell_in_dept, rect_is_free};
+pub use paint::{paint_edge, paint_drag_preview, paint_dashed_rect, paint_process, MetricBinding};
 pub use paint_department::paint_department_frame;
-pub use paint_edge::paint_edge;
 pub use paint_object::paint_object;
-pub use paint_process::paint_process;
-pub use paint_process::{paint_drag_preview, paint_dashed_rect};
 pub use theme::Theme;
 
 use egui::{Color32, Pos2, Rect, Vec2};
@@ -24,8 +22,6 @@ use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
 use polygram_core::{DynamicState, Geometry, StatusCode};
 use std::collections::HashMap;
-
-pub use paint_process::MetricBinding;
 
 /// Холст.
 pub struct Canvas {

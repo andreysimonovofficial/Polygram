@@ -29,6 +29,29 @@
 
 **Декомпозиция бог-объектов и мега-компонентов:** стараться реализовывать «один файл — одна ответственность». Большой файл с разной ответственностью режем на модули.
 
+## Структура кода (текущая, после рефакторинга)
+
+Мега-компоненты и бог-объекты разнесены по модулям «один файл — одна ответственность»:
+
+- `crates/api/src/lib.rs` — `ApiService` / `ApiServiceInner`: жизненный цикл, рантайм, чат, команды, снимок состояния.
+- `crates/api/src/backup.rs` — ротация `.bak` и атомарная запись (`atomic_save_with_backup`, `MAX_BACKUPS`).
+- `crates/api/src/document.rs` — экспорт/импорт `.pg` JSON (`to_json`, `save_to_file`, `load_from_file`, `apply_document`).
+- `crates/api/src/import.rs` — импорт документа как отдела, уникальные ID, топологическая сортировка.
+- `crates/api/src/sync/mod.rs` + `binding.rs`, `connectors.rs`, `source.rs`, `static_source.rs`, `sources/`, `service.rs`, `sync_loop.rs` — синхронизация показателей с внешними API (источники, коннекторы, привязки, сервис, фоновый цикл).
+- `crates/canvas/src/lib.rs` — `Canvas`, основной цикл `paint`, статусы (`status_dot_color`, `status_label_ru`).
+- `crates/canvas/src/paint/constants.rs` — геометрические константы строк/контейнеров.
+- `crates/canvas/src/paint/status.rs` — ранжирование и агрегация статусов (`status_rank`, `worst_status`).
+- `crates/canvas/src/paint/row.rs` — одна строка показателя, строка "+", превью перетаскивания (`MetricBinding`, `paint_metric_row`, `paint_add_row`, `paint_drag_preview`).
+- `crates/canvas/src/paint/container.rs` — заголовок контейнера показателей (`paint_container_header`).
+- `crates/canvas/src/paint/object.rs` — объект "Процесс", пунктирная рамка (`paint_process`, `paint_dashed_rect`).
+- `crates/canvas/src/paint/edge.rs` — ортогональная линия связи (`paint_edge`).
+- `crates/canvas/src/routing/ports.rs` — позиции точек сцепления (`visual_port_screen`, `metric_row_center_y`, `metric_port_screen_x`).
+- `crates/canvas/src/routing/grid.rs` — сетка, коллизии, упрощение ломаной (`snap_grid_*`, `obj_screen_rect`, `vertical_blocked`, `horizontal_blocked`, `simplify_points`).
+- `crates/polygram/src/interaction/container_menu.rs` — диалог списка показателей контейнера (`handle_container_menu_dialog`).
+- `crates/polygram/src/interaction/api_settings.rs` — настройки API-привязки одной записи (`render_entry_api_settings`).
+
+Правило размера: файл не длиннее 1000 строк. Если файл приближается к лимиту или несёт две и более ответственности — режем на модули.
+
 ## Запуск и пересборку polygram
 
 Если редактировали `polygram`, то после ответа обязательно закрывай и пересобирай его:
