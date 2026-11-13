@@ -131,8 +131,8 @@ impl crate::engine::Engine {
                 max_x = max_x.max(r.x + r.w);
                 max_y = max_y.max(r.y + r.h);
             }
-            let new_y = (min_y - 2).max(0);
-            let new_x = (min_x - 1).max(0);
+            let new_y = min_y - 2;
+            let new_x = min_x - 1;
             let new_w = (max_x + 1) - new_x;
             let new_h = (max_y + 1) - new_y;
             let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
@@ -181,8 +181,8 @@ impl crate::engine::Engine {
                 max_x = max_x.max(r.x + r.w);
                 max_y = max_y.max(r.y + r.h);
             }
-            let new_y = (min_y - 2).max(0);
-            let new_x = (min_x - 1).max(0);
+            let new_y = min_y - 2;
+            let new_x = min_x - 1;
             let new_w = (max_x + 1) - new_x;
             let new_h = (max_y + 1) - new_y;
             let new_rect = crate::layout::Rect::new(new_x, new_y, new_w, new_h);
