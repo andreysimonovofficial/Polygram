@@ -291,6 +291,31 @@ pub fn paint_edge(
         false
     }
 
+    /// Проверяет, пересекает ли горизонтальный отрезок в y от x0 до x1 тела карточек (кроме исключённых).
+    fn horizontal_blocked(
+        y: f32,
+        x0: f32,
+        x1: f32,
+        geometry: &Geometry,
+        exclude_from: &str,
+        exclude_to: &str,
+        cell_size: f32,
+        offset: Vec2,
+        zoom: f32,
+    ) -> bool {
+        let (x_min, x_max) = (x0.min(x1), x0.max(x1));
+        for o in &geometry.objects {
+            if o.id == exclude_from || o.id == exclude_to {
+                continue;
+            }
+            let r = obj_screen_rect(o, cell_size, offset, zoom);
+            if y >= r.min.y && y <= r.max.y && x_max >= r.min.x && x_min <= r.max.x {
+                return true;
+            }
+        }
+        false
+    }
+
     // Построить ортогональную ломаную:
     // 1-й сегмент — горизонталь от fp к вертикальной линии сетки V1 вне карточки источника.
     // 2-й сегмент — вертикаль по V1 от fp.y до уровня обхода (или tp.y если прямой путь свободен).
@@ -349,7 +374,7 @@ pub fn paint_edge(
                 pts.push(Pos2::new(tp.x, tp.y));
             }
         } else {
-            // H-V-H-V-H: обход или разные вертикали.
+            // H-V-H-V-H: разные вертикали или путь по одной вертикали заблокирован.
             // Если вертикали совпали но путь заблокирован — сдвигаем V2 на одну клетку в сторону.
             let mut v2_x = v2_x;
             if same_vertical && !vertical_free {
@@ -360,49 +385,81 @@ pub fn paint_edge(
                 }
             }
 
-            // Уровень обхода: над или под карточками, которые пересекают вертикальную полосу между V1 и V2.
-            let x_lo = v1_x.min(v2_x);
-            let x_hi = v1_x.max(v2_x);
-            let y_lo = fp.y.min(tp.y);
-            let y_hi = fp.y.max(tp.y);
+            let h_at_fp_free = !horizontal_blocked(fp.y, v1_x, v2_x, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
+            let v_at_v2_free = !vertical_blocked(v2_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
+            let v_at_v1_free = !vertical_blocked(v1_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
+            let h_at_tp_free = !horizontal_blocked(tp.y, v1_x, v2_x, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
 
-            let mut y_over = y_lo - gap;
-            let mut y_under = y_hi + gap;
-            for o in &geometry.objects {
-                if o.id == from_id || o.id == to_id {
-                    continue;
+            if h_at_fp_free && v_at_v2_free {
+                // Вариант А: горизонталь на уровне fp.y от V1 к V2, затем вертикаль по V2 вниз к tp.y.
+                // fp → (V1, fp.y) → (V2, fp.y) → (V2, tp.y) → tp
+                if (fp.x - v1_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v1_x, fp.y));
                 }
-                let r = obj_screen_rect(o, cell_size, camera_offset, camera_zoom);
-                // Карточка пересекает вертикальную полосу [x_lo, x_hi] по x и диапазон [y_lo, y_hi] по y.
-                if r.max.x >= x_lo && r.min.x <= x_hi && r.max.y >= y_lo && r.min.y <= y_hi {
-                    y_over = y_over.min(r.min.y - gap);
-                    y_under = y_under.max(r.max.y + gap);
+                if (v1_x - v2_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v2_x, fp.y));
                 }
-            }
+                if (fp.y - tp.y).abs() > 1.0 {
+                    pts.push(Pos2::new(v2_x, tp.y));
+                }
+                if (v2_x - tp.x).abs() > 1.0 {
+                    pts.push(Pos2::new(tp.x, tp.y));
+                }
+            } else if v_at_v1_free && h_at_tp_free {
+                // Вариант Б: вертикаль по V1 от fp.y к tp.y, затем горизонталь на уровне tp.y от V1 к V2.
+                // fp → (V1, fp.y) → (V1, tp.y) → (V2, tp.y) → tp
+                if (fp.x - v1_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v1_x, fp.y));
+                }
+                if (fp.y - tp.y).abs() > 1.0 {
+                    pts.push(Pos2::new(v1_x, tp.y));
+                }
+                if (v1_x - v2_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v2_x, tp.y));
+                }
+                if (v2_x - tp.x).abs() > 1.0 {
+                    pts.push(Pos2::new(tp.x, tp.y));
+                }
+            } else {
+                // Вариант В: обход над или под препятствиями между V1 и V2.
+                let x_lo = v1_x.min(v2_x);
+                let x_hi = v1_x.max(v2_x);
+                let y_lo = fp.y.min(tp.y);
+                let y_hi = fp.y.max(tp.y);
 
-            let over_cost = (fp.y - y_over).abs() + (tp.y - y_over).abs() + (v1_x - v2_x).abs();
-            let under_cost = (fp.y - y_under).abs() + (tp.y - y_under).abs() + (v1_x - v2_x).abs();
-            let y_mid = if over_cost <= under_cost { y_over } else { y_under };
+                let mut y_over = y_lo - gap;
+                let mut y_under = y_hi + gap;
+                for o in &geometry.objects {
+                    if o.id == from_id || o.id == to_id {
+                        continue;
+                    }
+                    let r = obj_screen_rect(o, cell_size, camera_offset, camera_zoom);
+                    if r.max.x >= x_lo && r.min.x <= x_hi && r.max.y >= y_lo && r.min.y <= y_hi {
+                        y_over = y_over.min(r.min.y - gap);
+                        y_under = y_under.max(r.max.y + gap);
+                    }
+                }
 
-            // fp → (v1_x, fp.y)
-            if (fp.x - v1_x).abs() > 1.0 {
-                pts.push(Pos2::new(v1_x, fp.y));
-            }
-            // (v1_x, fp.y) → (v1_x, y_mid)
-            if (fp.y - y_mid).abs() > 1.0 {
-                pts.push(Pos2::new(v1_x, y_mid));
-            }
-            // (v1_x, y_mid) → (v2_x, y_mid)
-            if (v1_x - v2_x).abs() > 1.0 {
-                pts.push(Pos2::new(v2_x, y_mid));
-            }
-            // (v2_x, y_mid) → (v2_x, tp.y)
-            if (y_mid - tp.y).abs() > 1.0 {
-                pts.push(Pos2::new(v2_x, tp.y));
-            }
-            // (v2_x, tp.y) → tp
-            if (v2_x - tp.x).abs() > 1.0 {
-                pts.push(Pos2::new(tp.x, tp.y));
+                let over_cost = (fp.y - y_over).abs() + (tp.y - y_over).abs() + (v1_x - v2_x).abs();
+                let under_cost = (fp.y - y_under).abs() + (tp.y - y_under).abs() + (v1_x - v2_x).abs();
+                let y_mid = if over_cost <= under_cost { y_over } else { y_under };
+
+                // fp → (v1_x, fp.y) → (v1_x, y_mid) → (v2_x, y_mid) → (v2_x, tp.y) → tp
+                if (fp.x - v1_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v1_x, fp.y));
+                }
+                if (fp.y - y_mid).abs() > 1.0 {
+                    pts.push(Pos2::new(v1_x, y_mid));
+                }
+                if (v1_x - v2_x).abs() > 1.0 {
+                    pts.push(Pos2::new(v2_x, y_mid));
+                }
+                if (y_mid - tp.y).abs() > 1.0 {
+                    pts.push(Pos2::new(v2_x, tp.y));
+                }
+                if (v2_x - tp.x).abs() > 1.0 {
+                    pts.push(Pos2::new(tp.x, tp.y));
+                }
             }
         }
         pts.push(tp);
