@@ -120,6 +120,22 @@ impl ConnectorManager {
         });
     }
 
+    /// Обновить только кэш в памяти (без записи в файл и сервера),
+    /// чтобы текст в поле ввода сохранялся между кадрами.
+    pub fn set_connector_config_memory(&mut self, connector_id: &str, config: Value) {
+        let mut cf = self
+            .connectors
+            .get(connector_id)
+            .cloned()
+            .unwrap_or(ConnectorFile {
+                id: connector_id.to_owned(),
+                ..Default::default()
+            });
+        cf.id = connector_id.to_owned();
+        cf.config = config;
+        self.connectors.insert(connector_id.to_owned(), cf);
+    }
+
     /// Получить список метрик Google Analytics.
     pub fn get_ga_metrics(&self) -> Vec<String> {
         vec![

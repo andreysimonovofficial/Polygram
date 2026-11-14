@@ -86,12 +86,14 @@ fn render_google_sheets_config(
     ui.label("URL Google Таблицы:");
     ui.label("Пример: https://docs.google.com/spreadsheets/d/1tr5UxsQIUlfs4Td2OdGoNGnKhsYRIvXRQdtrWAvnPvk/edit");
     let url_response = ui.text_edit_singleline(&mut url);
-    if url_response.lost_focus() && !url.is_empty() {
+    if url_response.changed() {
         config.insert("url".to_owned(), Value::String(url.clone()));
-        config.insert(
-            "intervalSecs".to_owned(),
-            Value::Number(interval.into()),
+        app.connectors.set_connector_config_memory(
+            "google-sheets",
+            Value::Object(config.clone()),
         );
+    }
+    if url_response.lost_focus() && !url.is_empty() {
         app.connectors.set_connector_config(
             "google-sheets",
             Value::Object(config.clone()),
