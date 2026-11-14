@@ -3,6 +3,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::process::Command;
 
 /// Описание коннектора из файла connectors/{id}.json.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -181,24 +182,59 @@ impl ConnectorManager {
             return;
         }
 
-        let api_client = api_client.clone();
-        let id = connector_id.to_owned();
-        let result = api_client.get(&url).query(&[("cell", "status")]).send();
-        let ok = result.as_ref().map_or(false, |resp| resp.status().is_success());
-        let error = result.err().map(|e| e.to_string());
+        // Для Google Таблиц данные читаются через gws CLI. Проверяем, что он доступен.
+        if connector_id == "google-sheets" {
+            let gws_ok = Command::new("gws.exe").arg("--help").output().is_ok();
+            if !gws_ok {
+                self.connector_status.insert(
+                    connector_id.to_owned(),
+                    ConnectorStatusInfo {
+                        ok: false,
+                        last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                        error: Some(
+                            "gws CLI не найден. Установите @googleworkspace/cli и выполните gws auth login"
+                                .to_owned(),
+                        ),
+                    },
+                );
+                return;
+            }
+        }
 
-        self.connector_status.insert(
-            connector_id.to_owned(),
-            ConnectorStatusInfo {
-                ok,
-                last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
-                error: if ok {
-                    None
-                } else {
-                    error.or_else(|| Some("подключение не удалось".to_owned()))
-                },
-            },
-        );
+        let api_client = api_client.clone();
+        let result = api_client.get(&url).query(&[("cell", "status")]).send();
+        match result {
+            Ok(resp) if resp.status().is_success() => {
+                self.connector_status.insert(
+                    connector_id.to_owned(),
+                    ConnectorStatusInfo {
+                        ok: true,
+                        last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                        error: None,
+                    },
+                );
+            }
+            Ok(resp) => {
+                self.connector_status.insert(
+                    connector_id.to_owned(),
+                    ConnectorStatusInfo {
+                        ok: false,
+                        last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                        error: Some(format!("HTTP {}", resp.status())),
+                    },
+                );
+            }
+            Err(e) => {
+                self.connector_status.insert(
+                    connector_id.to_owned(),
+                    ConnectorStatusInfo {
+                        ok: false,
+                        last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                        error: Some(e.to_string()),
+                    },
+                );
+            }
+        }
     }
 
     // ----- Персистентность коннекторов (папка connectors/) -----
