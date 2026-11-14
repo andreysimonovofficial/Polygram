@@ -70,7 +70,6 @@ pub fn handle_remove_metric_entry(
     };
     let plan = engine.plan_refit(oix, n_req, n_out).unwrap_or(None);
     engine.apply_refit(oix, plan);
-    engine.queue_entry_routes(e);
     Ok(Applied::default())
 }
 

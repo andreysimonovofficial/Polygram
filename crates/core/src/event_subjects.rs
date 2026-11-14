@@ -17,8 +17,7 @@ pub fn event_subjects(kind: &crate::event::EventKind, hier: &Hierarchy) -> Vec<O
             vec![om.object]
         }
         crate::event::EventKind::EdgeAdded { edge }
-        | crate::event::EventKind::EdgeRemoved { edge }
-        | crate::event::EventKind::EdgeRouted { edge } => {
+        | crate::event::EventKind::EdgeRemoved { edge } => {
             let ed = hier.edge(crate::types::EdgeIx(*edge));
             let from = hier.object_metric(ed.from).object;
             let to = hier.object_metric(ed.to).object;
@@ -28,8 +27,7 @@ pub fn event_subjects(kind: &crate::event::EventKind, hier: &Hierarchy) -> Vec<O
                 vec![from, to]
             }
         }
-        crate::event::EventKind::RoutesChanged
-        | crate::event::EventKind::LayoutChanged
+        crate::event::EventKind::LayoutChanged
         | crate::event::EventKind::MetricDefAdded { .. }
         | crate::event::EventKind::MetricDefRemoved { .. }
         | crate::event::EventKind::MetricDefRenamed { .. } => Vec::new(),

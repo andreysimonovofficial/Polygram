@@ -53,7 +53,6 @@ impl PolygramApp {
                 format!("Disconnect({from_object}.{from_entry} → {to_object}.{to_entry})")
             }
             Command::AutoLayout => "AutoLayout".to_owned(),
-            Command::RerouteAll => "RerouteAll".to_owned(),
             Command::RestartServer => "RestartServer".to_owned(),
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),
@@ -145,7 +144,6 @@ impl PolygramApp {
                 format!("Disconnect({from_object}.{from_entry} → {to_object}.{to_entry})")
             }
             Command::AutoLayout => "AutoLayout".to_owned(),
-            Command::RerouteAll => "RerouteAll".to_owned(),
             Command::RestartServer => "RestartServer".to_owned(),
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),

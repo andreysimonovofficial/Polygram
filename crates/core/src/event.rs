@@ -45,10 +45,6 @@ pub enum EventKind {
     EdgeRemoved {
         edge: u32,
     },
-    EdgeRouted {
-        edge: u32,
-    },
-    RoutesChanged,
     LayoutChanged,
     StatusChanged {
         metric: u32,

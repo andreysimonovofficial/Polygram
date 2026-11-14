@@ -100,122 +100,7 @@ fn growing_card_relocates_instead_of_overlapping() {
 }
 
 #[test]
-fn straight_forward_and_dogleg_routes() {
-    let mut e = Engine::new();
-    metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
-    object_at(&mut e, "a", [0, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", MetricValue::Number(10.0), None);
-    object_at(&mut e, "b", [60, 0]).unwrap();
-    req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
-    connect(&mut e, "a", "o1", "b", "r1");
-    let g = e.geometry();
-    assert_eq!(g.edges.len(), 1);
-    assert_eq!(
-        g.edges[0].points.len(),
-        2,
-        "одна строка и свободно — прямая линия"
-    );
-
-    object_at(&mut e, "c", [60, 70]).unwrap();
-    req(&mut e, "c", "r1", "tovary", MetricValue::Number(10.0), None);
-    connect(&mut e, "a", "o1", "c", "r1");
-    let g = e.geometry();
-    let dog = g
-        .edges
-        .iter()
-        .find(|x| x.points.len() > 2)
-        .expect("ломаная");
-    assert_eq!(dog.points.len(), 4);
-    assert_orthogonal(&dog.points);
-}
-
-#[test]
-fn backward_edge_goes_around() {
-    let mut e = Engine::new();
-    metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
-    object_at(&mut e, "a", [90, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", MetricValue::Number(10.0), None);
-    object_at(&mut e, "b", [0, 0]).unwrap();
-    req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
-    connect(&mut e, "a", "o1", "b", "r1");
-    let g = e.geometry();
-    let pts = &g.edges[0].points;
-    assert!(pts.len() >= 5, "обратная связь обходит карточки: {pts:?}");
-    assert_orthogonal(pts);
-    let l = e.layout();
-    let h = e.hierarchy();
-    let a = h.find_object("a").unwrap();
-    let b = h.find_object("b").unwrap();
-    let ar = l.rect_of(a);
-    let br = l.rect_of(b);
-    // Ближайшая сторона: выход источника — влево (к dest слева), вход приёмника — вправо (к src справа).
-    let expected_s = polygram_core::layout::Point {
-        x: ar.x * polygram_core::layout::Q,
-        y: (ar.y + 1) * polygram_core::layout::Q + polygram_core::layout::Q / 2,
-    };
-    let expected_d = polygram_core::layout::Point {
-        x: (br.x + br.w) * polygram_core::layout::Q,
-        y: (br.y + 1) * polygram_core::layout::Q + polygram_core::layout::Q / 2,
-    };
-    assert_eq!(pts[0], expected_s);
-    assert_eq!(*pts.last().unwrap(), expected_d);
-}
-
-#[test]
-fn overlapping_vertical_routes_get_separate_lanes() {
-    let mut e = Engine::new();
-    metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
-    for k in 0..3 {
-        let s = format!("s{k}");
-        let t = format!("t{k}");
-        // s_k и t_k расположены так, чтобы все три вертикали пересекались по Y
-        // и пришлось занять три разных дорожки.
-        let sy = k * 32;
-        let ty = (2 - k) * 32;
-        object_at(&mut e, &s, [0, sy]).unwrap();
-        out(&mut e, &s, "o1", "tovary", MetricValue::Number(1.0), None);
-        object_at(&mut e, &t, [90, ty]).unwrap();
-        req(&mut e, &t, "r1", "tovary", MetricValue::Number(1.0), None);
-        connect(&mut e, &s, "o1", &t, "r1");
-    }
-    let g = e.geometry();
-    let mut xs: Vec<i32> = g.edges.iter().map(|x| x.points[1].x).collect();
-    xs.sort_unstable();
-    xs.dedup();
-    assert_eq!(
-        xs.len(),
-        3,
-        "три пересекающиеся линии идут по трём разным дорожкам: {xs:?}"
-    );
-}
-
-#[test]
-fn route_avoids_blocking_card_when_possible() {
-    let mut e = Engine::new();
-    metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
-    object_at(&mut e, "a", [0, 0]).unwrap();
-    out(&mut e, "a", "o1", "tovary", MetricValue::Number(1.0), None);
-    object_at(&mut e, "b", [130, 40]).unwrap();
-    req(&mut e, "b", "r1", "tovary", MetricValue::Number(1.0), None);
-    // помеха частично перекрывает канал — маршрут должен обойти
-    object_at(&mut e, "wall", [60, 20]).unwrap();
-    for k in 0..8 {
-        out(&mut e, "wall", &format!("w{k}"), "tovary", MetricValue::Number(0.0), None);
-    }
-    connect(&mut e, "a", "o1", "b", "r1");
-    let g = e.geometry();
-    let col = g.edges[0].points[1].x / 4;
-    let wall = e
-        .layout()
-        .rect_of(e.hierarchy().find_object("wall").unwrap());
-    assert!(
-        col < wall.x || col >= wall.x + wall.w,
-        "вертикаль не должна идти сквозь карточку"
-    );
-}
-
-#[test]
-fn auto_layout_is_overlap_free_and_routes_are_orthogonal() {
+fn auto_layout_is_overlap_free() {
     let mut rng = Rng(99);
     let mut e = Engine::new();
     metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
@@ -254,10 +139,6 @@ fn auto_layout_is_overlap_free_and_routes_are_orthogonal() {
     assert_no_overlaps(&e);
     let g = e.geometry();
     assert_eq!(g.edges.len(), e.stats().edges);
-    for edge in &g.edges {
-        assert!(edge.points.len() >= 2);
-        assert_orthogonal(&edge.points);
-    }
     assert_eq!(e.dynamic_state(), e.recomputed_state());
 }
 
@@ -292,9 +173,28 @@ fn events_are_ordered_and_gaps_detected() {
     for r in 1..=5 {
         log.push(Event {
             rev: r,
-            kind: EventKind::RoutesChanged,
+            kind: EventKind::LayoutChanged,
         });
     }
     assert_eq!(log.since(0).unwrap_err().oldest_available, 3);
     assert_eq!(log.since(2).unwrap().len(), 3);
+}
+
+#[test]
+fn auto_layout_leaves_room_for_two_cell_line_stubs() {
+    // Линия выходит из карточки и входит в карточку минимум на 2 клетки каждая;
+    // чтобы обе вертикали совпали, между колонками нужно минимум 4 клетки.
+    let mut e = Engine::new();
+    metric_def(&mut e, "tovary", "Товары", MetricKind::Number, "ед.");
+    for id in ["a", "b"] {
+        object(&mut e, id);
+        out(&mut e, id, "o1", "tovary", MetricValue::Number(1.0), None);
+        req(&mut e, id, "r1", "tovary", MetricValue::Number(1.0), None);
+    }
+    connect(&mut e, "a", "o1", "b", "r1");
+    e.apply(Scope::Root, Command::AutoLayout).unwrap();
+    let g = e.geometry();
+    let ra = g.objects.iter().find(|o| o.id == "a").unwrap().rect;
+    let rb = g.objects.iter().find(|o| o.id == "b").unwrap().rect;
+    assert!(rb.x - (ra.x + ra.w) >= 4, "зазор между колонками: {ra:?} -> {rb:?}");
 }

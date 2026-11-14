@@ -280,11 +280,6 @@ pub fn context_menu(
                     app.add_event_log("info", "command", "Запущена автораскладка графа", None);
                     *close_menu = true;
                 }
-                if ui.button("Перемаршрутизировать").clicked() {
-                    app.apply_cmd(Command::RerouteAll);
-                    app.add_event_log("info", "command", "Запущена перемаршрутизация связей", None);
-                    *close_menu = true;
-                }
                 if object_id.is_none() {
                     if ui.button("Создать Процесс").clicked() {
                         let world_pos = app

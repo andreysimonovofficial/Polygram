@@ -38,11 +38,6 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                 app.add_event_log("info", "command", "Запущена автораскладка графа (меню)", None);
                 ui.close_menu();
             }
-            if ui.button("Перемаршрутизировать").clicked() {
-                app.apply_cmd(Command::RerouteAll);
-                app.add_event_log("info", "command", "Запущена перемаршрутизация связей (меню)", None);
-                ui.close_menu();
-            }
                 ui.separator();
                 if ui.button("Сброс камеры").clicked() {
                     app.canvas.camera = Camera::new();

@@ -35,16 +35,7 @@ impl crate::engine::Engine {
         self.vals
             .ensure(self.hier.object_metric_slots(), self.hier.edge_slots());
         self.layout
-            .ensure(self.hier.object_slots(), self.hier.edge_slots());
-    }
-
-    pub(crate) fn queue_entry_routes(&mut self, e: EntryIx) {
-        for edge in self.hier.out_entries(e) {
-            self.layout.queue_route(edge);
-        }
-        for edge in self.hier.in_entries(e) {
-            self.layout.queue_route(edge);
-        }
+            .ensure(self.hier.object_slots());
     }
 
     pub(crate) fn remove_edge_internal(&mut self, edge: crate::types::EdgeIx) {
@@ -53,7 +44,6 @@ impl crate::engine::Engine {
         self.vals.alloc[edge.idx()] = 0.0;
         self.vals.mark_out(d.from);
         self.vals.mark_in(d.to);
-        self.layout.release_route(edge);
         self.pending.push(EventKind::EdgeRemoved { edge: edge.0 });
     }
 
@@ -89,14 +79,6 @@ impl crate::engine::Engine {
                     gx: new.x,
                     gy: new.y,
                 });
-            }
-            let reqs: Vec<crate::types::EntryIx> = self.hier.object(o).requests.clone();
-            let outs: Vec<crate::types::EntryIx> = self.hier.object(o).outputs.clone();
-            for &e in &reqs {
-                self.queue_entry_routes(e);
-            }
-            for &e in &outs {
-                self.queue_entry_routes(e);
             }
         }
     }

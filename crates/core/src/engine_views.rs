@@ -156,7 +156,6 @@ impl crate::engine::Engine {
                     ix: e.0,
                     from: d.from.0,
                     to: d.to.0,
-                    points: self.layout.route(e).to_vec(),
                 }
             })
             .collect();

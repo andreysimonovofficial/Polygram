@@ -189,15 +189,3 @@ pub fn assert_no_overlaps(e: &Engine) {
         }
     }
 }
-
-/// Линия состоит только из горизонтальных и вертикальных отрезков.
-pub fn assert_orthogonal(points: &[Point]) {
-    for w in points.windows(2) {
-        assert!(
-            w[0].x == w[1].x || w[0].y == w[1].y,
-            "диагональный отрезок: {:?} -> {:?}",
-            w[0],
-            w[1]
-        );
-    }
-}

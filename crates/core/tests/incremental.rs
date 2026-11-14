@@ -145,9 +145,6 @@ fn incremental_equals_full_recompute_under_random_operations() {
             "итоговое расхождение, seed {seed}"
         );
         assert_no_overlaps(&e);
-        for edge in e.geometry().edges {
-            assert_orthogonal(&edge.points);
-        }
     }
 }
 

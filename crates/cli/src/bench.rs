@@ -141,14 +141,7 @@ pub fn bench(n: usize) -> i32 {
     let t = Instant::now();
     e.apply(Scope::Root, Command::AutoLayout).unwrap();
     println!(
-        "  Автораскладка + маршруты всех связей                  {}",
-        ms(t.elapsed())
-    );
-
-    let t = Instant::now();
-    e.apply(Scope::Root, Command::RerouteAll).unwrap();
-    println!(
-        "  Пересчёт маршрутов всех связей                        {}",
+        "  Автораскладка                                         {}",
         ms(t.elapsed())
     );
 

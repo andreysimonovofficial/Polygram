@@ -1,25 +1,26 @@
-//! Рисование одной ортогональной линии связи между портами показателей.
-//! Использует чистыеhelpers из `routing` (порты, сетка, коллизии, упрощение).
+//! Рисование одной линии связи.
+//!
+//! Маршрут строит и кэширует `routing::EdgeLayer` (по клеткам сетки, без экрана). Здесь —
+//! только цвет по статусу и перевод маршрута в пиксели с привязкой концов к реальным точкам
+//! сцепления строк показателей на текущем зуме.
 
-use egui::{Painter, Pos2, Shape, Stroke, Vec2};
-use polygram_core::layout::Rect as CoreRect;
+use egui::{Painter, Pos2, Rect as ScreenRect, Shape, Stroke, Vec2};
 use polygram_core::types::Direction;
-use polygram_core::{DynamicState, EdgeGeom, Geometry, StatusCode};
+use polygram_core::{DynamicState, EdgeGeom, EntryIx, Geometry, StatusCode};
 
-use crate::routing::{
-    horizontal_blocked, obj_screen_rect, simplify_points, snap_grid_x_ceil, snap_grid_x_floor,
-    visual_port_screen, vertical_blocked,
-};
+use crate::routing::ports::visual_port_screen;
+use crate::routing::screen::{cell_size_from_px, to_screen};
+use crate::routing::{EdgeLayer, Route, Side};
 use crate::status_dot_color;
 
-/// cell_size из cell_px (который уже содержит зум).
-fn cell_size_from_px(cell_px: f32, camera_zoom: f32) -> f32 {
-    cell_px / camera_zoom.max(0.001)
-}
+/// Запас вокруг пары карточек (клеток), в пределах которого линия считается видимой:
+/// обходы чужих карточек могут выходить за габариты пары.
+const CULL_MARGIN_CELLS: f32 = 30.0;
 
 pub fn paint_edge(
     painter: &Painter,
     edge: &EdgeGeom,
+    layer: &mut EdgeLayer,
     geometry: &Geometry,
     dynamic: &DynamicState,
     theme: &crate::theme::Theme,
@@ -27,298 +28,232 @@ pub fn paint_edge(
     camera_offset: Vec2,
     camera_zoom: f32,
 ) {
-    let from_obj = geometry
-        .objects
-        .iter()
-        .find(|o| o.outputs.iter().any(|e| e.ix == edge.from));
-    let to_obj = geometry
-        .objects
-        .iter()
-        .find(|o| o.requests.iter().any(|e| e.ix == edge.to));
-
-    let line_color = match (from_obj, to_obj) {
-        (Some(fo), Some(to)) => {
-            let k_from = fo
-                .outputs
-                .iter()
-                .position(|e| e.ix == edge.from)
-                .unwrap_or(0);
-            let k_to = to
-                .requests
-                .iter()
-                .position(|e| e.ix == edge.to)
-                .unwrap_or(0);
-            let from_status = dynamic.status[fo.outputs[k_from].ix as usize];
-            let to_status = dynamic.status[to.requests[k_to].ix as usize];
-            // Цвет линии по статусу точки: источник = Выход, приёмник = Запрос.
-            if from_status != StatusCode::Ok {
-                status_dot_color(from_status, Direction::Output, theme)
-            } else if to_status != StatusCode::Ok {
-                status_dot_color(to_status, Direction::Request, theme)
-            } else {
-                theme.status_ok
-            }
-        }
-        _ => theme.line,
+    let cell_size = cell_size_from_px(cell_px, camera_zoom);
+    let Some(ends) = layer.ends(geometry, edge) else {
+        return;
     };
 
-    // Визуальные позиции точек сцепления (источник и приёмник) со стороной выхода/входа.
-    // Сторона выбирается ближайшая к другому объекту: выход источника — ближе к центру цели,
-    // вход приёмника — ближе к центру источника.
-    // Возвращает (позиция, exits_right) — true если порт на правой границе объекта.
-    let cell_size = cell_size_from_px(cell_px, camera_zoom);
-
-    let fo_center_x = from_obj.map(|fo| {
-        (fo.rect.x + fo.rect.x + fo.rect.w) as f32 * cell_size / 2.0 + camera_offset.x * camera_zoom
-    });
-    let to_center_x = to_obj.map(|to| {
-        (to.rect.x + to.rect.x + to.rect.w) as f32 * cell_size / 2.0 + camera_offset.x * camera_zoom
-    });
-
-    let from_port_side = from_obj.and_then(|fo| {
-        let from_right = visual_port_screen(
-            &fo.rect,
-            &fo.outputs,
-            polygram_core::EntryIx(edge.from),
-            true,
-            true,
-            cell_px,
-            camera_offset,
-            camera_zoom,
-        );
-        let from_left = visual_port_screen(
-            &fo.rect,
-            &fo.outputs,
-            polygram_core::EntryIx(edge.from),
-            true,
-            false,
-            cell_px,
-            camera_offset,
-            camera_zoom,
-        );
-        match (from_right, from_left, to_center_x) {
-            (Some(r), Some(l), Some(tcx)) => {
-                if (r.x - tcx).abs() <= (l.x - tcx).abs() {
-                    Some((r, true))
-                } else {
-                    Some((l, false))
-                }
-            }
-            (Some(r), None, _) => Some((r, true)),
-            (None, Some(l), _) => Some((l, false)),
-            (Some(r), Some(_), None) => Some((r, true)),
-            (None, None, _) => None,
-        }
-    });
-
-    let to_port_side = to_obj.and_then(|to| {
-        let to_right = visual_port_screen(
-            &to.rect,
-            &to.requests,
-            polygram_core::EntryIx(edge.to),
-            false,
-            true,
-            cell_px,
-            camera_offset,
-            camera_zoom,
-        );
-        let to_left = visual_port_screen(
-            &to.rect,
-            &to.requests,
-            polygram_core::EntryIx(edge.to),
-            false,
-            false,
-            cell_px,
-            camera_offset,
-            camera_zoom,
-        );
-        match (to_right, to_left, fo_center_x) {
-            (Some(r), Some(l), Some(fcx)) => {
-                if (l.x - fcx).abs() <= (r.x - fcx).abs() {
-                    Some((l, true))
-                } else {
-                    Some((r, false))
-                }
-            }
-            (Some(r), None, _) => Some((r, true)),
-            (None, Some(l), _) => Some((l, true)),
-            (Some(_), Some(l), None) => Some((l, true)),
-            (None, None, _) => None,
-        }
-    });
-
-    // Линия строится только во фронтенде от визуального порта источника к визуальному порту приёмника.
-    // edge.points / route.rs не используются для отрисовки.
-
-    let mut pts: Vec<Pos2> = Vec::new();
-    if let (Some((fp, from_exits_right)), Some((tp, to_enters_left))) = (from_port_side, to_port_side) {
-        pts.push(fp);
-
-        let cell_px_screen = cell_size * camera_zoom;
-        let gap = 2.0 * cell_px_screen; // минимум 2 клетки от тела карточки
-
-        let src_rect = from_obj.map(|o| obj_screen_rect(o, cell_size, camera_offset, camera_zoom));
-        let dst_rect = to_obj.map(|o| obj_screen_rect(o, cell_size, camera_offset, camera_zoom));
-
-        let from_id = from_obj.map_or("", |o| o.id.as_str());
-        let to_id = to_obj.map_or("", |o| o.id.as_str());
-
-        // V1: вертикальная линия сетки вне карточки источника со стороны выхода.
-        let v1_x = if from_exits_right {
-            let card_right = src_rect.map_or(fp.x, |r| r.max.x);
-            let target = (card_right + gap).max(fp.x + gap);
-            snap_grid_x_ceil(target, camera_offset.x, camera_zoom, cell_size)
-        } else {
-            let card_left = src_rect.map_or(fp.x, |r| r.min.x);
-            let target = (card_left - gap).min(fp.x - gap);
-            snap_grid_x_floor(target, camera_offset.x, camera_zoom, cell_size)
-        };
-
-        // V2: вертикальная линия сетки вне карточки приёмника со стороны входа.
-        let v2_x = if to_enters_left {
-            let card_left = dst_rect.map_or(tp.x, |r| r.min.x);
-            let target = (card_left - gap).min(tp.x - gap);
-            snap_grid_x_floor(target, camera_offset.x, camera_zoom, cell_size)
-        } else {
-            let card_right = dst_rect.map_or(tp.x, |r| r.max.x);
-            let target = (card_right + gap).max(tp.x + gap);
-            snap_grid_x_ceil(target, camera_offset.x, camera_zoom, cell_size)
-        };
-
-        let same_vertical = (v1_x - v2_x).abs() < 1.0;
-        let vertical_free = same_vertical
-            && !vertical_blocked(v1_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
-
-        if same_vertical && vertical_free {
-            // H-V-H: fp → (V1, fp.y) → (V1, tp.y) → tp
-            if (fp.x - v1_x).abs() > 1.0 {
-                pts.push(Pos2::new(v1_x, fp.y));
-            }
-            if (fp.y - tp.y).abs() > 1.0 {
-                pts.push(Pos2::new(v1_x, tp.y));
-            }
-            if (v1_x - tp.x).abs() > 1.0 {
-                pts.push(Pos2::new(tp.x, tp.y));
-            }
-        } else {
-            // H-V-H-V-H: разные вертикали или путь по одной вертикали заблокирован.
-            let mut v2_x = v2_x;
-            if same_vertical && !vertical_free {
-                if from_exits_right {
-                    v2_x = v1_x + cell_px_screen;
-                } else {
-                    v2_x = v1_x - cell_px_screen;
-                }
-            }
-
-            let h_at_fp_free = !horizontal_blocked(fp.y, v1_x, v2_x, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
-            let v_at_v2_free = !vertical_blocked(v2_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
-            let v_at_v1_free = !vertical_blocked(v1_x, fp.y, tp.y, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
-            let h_at_tp_free = !horizontal_blocked(tp.y, v1_x, v2_x, geometry, from_id, to_id, cell_size, camera_offset, camera_zoom);
-
-            if h_at_fp_free && v_at_v2_free {
-                // Вариант А: горизонталь на уровне fp.y от V1 к V2, затем вертикаль по V2 вниз к tp.y.
-                if (fp.x - v1_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v1_x, fp.y));
-                }
-                if (v1_x - v2_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v2_x, fp.y));
-                }
-                if (fp.y - tp.y).abs() > 1.0 {
-                    pts.push(Pos2::new(v2_x, tp.y));
-                }
-                if (v2_x - tp.x).abs() > 1.0 {
-                    pts.push(Pos2::new(tp.x, tp.y));
-                }
-            } else if v_at_v1_free && h_at_tp_free {
-                // Вариант Б: вертикаль по V1 от fp.y к tp.y, затем горизонталь на уровне tp.y от V1 к V2.
-                if (fp.x - v1_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v1_x, fp.y));
-                }
-                if (fp.y - tp.y).abs() > 1.0 {
-                    pts.push(Pos2::new(v1_x, tp.y));
-                }
-                if (v1_x - v2_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v2_x, tp.y));
-                }
-                if (v2_x - tp.x).abs() > 1.0 {
-                    pts.push(Pos2::new(tp.x, tp.y));
-                }
-            } else {
-                // Вариант В: обход над или под препятствиями между V1 и V2.
-                let x_lo = v1_x.min(v2_x);
-                let x_hi = v1_x.max(v2_x);
-                let y_lo = fp.y.min(tp.y);
-                let y_hi = fp.y.max(tp.y);
-
-                let mut y_over = y_lo - gap;
-                let mut y_under = y_hi + gap;
-                for o in &geometry.objects {
-                    if o.id == from_id || o.id == to_id {
-                        continue;
-                    }
-                    let r = obj_screen_rect(o, cell_size, camera_offset, camera_zoom);
-                    if r.max.x >= x_lo && r.min.x <= x_hi && r.max.y >= y_lo && r.min.y <= y_hi {
-                        y_over = y_over.min(r.min.y - gap);
-                        y_under = y_under.max(r.max.y + gap);
-                    }
-                }
-
-                let over_cost = (fp.y - y_over).abs() + (tp.y - y_over).abs() + (v1_x - v2_x).abs();
-                let under_cost = (fp.y - y_under).abs() + (tp.y - y_under).abs() + (v1_x - v2_x).abs();
-                let y_mid = if over_cost <= under_cost { y_over } else { y_under };
-
-                if (fp.x - v1_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v1_x, fp.y));
-                }
-                if (fp.y - y_mid).abs() > 1.0 {
-                    pts.push(Pos2::new(v1_x, y_mid));
-                }
-                if (v1_x - v2_x).abs() > 1.0 {
-                    pts.push(Pos2::new(v2_x, y_mid));
-                }
-                if (y_mid - tp.y).abs() > 1.0 {
-                    pts.push(Pos2::new(v2_x, tp.y));
-                }
-                if (v2_x - tp.x).abs() > 1.0 {
-                    pts.push(Pos2::new(tp.x, tp.y));
-                }
-            }
-        }
-        pts.push(tp);
-    }
-
-    let pts = simplify_points(pts);
-
-    if pts.len() < 2 {
-        // Фоллбэк: прямая линия от порта к порту.
-        if let (Some((fp, _)), Some((tp, _))) = (from_port_side, to_port_side) {
-            let stroke = Stroke::new(theme.edge_width * camera_zoom, line_color);
-            painter.add(Shape::line(vec![fp, tp], stroke));
-        }
+    // Не считаем и не рисуем то, что за пределами экрана.
+    let (a, b) = (ends.from.rect, ends.to.rect);
+    let (x0, y0) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
+    let (x1, y1) = (
+        (a.x + a.w).max(b.x + b.w) as f32,
+        (a.y + a.h).max(b.y + b.h) as f32,
+    );
+    let m = CULL_MARGIN_CELLS;
+    let area = ScreenRect::from_two_pos(
+        Pos2::new(
+            ((x0 - m) * cell_size + camera_offset.x) * camera_zoom,
+            ((y0 - m) * cell_size + camera_offset.y) * camera_zoom,
+        ),
+        Pos2::new(
+            ((x1 + m) * cell_size + camera_offset.x) * camera_zoom,
+            ((y1 + m) * cell_size + camera_offset.y) * camera_zoom,
+        ),
+    );
+    if !area.intersects(painter.clip_rect()) {
         return;
     }
 
-    let stroke = Stroke::new(theme.edge_width * camera_zoom, line_color);
-    painter.add(Shape::line(pts, stroke));
+    let from_status = dynamic.status[ends.from.outputs[ends.from_row].ix as usize];
+    let to_status = dynamic.status[ends.to.requests[ends.to_row].ix as usize];
+    let color = line_color(from_status, to_status, theme);
+
+    let (from_obj, to_obj) = (ends.from, ends.to);
+    let Some(route) = layer.route(geometry, edge) else {
+        return;
+    };
+
+    // Концы линии — точки сцепления выбранных сторон на текущем зуме.
+    let src_port = visual_port_screen(
+        &from_obj.rect,
+        &from_obj.outputs,
+        EntryIx(edge.from),
+        true,
+        route.src == Side::Right,
+        cell_px,
+        camera_offset,
+        camera_zoom,
+    );
+    let dst_port = visual_port_screen(
+        &to_obj.rect,
+        &to_obj.requests,
+        EntryIx(edge.to),
+        false,
+        route.dst == Side::Right,
+        cell_px,
+        camera_offset,
+        camera_zoom,
+    );
+    let (Some(src_port), Some(dst_port)) = (src_port, dst_port) else {
+        return;
+    };
+
+    let pts = screen_polyline(
+        route,
+        src_port,
+        dst_port,
+        cell_size,
+        camera_offset,
+        camera_zoom,
+    );
+    painter.add(Shape::line(
+        pts,
+        Stroke::new(theme.edge_width * camera_zoom, color),
+    ));
 }
 
-/// Позиция порта выхода (правая граница объекта), в квантах. (Оставлена для совместимости.)
-#[allow(dead_code)]
-pub fn out_port_point(r: &CoreRect, k: usize) -> egui::Pos2 {
-    egui::Pos2::new(
-        (r.x + r.w) as f32 * polygram_core::layout::Q as f32,
-        (r.y + 1 + k as i32) as f32 * polygram_core::layout::Q as f32
-            + polygram_core::layout::Q as f32 / 2.0,
-    )
+/// Цвет линии по статусу: сначала проблема выхода источника, потом входа приёмника.
+fn line_color(from: StatusCode, to: StatusCode, theme: &crate::theme::Theme) -> egui::Color32 {
+    if from != StatusCode::Ok {
+        status_dot_color(from, Direction::Output, theme)
+    } else if to != StatusCode::Ok {
+        status_dot_color(to, Direction::Request, theme)
+    } else {
+        theme.status_ok
+    }
 }
 
-/// Позиция порта запроса (левая граница объекта), в квантах. (Оставлена для совместимости.)
-#[allow(dead_code)]
-pub fn request_port_point(r: &CoreRect, k: usize) -> egui::Pos2 {
-    egui::Pos2::new(
-        r.x as f32 * polygram_core::layout::Q as f32,
-        (r.y + 1 + k as i32) as f32 * polygram_core::layout::Q as f32
-            + polygram_core::layout::Q as f32 / 2.0,
-    )
+/// Маршрут в пикселях. Первый и последний отрезки горизонтальны и начинаются в реальных
+/// точках сцепления: они на текущем зуме могут отличаться от расчётных на доли пикселя.
+fn screen_polyline(
+    route: &Route,
+    src_port: Pos2,
+    dst_port: Pos2,
+    cell_size: f32,
+    offset: Vec2,
+    zoom: f32,
+) -> Vec<Pos2> {
+    let mut pts: Vec<Pos2> = route
+        .points
+        .iter()
+        .map(|&p| to_screen(p, cell_size, offset, zoom))
+        .collect();
+    let n = pts.len();
+    if n < 2 {
+        return pts;
+    }
+    pts[0] = src_port;
+    pts[n - 1] = dst_port;
+    if n == 2 {
+        // Прямая линия: оставляем строго горизонтальной.
+        pts[1].y = src_port.y;
+    } else {
+        pts[1].y = src_port.y;
+        pts[n - 2].y = dst_port.y;
+    }
+    pts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{vec2, Context, RawInput};
+
+    /// Настоящий кадр egui без окна: линии строго ортогональны на любом зуме, начинаются
+    /// и заканчиваются в реальных точках сцепления, первый и последний отрезки горизонтальны.
+    #[test]
+    fn painted_lines_are_orthogonal_and_start_at_the_ports_at_any_zoom() {
+        let e = crate::routing::layer_tests::engine();
+        let g = e.geometry();
+        let dynamic = e.dynamic_state();
+        let theme = crate::theme::Theme::default();
+
+        for zoom in [0.4_f32, 0.75, 1.0, 1.7] {
+            let cell_px = 16.0 * zoom;
+            let offset = Vec2::new(30.0, 12.0);
+            let mut layer = EdgeLayer::default();
+            let ctx = Context::default();
+            let input = RawInput {
+                screen_rect: Some(ScreenRect::from_min_size(Pos2::ZERO, vec2(20000.0, 8000.0))),
+                ..Default::default()
+            };
+            let out = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    layer.sync(&g, 16.0);
+                    for edge in &g.edges {
+                        paint_edge(
+                            ui.painter(),
+                            edge,
+                            &mut layer,
+                            &g,
+                            &dynamic,
+                            &theme,
+                            cell_px,
+                            offset,
+                            zoom,
+                        );
+                    }
+                });
+            });
+
+            let lines: Vec<Vec<Pos2>> = out
+                .shapes
+                .into_iter()
+                .filter_map(|s| match s.shape {
+                    Shape::Path(l) => Some(l.points),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                lines.len(),
+                g.edges.len(),
+                "зум {zoom}: нарисованы все линии"
+            );
+
+            for (edge, pts) in g.edges.iter().zip(&lines) {
+                let route = layer.route(&g, edge).unwrap().clone();
+                let ends = layer.ends(&g, edge).unwrap();
+                let want_src = visual_port_screen(
+                    &ends.from.rect,
+                    &ends.from.outputs,
+                    EntryIx(edge.from),
+                    true,
+                    route.src == Side::Right,
+                    cell_px,
+                    offset,
+                    zoom,
+                )
+                .unwrap();
+                let want_dst = visual_port_screen(
+                    &ends.to.rect,
+                    &ends.to.requests,
+                    EntryIx(edge.to),
+                    false,
+                    route.dst == Side::Right,
+                    cell_px,
+                    offset,
+                    zoom,
+                )
+                .unwrap();
+                let n = pts.len();
+                assert!(
+                    (pts[0] - want_src).length() < 1e-3,
+                    "начало в порте источника"
+                );
+                assert!(
+                    (pts[n - 1] - want_dst).length() < 1e-3,
+                    "конец в порте приёмника"
+                );
+                assert!(
+                    (pts[0].y - pts[1].y).abs() < 1e-3,
+                    "первый отрезок горизонтален"
+                );
+                assert!(
+                    (pts[n - 2].y - pts[n - 1].y).abs() < 1e-3,
+                    "последний отрезок горизонтален"
+                );
+                for w in pts.windows(2) {
+                    let dx = (w[0].x - w[1].x).abs();
+                    let dy = (w[0].y - w[1].y).abs();
+                    assert!(
+                        dx < 1e-3 || dy < 1e-3,
+                        "зум {zoom}: диагональ {:?}->{:?}",
+                        w[0],
+                        w[1]
+                    );
+                }
+            }
+        }
+    }
 }

@@ -3,15 +3,16 @@
 //! * Объекты привязаны к клеткам сетки (целые координаты), наложения запрещены.
 //! * Размер карточки: ширина 8 клеток, высота = 1 (шапка) + строки показателей.
 //! * Запросы — слева, выходы — справа; порт показателя номер k лежит на строке k.
-//! * Линии считаются в «квантах» (1 клетка = 4 кванта), чтобы вести параллельные дорожки.
+//! * Буфер между карточками считается в «квантах» (1 клетка = 4 кванта).
 //!
-//! Маршрутизация — в `route.rs`, автораскладка — в `autolayout.rs`.
+//! Линии связи здесь НЕ хранятся: это визуальный слой, его строит холст (`polygram-canvas`)
+//! по положению карточек. Автораскладка — в `autolayout.rs`.
 
-use crate::{route::LaneRegistry, types::*};
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Квантов линии в одной клетке.
+/// Квантов в одной клетке (единица буфера между карточками).
 pub const Q: i32 = 4;
 /// Ширина карточки в клетках.
 pub const NODE_W: u16 = 30;
@@ -53,13 +54,6 @@ impl Rect {
         let b2 = (o.y + o.h) * Q + buffer_quanta;
         l1 < r2 && l2 < r1 && t1 < b2 && t2 < b1
     }
-}
-
-/// Точка линии в квантах.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Point {
-    pub x: i32,
-    pub y: i32,
 }
 
 /// Размер карточки в клетках по числу запросов и выходов.
@@ -138,10 +132,6 @@ pub struct Layout {
     pub(crate) rect: Vec<Rect>,
     pub(crate) placed: Vec<bool>,
     grid: SpatialGrid,
-    pub(crate) routes: Vec<Vec<Point>>,
-    pub(crate) lanes: LaneRegistry,
-    route_queue: Vec<u32>,
-    route_queued: Vec<bool>,
     auto_slot: u32,
 }
 
@@ -150,14 +140,10 @@ impl Layout {
         Self::default()
     }
 
-    pub fn ensure(&mut self, objects: usize, edges: usize) {
+    pub fn ensure(&mut self, objects: usize) {
         if self.rect.len() < objects {
             self.rect.resize(objects, Rect::new(0, 0, 0, 0));
             self.placed.resize(objects, false);
-        }
-        if self.routes.len() < edges {
-            self.routes.resize(edges, Vec::new());
-            self.route_queued.resize(edges, false);
         }
     }
 
@@ -169,10 +155,6 @@ impl Layout {
     #[inline]
     pub fn is_placed(&self, o: ObjectIx) -> bool {
         self.placed[o.idx()]
-    }
-
-    pub fn route(&self, e: EdgeIx) -> &[Point] {
-        &self.routes[e.idx()]
     }
 
     /// Можно ли поставить прямоугольник (не пересекается ни с кем, кроме `ignore`).
@@ -305,40 +287,5 @@ impl Layout {
                 return (gx, gy);
             }
         }
-    }
-
-    // ---------- порты ----------
-    /// Точка выхода k-го выходного показателя (правая граница карточки), в квантах.
-    pub fn out_port(&self, o: ObjectIx, k: usize) -> Point {
-        let r = self.rect[o.idx()];
-        Point {
-            x: (r.x + r.w) * Q,
-            y: (r.y + 1 + k as i32) * Q + Q / 2,
-        }
-    }
-
-    /// Точка входа k-го запроса (левая граница карточки), в квантах.
-    pub fn request_port(&self, o: ObjectIx, k: usize) -> Point {
-        let r = self.rect[o.idx()];
-        Point {
-            x: r.x * Q,
-            y: (r.y + 1 + k as i32) * Q + Q / 2,
-        }
-    }
-
-    // ---------- очередь перемаршрутизации ----------
-    pub fn queue_route(&mut self, e: EdgeIx) {
-        if !self.route_queued[e.idx()] {
-            self.route_queued[e.idx()] = true;
-            self.route_queue.push(e.0);
-        }
-    }
-
-    pub(crate) fn take_route_queue(&mut self) -> Vec<u32> {
-        let q = std::mem::take(&mut self.route_queue);
-        for &e in &q {
-            self.route_queued[e as usize] = false;
-        }
-        q
     }
 }

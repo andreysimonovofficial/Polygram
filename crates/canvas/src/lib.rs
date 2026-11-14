@@ -36,6 +36,8 @@ pub struct Canvas {
     pub drag_metric_hotspots: Vec<(String, Direction, String, Rect)>,
     /// Горячие зоны иконок ошибок API-привязки (экранный rect, текст ошибки для копирования).
     pub api_error_hotspots: Vec<(Rect, String)>,
+    /// Линии связей: кэш маршрутов, пока карточки не сдвинулись.
+    edge_layer: routing::EdgeLayer,
 }
 
 impl Default for Canvas {
@@ -54,6 +56,7 @@ impl Canvas {
             container_menu_hotspots: Vec::new(),
             drag_metric_hotspots: Vec::new(),
             api_error_hotspots: Vec::new(),
+            edge_layer: routing::EdgeLayer::default(),
         }
     }
 
@@ -186,10 +189,12 @@ impl Canvas {
         self.api_error_hotspots = error_hotspots;
 
         // Линии связи рисуются поверх объектов, чтобы объекты не загораживали их.
+        self.edge_layer.sync(geometry, self.cell_size);
         for edge in &geometry.edges {
             paint_edge(
                 painter,
                 edge,
+                &mut self.edge_layer,
                 geometry,
                 dynamic,
                 &self.theme,

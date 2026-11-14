@@ -19,7 +19,6 @@ pub fn handle_connect(
     engine.vals.alloc[edge.idx()] = 0.0;
     engine.vals.mark_out(from);
     engine.vals.mark_in(to);
-    engine.layout.queue_route(edge);
     engine
         .pending
         .push(crate::event::EventKind::EdgeAdded { edge: edge.0 });

@@ -1,14 +1,34 @@
 //! Расчёт экранных позиций портов сцепления строк показателей.
 //! Чистая геометрия без egui-отрисовки: только координаты точек сцепления.
 
+use super::model::Port;
+use super::screen::cell_size_from_px;
 use egui::{Pos2, Vec2};
 use polygram_core::geometry::EntryGeom;
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::EntryIx;
 
-/// cell_size из cell_px (который уже содержит зум).
-pub fn cell_size_from_px(cell_px: f32, camera_zoom: f32) -> f32 {
-    cell_px / camera_zoom.max(0.001)
+/// Точка сцепления строки показателя в клетках сетки, при зуме 1 и нулевом смещении камеры.
+/// Не зависит от камеры, поэтому годится для кэша маршрутов. `exit_right` — сторона карточки.
+pub fn port_in_cells(
+    object_rect: &CoreRect,
+    entries: &[EntryGeom],
+    target_ix: EntryIx,
+    is_output: bool,
+    exit_right: bool,
+    cell_size: f32,
+) -> Option<Port> {
+    let p = visual_port_screen(
+        object_rect,
+        entries,
+        target_ix,
+        is_output,
+        exit_right,
+        cell_size,
+        Vec2::ZERO,
+        1.0,
+    )?;
+    Some(Port { x: p.x / cell_size, y: p.y / cell_size })
 }
 
 /// Вычислить экранную позицию точки сцепления строки показателя.

@@ -1,7 +1,7 @@
 use crate::layout::Rect;
 use crate::types::{MetricValue, NodeKind};
 
-/// Редко меняющаяся часть для холста: положение карточек и линии.
+/// Редко меняющаяся часть для холста: положение карточек и список связей.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EntryGeom {
     pub ix: u32,
@@ -24,12 +24,13 @@ pub struct ObjectGeom {
     pub parent: Option<String>,
 }
 
+/// Связь между двумя показателями. Координат линии здесь нет намеренно: линия — визуальный
+/// элемент холста, агентам (MCP) и API отдаются только карточки и то, что с чем соединено.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EdgeGeom {
     pub ix: u32,
     pub from: u32,
     pub to: u32,
-    pub points: Vec<crate::layout::Point>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]

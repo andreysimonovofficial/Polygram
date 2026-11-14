@@ -133,7 +133,6 @@ pub enum Command {
     },
 
     AutoLayout,
-    RerouteAll,
 
     /// Управление сервером — единые для GUI, MCP и HTTP.
     RestartServer,

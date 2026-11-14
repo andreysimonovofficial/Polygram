@@ -7,7 +7,6 @@ mod layout;
 mod metric_defs;
 mod metric_entries;
 mod objects;
-mod reroute_all;
 
 pub use auto_layout::handle_auto_layout;
 pub use edges::{handle_connect, handle_disconnect};
@@ -18,7 +17,6 @@ pub use metric_entries::{
     handle_set_required, handle_set_value,
 };
 pub use objects::{handle_add_object, handle_remove_object, handle_rename_object, handle_set_object_parent};
-pub use reroute_all::handle_reroute_all;
 
 pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied> {
     match cmd {
@@ -111,7 +109,6 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
             to_entry,
         } => handle_disconnect(engine, &from_object, &from_entry, &to_object, &to_entry),
         Command::AutoLayout => handle_auto_layout(engine),
-        Command::RerouteAll => handle_reroute_all(engine),
 
         // Админ-команды не модифицируют ядро, они управляют жизненным циклом API-сервера.
         Command::RestartServer => Ok(Applied { rev: 0, created: None, at: None }),

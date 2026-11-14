@@ -32,14 +32,6 @@ pub fn handle_move_object(engine: &mut Engine, object: &str, at: [i32; 2]) -> Re
     if let Some(p) = parent_ix {
         engine.expand_department_to_fit(p);
     }
-    let reqs: Vec<crate::types::EntryIx> = engine.hier.object(ix).requests.clone();
-    let outs: Vec<crate::types::EntryIx> = engine.hier.object(ix).outputs.clone();
-    for &e in &reqs {
-        engine.queue_entry_routes(e);
-    }
-    for &e in &outs {
-        engine.queue_entry_routes(e);
-    }
     engine.pending.push(crate::event::EventKind::ObjectMoved {
         object: ix.0,
         gx: at[0],
