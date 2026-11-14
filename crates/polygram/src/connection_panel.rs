@@ -38,18 +38,6 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                             }
                         });
 
-                        // Показать/скрыть сайдбар Коннекторы.
-                        ui.horizontal(|ui| {
-                            let label = if app.show_connectors_panel {
-                                "Скрыть коннекторы"
-                            } else {
-                                "Показать коннекторы"
-                            };
-                            if ui.button(label).clicked() {
-                                app.show_connectors_panel = !app.show_connectors_panel;
-                            }
-                        });
-
                         ui.separator();
 
                         // Подключение к API.

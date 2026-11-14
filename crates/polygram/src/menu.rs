@@ -46,6 +46,9 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                 ui.separator();
                 if ui.checkbox(&mut app.show_grid, "Отображать сетку").changed() {}
                 if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
+                if ui.checkbox(&mut app.show_connectors_panel, "Коннекторы").changed() {
+                    app.ui_config_save();
+                }
             });
 
             ui.separator();
