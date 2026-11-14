@@ -4,6 +4,7 @@ use serde_json::{to_string, Value};
 
 impl PolygramApp {
     pub fn apply_cmd(&mut self, cmd: Command) {
+        self.mark_dirty();
         let cmd_str = to_string(&cmd).unwrap_or_default();
         let api_base = self.connection.api_base.clone();
         let client = self.connection.api_client.clone();
@@ -95,6 +96,9 @@ impl PolygramApp {
     }
 
     pub fn apply_batch(&mut self, cmds: Vec<Command>) {
+        if !cmds.is_empty() {
+            self.mark_dirty();
+        }
         let cmd_str = to_string(&cmds).unwrap_or_default();
         let api_base = self.connection.api_base.clone();
         let client = self.connection.api_client.clone();

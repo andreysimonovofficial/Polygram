@@ -8,12 +8,38 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
             ui.menu_button("Файл", |ui| {
                 if ui.button("Новый граф").clicked() {
                     ui.close_menu();
+                    if app.dirty {
+                        app.close_confirmation_pending = true;
+                    } else {
+                        app.connection.snapshot = None;
+                        app.connection.last_rev = 0;
+                        app.mark_clean();
+                        app.last_opened_file = None;
+                        app.try_connect_once();
+                    }
                 }
-                if ui.button("Загрузить .pg").clicked() {
+                if ui.button("Открыть проект…").clicked() {
+                    ui.close_menu();
+                    app.open_project_requested = true;
+                }
+                if ui.button("Сохранить проект").clicked() {
+                    ui.close_menu();
+                    if app.last_opened_file.is_some() {
+                        app.save_project_requested = true;
+                    } else {
+                        app.save_project_as_requested = true;
+                    }
+                }
+                if ui.button("Сохранить проект как…").clicked() {
+                    ui.close_menu();
+                    app.save_project_as_requested = true;
+                }
+                ui.separator();
+                if ui.button("Загрузить .pg (отдел)").clicked() {
                     ui.close_menu();
                     app.import_requested = true;
                 }
-                if ui.button("Сохранить .pg").clicked() {
+                if ui.button("Сохранить .pg (отдел)").clicked() {
                     ui.close_menu();
                     app.export_requested = true;
                 }
@@ -29,6 +55,11 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                 ui.separator();
                 if ui.button("Выход").clicked() {
                     ui.close_menu();
+                    if app.dirty {
+                        app.close_confirmation_pending = true;
+                    } else {
+                        std::process::exit(0);
+                    }
                 }
             });
 
@@ -78,4 +109,3 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
         });
     });
 }
-

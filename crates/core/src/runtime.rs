@@ -43,6 +43,7 @@ enum Msg {
         reply: mpsc::Sender<BatchResult>,
     },
     Query(Box<dyn FnOnce(&mut Engine) + Send>),
+    ReplaceEngine(Engine),
     Stop,
 }
 
@@ -129,6 +130,10 @@ impl EngineRuntime {
                             Msg::Query(f) => {
                                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut engine)));
                             }
+                            Msg::ReplaceEngine(new_engine) => {
+                                engine = new_engine;
+                                last = publish(&engine, &slot, &last);
+                            }
                             Msg::Stop => {
                                 stop = true;
                                 break;
@@ -162,6 +167,11 @@ impl EngineRuntime {
     pub fn shutdown(mut self) -> Option<Engine> {
         let _ = self.handle.tx.send(Msg::Stop);
         self.join.take().and_then(|j| j.join().ok())
+    }
+
+    /// Заменить движок в рантайме на новый (используется при открытии проекта из файла).
+    pub fn replace_engine(&self, engine: Engine) {
+        let _ = self.handle.tx.send(Msg::ReplaceEngine(engine));
     }
 }
 

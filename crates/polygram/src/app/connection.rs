@@ -117,6 +117,12 @@ impl ConnectionState {
     }
 
     pub fn start_api_process(&mut self) -> Result<String, String> {
+        // Если API уже доступен по HTTP — не запускаем новый процесс.
+        if self.api_available() {
+            self.api_connected = true;
+            self.api_error = None;
+            return Ok("API уже запущен".to_owned());
+        }
         if self.api_process_running() {
             return Err("уже запущен".to_owned());
         }
@@ -135,11 +141,16 @@ impl ConnectionState {
     }
 
     pub fn stop_api_process(&mut self) -> bool {
-        if let Some(mut child) = self.api_process.take() {
-            let _ = child.kill();
-            true
-        } else {
-            false
+        // Не убиваем API при закрытии GUI — API живёт indépendantly и хранит состояние.
+        // Возвращаем false, чтобы сигнализировать, что остановка отменена.
+        false
+    }
+
+    /// Проверить, доступен ли API по HTTP (без попытки запуска).
+    pub fn api_available(&self) -> bool {
+        match self.api_client.get(format!("{}/api/snapshot", self.api_base)).send() {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
         }
     }
 

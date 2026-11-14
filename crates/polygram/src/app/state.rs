@@ -37,8 +37,22 @@ impl PolygramApp {
             show_connectors_panel: self.show_connectors_panel,
             show_grid: self.show_grid,
             show_cursor_coords: self.show_cursor_coords,
+            last_opened_file: self.last_opened_file.clone(),
         };
         ui_config.save();
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    pub fn set_last_opened_file(&mut self, path: Option<String>) {
+        self.last_opened_file = path;
+        self.ui_config_save();
     }
 
     pub fn poll_chat(&mut self) {

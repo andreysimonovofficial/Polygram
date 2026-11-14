@@ -40,6 +40,16 @@ pub struct CreateBinding {
     pub interval_secs: u64,
 }
 
+#[derive(Deserialize)]
+pub struct OpenProjectRequest {
+    pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct SaveProjectAsRequest {
+    pub path: String,
+}
+
 pub fn router(api: Arc<ApiService>) -> Router {
     Router::new()
         .route("/api/snapshot", get(get_snapshot))
@@ -49,6 +59,9 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/commands", post(post_command))
         .route("/api/commands/batch", post(post_batch))
         .route("/api/document", get(get_document))
+        .route("/api/document/open", post(post_document_open))
+        .route("/api/document/save-as", post(post_document_save_as))
+        .route("/api/document/recent", get(get_document_recent))
         .route("/api/document/import", post(post_document_import))
         .route(
             "/api/document/import-department",
@@ -157,6 +170,38 @@ async fn get_document(State(api): State<Arc<ApiService>>) -> Json<serde_json::Va
         },
         Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
     }
+}
+
+/// POST /api/document/open — открыть проект из файла, заменив текущий граф.
+/// Тело: { "path": "<путь к .pg файлу>" }
+async fn post_document_open(
+    State(api): State<Arc<ApiService>>,
+    Json(req): Json<OpenProjectRequest>,
+) -> Json<serde_json::Value> {
+    let path = std::path::Path::new(&req.path);
+    match api.open_project(path) {
+        Ok(result) => Json(result),
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+    }
+}
+
+/// POST /api/document/save-as — сохранить текущий граф в указанный файл.
+/// Тело: { "path": "<путь к .pg файлу>" }
+async fn post_document_save_as(
+    State(api): State<Arc<ApiService>>,
+    Json(req): Json<SaveProjectAsRequest>,
+) -> Json<serde_json::Value> {
+    let path = std::path::Path::new(&req.path);
+    match api.save_project_as(path) {
+        Ok(result) => Json(result),
+        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+    }
+}
+
+/// GET /api/document/recent — список недавних проектов.
+async fn get_document_recent(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let recent = api.get_recent_files();
+    Json(json!({"ok": true, "recent": recent}))
 }
 
 /// POST /api/document/import — применить документ (.pg JSON) к текущему графу.

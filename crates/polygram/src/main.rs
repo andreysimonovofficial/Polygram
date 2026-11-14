@@ -244,6 +244,41 @@ impl eframe::App for PolygramApp {
 
         document::import_graph(self);
 
+        document::open_project(self);
+
+        document::save_project(self);
+
+        document::save_project_as(self);
+
+        // Подтверждение закрытия с несохранёнными изменениями.
+        if self.close_confirmation_pending {
+            self.close_confirmation_pending = false;
+            egui::Window::new("Несохранённые изменения")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.label("Есть несохранённые изменения. Сохранить проект перед выходом?");
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("Сохранить и выйти").clicked() {
+                            if self.last_opened_file.is_some() {
+                                self.save_project_requested = true;
+                            } else {
+                                self.save_project_as_requested = true;
+                            }
+                            // Даем время на сохранение перед выходом.
+                            ctx.request_repaint();
+                        }
+                        if ui.button("Выйти без сохранения").clicked() {
+                            std::process::exit(0);
+                        }
+                        if ui.button("Отмена").clicked() {
+                            // Не закрываем.
+                        }
+                    });
+                });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             interaction::handle_canvas_interaction(self, ctx, ui, &published, &mut close_menu);
         });
@@ -315,6 +350,14 @@ fn main() -> eframe::Result {
             let mut app = PolygramApp::new(snapshot_rx);
             app.start_api_process();
             app.try_connect_once();
+
+            // Если есть последний открытый файл — открываем его при старте.
+            if let Some(ref path) = app.last_opened_file {
+                if std::path::Path::new(path).exists() {
+                    app.open_project_requested = true;
+                }
+            }
+
             Ok(Box::new(app))
         }),
     );

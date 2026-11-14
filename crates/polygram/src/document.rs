@@ -169,6 +169,130 @@ pub fn import_graph(app: &mut PolygramApp) {
     }
 }
 
+/// Открыть проект из .pg файла (заменяет весь граф).
+pub fn open_project(app: &mut PolygramApp) {
+    if !app.open_project_requested {
+        return;
+    }
+    app.open_project_requested = false;
+    if let Some(path) = FileDialog::new().pick_file() {
+        let api_base = app.connection.api_base.clone();
+        let path_str = path.to_string_lossy().to_string();
+        let client = Client::new();
+        let request = serde_json::json!({"path": path_str});
+        let result = client
+            .post(format!("{api_base}/api/document/open"))
+            .json(&request)
+            .send();
+        match result {
+            Ok(resp) => {
+                let status = resp.status();
+                let body: serde_json::Value = resp.json().unwrap_or_default();
+                let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+                if ok {
+                    let name = body
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("проект")
+                        .to_owned();
+                    app.set_last_opened_file(Some(path_str.clone()));
+                    app.mark_clean();
+                    app.last_status = format!("Проект открыт: {}", name);
+                    app.try_connect_once();
+                } else {
+                    let error = body
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("неизвестная ошибка");
+                    app.last_status = format!("Ошибка открытия проекта: {error} (HTTP {status})");
+                }
+            }
+            Err(e) => {
+                app.last_status = format!("Ошибка открытия проекта: {e}");
+            }
+        }
+    }
+}
+
+/// Сохранить проект в последний использованный файл или вызвать "Сохранить как".
+pub fn save_project(app: &mut PolygramApp) {
+    if !app.save_project_requested {
+        return;
+    }
+    app.save_project_requested = false;
+    let path_clone = app.last_opened_file.clone();
+    let Some(path) = path_clone.as_deref() else {
+        app.save_project_as_requested = true;
+        return;
+    };
+    let api_base = app.connection.api_base.clone();
+    let client = Client::new();
+    let request = serde_json::json!({"path": path});
+    let result = client
+        .post(format!("{api_base}/api/document/save-as"))
+        .json(&request)
+        .send();
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: serde_json::Value = resp.json().unwrap_or_default();
+            let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+            if ok {
+                app.mark_clean();
+                app.last_status = format!("Проект сохранён: {}", path);
+            } else {
+                let error = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("неизвестная ошибка");
+                app.last_status = format!("Ошибка сохранения: {error} (HTTP {status})");
+            }
+        }
+        Err(e) => {
+            app.last_status = format!("Ошибка сохранения: {e}");
+        }
+    }
+}
+
+/// Сохранить проект в выбранный файл.
+pub fn save_project_as(app: &mut PolygramApp) {
+    if !app.save_project_as_requested {
+        return;
+    }
+    app.save_project_as_requested = false;
+    if let Some(path) = FileDialog::new().set_file_name("graph.pg").save_file() {
+        let path_str = path.to_string_lossy().to_string();
+        let api_base = app.connection.api_base.clone();
+        let client = Client::new();
+        let request = serde_json::json!({"path": path_str});
+        let result = client
+            .post(format!("{api_base}/api/document/save-as"))
+            .json(&request)
+            .send();
+        match result {
+            Ok(resp) => {
+                let status = resp.status();
+                let body: serde_json::Value = resp.json().unwrap_or_default();
+                let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(status.is_success());
+                if ok {
+                    app.set_last_opened_file(Some(path_str.clone()));
+                    app.mark_clean();
+                    app.last_status = format!("Проект сохранён в {}", path.display());
+                } else {
+                    let error = body
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("неизвестная ошибка");
+                    app.last_status = format!("Ошибка сохранения: {error} (HTTP {status})");
+                }
+            }
+            Err(e) => {
+                app.last_status = format!("Ошибка сохранения: {e}");
+            }
+        }
+    }
+}
+
 /// Защитное значение Published, когда снимок от API ещё не получен.
 pub fn empty_published() -> Arc<polygram_core::Published> {
     Arc::new(polygram_core::Published {

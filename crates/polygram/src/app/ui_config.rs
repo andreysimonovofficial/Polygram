@@ -1,7 +1,30 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// Настройки отображения UI, которые сохраняются в polygram_ui_config.json рядом с экзешником.
+/// Директория данных приложения (%LOCALAPPDATA%\Polygram\ на Windows).
+fn app_data_dir() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        std::env::var("LOCALAPPDATA")
+            .ok()
+            .map(|p| PathBuf::from(p).join("Polygram"))
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .unwrap_or_default()
+                    .join("polygram_data")
+            })
+    } else {
+        std::env::var("HOME")
+            .ok()
+            .map(|p| PathBuf::from(p).join(".config").join("polygram"))
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .unwrap_or_default()
+                    .join("polygram_data")
+            })
+    }
+}
+
+/// Настройки отображения UI, которые сохраняются в polygram_ui_config.json.
 #[derive(Default, Serialize, Deserialize)]
 pub struct UiConfig {
     pub show_sidebar: bool,
@@ -11,15 +34,14 @@ pub struct UiConfig {
     pub show_connectors_panel: bool,
     pub show_grid: bool,
     pub show_cursor_coords: bool,
+    /// Последний открытый файл проекта.
+    pub last_opened_file: Option<String>,
 }
 
 impl UiConfig {
     pub fn path() -> PathBuf {
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-            .join("polygram_ui_config.json")
+        let _ = std::fs::create_dir_all(&app_data_dir());
+        app_data_dir().join("polygram_ui_config.json")
     }
 
     pub fn load() -> Self {
@@ -35,5 +57,10 @@ impl UiConfig {
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = std::fs::write(&path, json);
         }
+    }
+
+    /// Путь к последнему открытому файлу, если он существует.
+    pub fn last_opened_file_path(&self) -> Option<PathBuf> {
+        self.last_opened_file.as_ref().filter(|p| Path::new(p).exists()).cloned().map(PathBuf::from)
     }
 }

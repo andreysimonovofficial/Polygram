@@ -1,8 +1,9 @@
 use axum::Router;
-use polygram_api::{ApiService, backup_path, http::router};
+use polygram_api::{ApiService, backup_path, http::router, storage::{auto_save_path, ensure_data_dir}};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::time::{self, Duration};
 
 fn try_load_with_backups(path: &PathBuf) -> Option<polygram_api::ApiService> {
     // Пробуем основной файл.
@@ -24,11 +25,11 @@ fn try_load_with_backups(path: &PathBuf) -> Option<polygram_api::ApiService> {
 
 #[tokio::main]
 async fn main() {
-    let auto_save_path = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-        .join("polygram_auto.pg");
+    // Директория данных в %LOCALAPPDATA%\Polygram\ (или ~/.config/polygram/).
+    if let Err(e) = ensure_data_dir() {
+        eprintln!("Не удалось создать директорию данных: {e}");
+    }
+    let auto_save_path = auto_save_path();
     let api = if auto_save_path.exists() || (1..=polygram_api::MAX_BACKUPS).any(|i| backup_path(&auto_save_path, i).exists()) {
         match try_load_with_backups(&auto_save_path) {
             Some(api) => {
@@ -49,6 +50,17 @@ async fn main() {
         api
     };
     let api = Arc::new(api);
+
+    // Фоновое автосохранение каждые 5 минут.
+    let api_clone = Arc::clone(&api);
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            let _ = api_clone.maybe_save();
+            eprintln!("Плановое автосохранение выполнено.");
+        }
+    });
 
     let app: Router = router(api.clone());
 

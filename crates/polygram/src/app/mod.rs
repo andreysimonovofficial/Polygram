@@ -57,8 +57,18 @@ pub struct PolygramApp {
     pub import_requested: bool,
     pub export_department_requested: bool,
     pub import_department_requested: bool,
+    /// Экспорт/импорт проекта: флаги запроса открытия диалога файла.
+    pub open_project_requested: bool,
+    pub save_project_requested: bool,
+    pub save_project_as_requested: bool,
     /// Менеджер коннекторов: кэш файлов connectors/ и статус подключения.
     pub connectors: ConnectorManager,
+    /// Несохранённые изменения (флаг "грязного" состояния).
+    pub dirty: bool,
+    /// Последний открытый файл проекта.
+    pub last_opened_file: Option<String>,
+    /// Подтверждение закрытия с несохранёнными изменениями ожидается.
+    pub close_confirmation_pending: bool,
 }
 
 impl PolygramApp {
@@ -95,7 +105,13 @@ impl PolygramApp {
             import_requested: false,
             export_department_requested: false,
             import_department_requested: false,
+            open_project_requested: false,
+            save_project_requested: false,
+            save_project_as_requested: false,
             connectors: ConnectorManager::new(),
+            dirty: false,
+            last_opened_file: ui_config.last_opened_file.clone(),
+            close_confirmation_pending: false,
         }
     }
 }

@@ -12,16 +12,19 @@ pub mod document;
 pub mod http;
 pub mod import;
 pub mod mcp;
+pub mod storage;
 pub mod sync;
 
 use polygram_core::{
-    runtime::EngineRuntime, Command, Event, ObjectView, Stats,
+    runtime::EngineRuntime, Command, Document, EngineError, Event, ObjectView, Stats,
 };
-use std::path::PathBuf;
+use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::chat::ChatService;
+use crate::storage::{auto_save_path, add_recent_file, ensure_data_dir, load_recent_files, save_recent_files};
 
 /// Главный сервис API. Оборачивает EngineRuntime и предоставляет
 /// срезы состояния и выполнение команд.
@@ -38,6 +41,10 @@ struct ApiServiceInner {
     pub sync: sync::SyncService,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
+    /// Список недавних проектов.
+    recent_files: Mutex<Vec<storage::RecentFile>>,
+    /// Последний открытый файл проекта.
+    last_opened_file: Mutex<Option<PathBuf>>,
     /// Флаги управления жизненным циклом сервера.
     restart_flag: Arc<AtomicBool>,
     shutdown_flag: Arc<AtomicBool>,
@@ -55,6 +62,8 @@ impl ApiService {
                 chat: ChatService::new(),
                 sync,
                 auto_save_path: Mutex::new(None),
+                recent_files: Mutex::new(load_recent_files()),
+                last_opened_file: Mutex::new(None),
                 restart_flag: Arc::new(AtomicBool::new(false)),
                 shutdown_flag: Arc::new(AtomicBool::new(false)),
                 port_cell: Arc::new(AtomicU16::new(8080)),
@@ -201,16 +210,102 @@ impl ApiService {
         result
     }
 
-    fn maybe_save(&self) {
+    pub fn maybe_save(&self) {
         let path = self.inner.auto_save_path.lock().unwrap().clone();
         if let Some(path) = path {
             let _ = self.save_to_file(&path);
+            self.track_recent_after_save();
         }
     }
 
     /// Установить путь к файлу автосохранения.
     pub fn set_auto_save_path(&self, path: PathBuf) {
         *self.inner.auto_save_path.lock().unwrap() = Some(path);
+    }
+
+    /// Открыть проект из файла, заменив текущий граф.
+    pub fn open_project(&self, path: &Path) -> Result<Value, EngineError> {
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| EngineError::Document(e.to_string()))?;
+        let doc = Document::parse(&json)?;
+        let engine = polygram_core::Engine::from_document(&doc)?;
+        // Заменяем движок в рантайме.
+        self.inner.runtime.replace_engine(engine);
+
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("проект")
+            .to_owned();
+
+        // Добавляем в недавние файлы.
+        let mut recent = self.inner.recent_files.lock().unwrap();
+        add_recent_file(&mut recent, path, &name);
+        drop(recent);
+
+        // Запоминаем как последний открытый.
+        *self.inner.last_opened_file.lock().unwrap() = Some(path.to_path_buf());
+
+        // Сохраняем как автосохранение, чтобы при следующем запуске загрузилось это.
+        let _ = ensure_data_dir();
+        let p = auto_save_path();
+        let _ = self.save_to_file(&p);
+
+        Ok(serde_json::json!({"ok": true, "name": name}))
+    }
+
+    /// Сохранить текущий граф в указанный файл.
+    pub fn save_project_as(&self, path: &Path) -> Result<Value, EngineError> {
+        let json = self.to_json();
+        crate::backup::atomic_save_with_backup(path, &json)
+            .map_err(|e| EngineError::Document(e.to_string()))?;
+
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("проект")
+            .to_owned();
+
+        let mut recent = self.inner.recent_files.lock().unwrap();
+        add_recent_file(&mut recent, path, &name);
+        drop(recent);
+
+        *self.inner.last_opened_file.lock().unwrap() = Some(path.to_path_buf());
+
+        Ok(serde_json::json!({"ok": true, "name": name}))
+    }
+
+    /// Получить список недавних файлов.
+    pub fn get_recent_files(&self) -> Vec<Value> {
+        let recent = self.inner.recent_files.lock().unwrap();
+        recent
+            .iter()
+            .map(|f| {
+                json!({
+                    "path": f.path,
+                    "name": f.name,
+                    "last_opened": f.last_opened,
+                })
+            })
+            .collect()
+    }
+
+    /// Получить последний открытый файл.
+    pub fn get_last_opened_file(&self) -> Option<PathBuf> {
+        self.inner.last_opened_file.lock().unwrap().clone()
+    }
+
+    /// Обновить недавние файлы после автосохранения.
+    fn track_recent_after_save(&self) {
+        if let Some(path) = self.inner.last_opened_file.lock().unwrap().as_ref() {
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("проект")
+                .to_owned();
+            let mut recent = self.inner.recent_files.lock().unwrap();
+            add_recent_file(&mut recent, path, &name);
+        }
     }
 }
 
