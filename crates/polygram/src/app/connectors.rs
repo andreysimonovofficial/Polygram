@@ -183,21 +183,20 @@ impl ConnectorManager {
 
         let api_client = api_client.clone();
         let id = connector_id.to_owned();
-        std::thread::spawn(move || {
-            let result = api_client.get(&url).query(&[("cell", "status")]).send();
-            let ok = result.as_ref().map_or(false, |resp| resp.status().is_success());
-            let error = result.err().map(|e| e.to_string());
-            let _ = ok;
-            let _ = error;
-            let _ = id;
-        });
+        let result = api_client.get(&url).query(&[("cell", "status")]).send();
+        let ok = result.as_ref().map_or(false, |resp| resp.status().is_success());
+        let error = result.err().map(|e| e.to_string());
 
         self.connector_status.insert(
             connector_id.to_owned(),
             ConnectorStatusInfo {
-                ok: false,
+                ok,
                 last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
-                error: Some("проверка...".to_owned()),
+                error: if ok {
+                    None
+                } else {
+                    error.or_else(|| Some("подключение не удалось".to_owned()))
+                },
             },
         );
     }
