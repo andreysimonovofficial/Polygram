@@ -184,7 +184,9 @@ impl ConnectorManager {
 
         // Для Google Таблиц данные читаются через gws CLI. Проверяем, что он доступен.
         if connector_id == "google-sheets" {
-            let gws_ok = Command::new("gws").arg("--help").output().is_ok();
+            let gws_ok = ["gws", "gws.exe", "gws.cmd", "gws.bat"]
+                .iter()
+                .any(|cmd| Command::new(cmd).arg("--help").output().is_ok());
             if !gws_ok {
                 self.connector_status.insert(
                     connector_id.to_owned(),
