@@ -155,8 +155,8 @@ impl ConnectorManager {
         ]
     }
 
-    /// Проверить подключение к Apps Script URL (для Google Таблиц).
-    pub fn check_connector_status(&mut self, connector_id: &str, api_client: &Client) {
+    /// Проверить подключение к Google Таблицы через gws CLI.
+    pub fn check_connector_status(&mut self, connector_id: &str, _api_client: &Client) {
         let config = match self.connectors.get(connector_id) {
             Some(c) => c.config.clone(),
             None => return,
@@ -182,31 +182,72 @@ impl ConnectorManager {
             return;
         }
 
-        // Для Google Таблиц данные читаются через gws CLI. Проверяем, что он доступен.
-        if connector_id == "google-sheets" {
-            let gws_ok = ["gws", "gws.exe", "gws.cmd", "gws.bat"]
-                .iter()
-                .any(|cmd| Command::new(cmd).arg("--help").output().is_ok());
-            if !gws_ok {
+        let spreadsheet_id = match Self::extract_spreadsheet_id(&url) {
+            Some(id) => id,
+            None => {
                 self.connector_status.insert(
                     connector_id.to_owned(),
                     ConnectorStatusInfo {
                         ok: false,
                         last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
-                        error: Some(
-                            "gws CLI не найден. Установите @googleworkspace/cli и выполните gws auth login"
-                                .to_owned(),
-                        ),
+                        error: Some("не удалось извлечь ID таблицы из URL".to_owned()),
                     },
                 );
                 return;
             }
+        };
+
+        // Данные читаются через gws CLI. Проверяем доступность таблицы тем же путём.
+        let gws_cmd = Self::find_gws_cmd();
+        let gws_ok = match &gws_cmd {
+            Some(cmd) => Command::new(cmd).arg("--help").output().is_ok(),
+            None => false,
+        };
+        if !gws_ok {
+            self.connector_status.insert(
+                connector_id.to_owned(),
+                ConnectorStatusInfo {
+                    ok: false,
+                    last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                    error: Some(
+                        "gws CLI не найден. Установите @googleworkspace/cli и выполните gws auth login"
+                            .to_owned(),
+                    ),
+                },
+            );
+            return;
         }
 
-        let api_client = api_client.clone();
-        let result = api_client.get(&url).query(&[("cell", "status")]).send();
-        match result {
-            Ok(resp) if resp.status().is_success() => {
+        let params = serde_json::json!({
+            "spreadsheetId": spreadsheet_id,
+            "ranges": ["A1"],
+            "fields": "sheets(properties.title)"
+        });
+        let output = Command::new(gws_cmd.unwrap())
+            .args([
+                "sheets", "spreadsheets", "get",
+                "--params", &params.to_string(),
+                "--format", "json"
+            ])
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let _: Value = match serde_json::from_str(&stdout) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        self.connector_status.insert(
+                            connector_id.to_owned(),
+                            ConnectorStatusInfo {
+                                ok: false,
+                                last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
+                                error: Some("gws CLI вернул некорректный ответ".to_owned()),
+                            },
+                        );
+                        return;
+                    }
+                };
                 self.connector_status.insert(
                     connector_id.to_owned(),
                     ConnectorStatusInfo {
@@ -216,13 +257,14 @@ impl ConnectorManager {
                     },
                 );
             }
-            Ok(resp) => {
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
                 self.connector_status.insert(
                     connector_id.to_owned(),
                     ConnectorStatusInfo {
                         ok: false,
                         last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
-                        error: Some(format!("HTTP {}", resp.status())),
+                        error: Some(format!("gws CLI ошибка: {stderr}")),
                     },
                 );
             }
@@ -232,10 +274,35 @@ impl ConnectorManager {
                     ConnectorStatusInfo {
                         ok: false,
                         last_checked: Some(Local::now().format("%H:%M:%S").to_string()),
-                        error: Some(e.to_string()),
+                        error: Some(format!("не удалось запустить gws: {e}")),
                     },
                 );
             }
+        }
+    }
+
+    /// Найти доступную команду gws (gws, gws.exe, gws.cmd, gws.bat).
+    fn find_gws_cmd() -> Option<String> {
+        for cmd in ["gws", "gws.exe", "gws.cmd", "gws.bat"] {
+            if Command::new(cmd).arg("--help").output().is_ok() {
+                return Some(cmd.to_owned());
+            }
+        }
+        None
+    }
+
+    /// Извлечь ID таблицы из URL Google Таблиц.
+    fn extract_spreadsheet_id(url: &str) -> Option<String> {
+        let parts: Vec<&str> = url.split("/d/").collect();
+        if parts.len() < 2 {
+            return None;
+        }
+        let rest = parts[1];
+        let id = rest.split('/').next()?.split('?').next()?;
+        if id.is_empty() {
+            None
+        } else {
+            Some(id.to_owned())
         }
     }
 
