@@ -57,7 +57,7 @@ pub fn paint_container_header(
         rect.max - Vec2::new(btn_size, rect.height()),
         Vec2::new(btn_size, rect.height()),
     );
-    painter.rect_stroke(btn_rect, 0.0, Stroke::new(1.0 * zoom, theme.card_border));
+    painter.rect_stroke(btn_rect, 0.0, Stroke::new(1.0 * zoom, theme.card_border), egui::StrokeKind::Middle);
     let btn_color = if is_hovered { theme.text } else { header_color };
     painter.text(
         btn_rect.center(),

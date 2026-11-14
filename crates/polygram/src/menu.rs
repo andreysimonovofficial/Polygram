@@ -1,13 +1,13 @@
 use crate::app::PolygramApp;
-use polygram_canvas::Camera;
+use polygram_canvas::{Camera, Theme};
 use polygram_core::Command;
 
-pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
-    egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-        egui::menu::bar(ui, |ui| {
+pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
+    egui::Panel::top("menu").show(ui, |ui| {
+        egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("Файл", |ui| {
                 if ui.button("Новый граф").clicked() {
-                    ui.close_menu();
+                    
                     if app.dirty {
                         app.close_confirmation_pending = true;
                     } else {
@@ -19,11 +19,11 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                     }
                 }
                 if ui.button("Открыть проект…").clicked() {
-                    ui.close_menu();
+                    
                     app.open_project_requested = true;
                 }
                 if ui.button("Сохранить проект").clicked() {
-                    ui.close_menu();
+                    
                     if app.last_opened_file.is_some() {
                         app.save_project_requested = true;
                     } else {
@@ -31,30 +31,30 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
                     }
                 }
                 if ui.button("Сохранить проект как…").clicked() {
-                    ui.close_menu();
+                    
                     app.save_project_as_requested = true;
                 }
                 ui.separator();
                 if ui.button("Загрузить .pg (отдел)").clicked() {
-                    ui.close_menu();
+                    
                     app.import_requested = true;
                 }
                 if ui.button("Сохранить .pg (отдел)").clicked() {
-                    ui.close_menu();
+                    
                     app.export_requested = true;
                 }
                 ui.separator();
                 if ui.button("Экспортировать отдел").clicked() {
-                    ui.close_menu();
+                    
                     app.export_department_requested = true;
                 }
                 if ui.button("Импортировать отдел").clicked() {
-                    ui.close_menu();
+                    
                     app.import_department_requested = true;
                 }
                 ui.separator();
                 if ui.button("Выход").clicked() {
-                    ui.close_menu();
+                    
                     if app.dirty {
                         app.close_confirmation_pending = true;
                     } else {
@@ -67,12 +67,12 @@ pub fn top_menu(app: &mut PolygramApp, ctx: &egui::Context) {
             if ui.button("Автораскладка").clicked() {
                 app.apply_cmd(Command::AutoLayout);
                 app.add_event_log("info", "command", "Запущена автораскладка графа (меню)", None);
-                ui.close_menu();
+                
             }
                 ui.separator();
                 if ui.button("Сброс камеры").clicked() {
                     app.canvas.camera = Camera::new();
-                    ui.close_menu();
+                    
                 }
                 ui.separator();
                 if ui.checkbox(&mut app.show_grid, "Отображать сетку").changed() {}

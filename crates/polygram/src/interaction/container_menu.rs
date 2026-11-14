@@ -4,6 +4,7 @@
 use crate::app::{PolygramApp, dialogs::EntryApiBinding};
 use crate::interaction::api_settings::render_entry_api_settings;
 use polygram_core::{MetricValue, Published};
+use polygram_canvas::Theme;
 use egui::{Context, Window};
 
 /// Диалог редактирования списка показателей контейнера (запросы/выходы) и
@@ -12,6 +13,7 @@ pub fn handle_container_menu_dialog(
     app: &mut PolygramApp,
     ctx: &Context,
     published: &Published,
+    theme: &Theme,
 ) {
     let Some((object_id, dir)) = &app.dialogs.container_menu_target else {
         return;
@@ -165,9 +167,9 @@ pub fn handle_container_menu_dialog(
                         let binding_id = format!("{}:{}", object_id, entry.name);
                         if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
                             let icon_color = if info.ok {
-                                egui::Color32::from_rgb(0, 200, 80)
+                                theme.status_ok
                             } else {
-                                egui::Color32::from_rgb(240, 80, 80)
+                                theme.status_deficit
                             };
                             let icon_text = if info.ok { "🌐" } else { "⚠" };
                             // Кнопка иконки привязки: при клике на ⚠ копируем текст ошибки.

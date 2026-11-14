@@ -40,6 +40,7 @@ pub fn paint_object(
         rect_px,
         theme.object_corner_radius * zoom,
         Stroke::new(border_width, border_color),
+        egui::StrokeKind::Middle,
     );
 
     // Заголовок

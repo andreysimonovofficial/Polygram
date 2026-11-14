@@ -13,7 +13,7 @@ pub fn handle_camera(
         return;
     }
     // Зум колёсиком мыши к курсору (как в инструменте дизайна).
-    let scroll = ctx.input(|i| i.raw_scroll_delta);
+    let scroll = ctx.input(|i| i.smooth_scroll_delta());
     if scroll.y.abs() > 0.001 {
         if let Some(cursor) = ctx.pointer_hover_pos() {
             let old_zoom = camera.zoom;

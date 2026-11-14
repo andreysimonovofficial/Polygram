@@ -1,18 +1,19 @@
 use crate::app::PolygramApp;
+use polygram_canvas::Theme;
 
-pub fn command_log_panel(app: &PolygramApp, ctx: &egui::Context) {
-    egui::SidePanel::right("command_log")
-        .default_width(300.0)
-        .show(ctx, |ui| {
+pub fn command_log_panel(app: &PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
+    egui::Panel::right("command_log")
+        .exact_size(300.0)
+        .show(ui, |ui| {
             ui.heading("Лог команд");
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for entry in &app.commands.command_log {
                     ui.label(format!("> {}", entry.cmd));
                     ui.colored_label(
                         if entry.result.starts_with("OK") {
-                            egui::Color32::from_rgb(76, 175, 80)
+                            theme.status_ok
                         } else {
-                            egui::Color32::from_rgb(244, 67, 54)
+                            theme.status_deficit
                         },
                         &entry.result,
                     );

@@ -60,7 +60,7 @@ fn register_fonts(ctx: &egui::Context) {
             {
                 let path = dir.join(format!("fonts/{key}.ttf"));
                 if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
                     fonts
                         .families
                         .entry(egui::FontFamily::Name(key.clone().into()))
@@ -72,7 +72,7 @@ fn register_fonts(ctx: &egui::Context) {
             if !loaded {
                 let path = format!("fonts/{key}.ttf");
                 if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
                     fonts
                         .families
                         .entry(egui::FontFamily::Name(key.clone().into()))
@@ -84,7 +84,7 @@ fn register_fonts(ctx: &egui::Context) {
             if !loaded {
                 let path = format!("crates/polygram/fonts/{key}.ttf");
                 if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
                     fonts
                         .families
                         .entry(egui::FontFamily::Name(key.clone().into()))
@@ -163,7 +163,7 @@ fn load_any_system_font(fonts: &mut FontDefinitions) -> Option<String> {
     ] {
         if let Ok(data) = std::fs::read(path) {
             let key = "system".to_owned();
-            fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+            fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
             fonts
                 .families
                 .entry(egui::FontFamily::Name(key.clone().into()))
@@ -182,7 +182,7 @@ fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
     ] {
         if let Ok(data) = std::fs::read(path) {
             let key = "unicode-fallback".to_owned();
-            fonts.font_data.insert(key.clone(), FontData::from_owned(data));
+            fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
             fonts
                 .families
                 .entry(egui::FontFamily::Name(key.clone().into()))
@@ -195,9 +195,7 @@ fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
 }
 
 impl eframe::App for PolygramApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut close_menu = false;
-
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Опрос снимка состояния из API-сервера.
         self.poll_snapshot();
 
@@ -220,6 +218,53 @@ impl eframe::App for PolygramApp {
             self.refresh_api_bindings();
         }
 
+        if self.connection.warmup_frames > 0 {
+            self.connection.warmup_frames -= 1;
+            ctx.request_repaint_after(Duration::ZERO);
+        }
+
+        // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта).
+        let theme = self.canvas.theme;
+        ctx.style_mut_of(egui::Theme::Dark, |style| {
+            style.visuals.window_fill = theme.panel_bg;
+            style.visuals.panel_fill = theme.panel_bg;
+            style.visuals.window_stroke = egui::Stroke::new(1.0, theme.panel_border);
+            style.visuals.widgets.noninteractive.bg_fill = theme.panel_bg;
+            style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
+            style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.inactive.bg_fill = theme.panel_bg;
+            style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
+            style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.hovered.bg_fill = theme.menu_hover;
+            style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, theme.accent_secondary);
+            style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.active.bg_fill = theme.accent;
+            style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, theme.accent);
+            style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, theme.panel_bg);
+            style.visuals.selection.bg_fill = theme.accent;
+            style.visuals.selection.stroke = egui::Stroke::new(1.0, theme.accent);
+            style.visuals.hyperlink_color = theme.accent_secondary;
+            style.visuals.warn_fg_color = theme.status_warning;
+            style.visuals.error_fg_color = theme.status_deficit;
+            style.visuals.window_shadow = egui::epaint::Shadow {
+                offset: [theme.shadow_offset[0] as i8, theme.shadow_offset[1] as i8],
+                blur: theme.shadow_blur as u8,
+                spread: 0,
+                color: theme.shadow_color,
+            };
+            style.visuals.popup_shadow = egui::epaint::Shadow {
+                offset: [theme.shadow_offset[0] as i8, theme.shadow_offset[1] as i8],
+                blur: theme.shadow_blur as u8,
+                spread: 0,
+                color: theme.shadow_color,
+            };
+        });
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let mut close_menu = false;
+
         let published = self.connection.snapshot.clone().unwrap_or_else(|| {
             Arc::new(Published {
                 rev: 0,
@@ -229,12 +274,10 @@ impl eframe::App for PolygramApp {
             })
         });
 
-        // Считываем события из команды лог (если были).
-        // MCP-события больше не приходят в GUI (MCP живёт в polygram-api),
-        // команды логируются локально через apply_cmd.
+        let theme = self.canvas.theme;
 
         // Горячая перезагрузка больше не нужна — состояние приходит из API по HTTP.
-        menu::top_menu(self, ctx);
+        menu::top_menu(self, ui, &theme);
 
         document::export_department(self);
 
@@ -256,7 +299,7 @@ impl eframe::App for PolygramApp {
             egui::Window::new("Несохранённые изменения")
                 .collapsible(false)
                 .resizable(false)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.label("Есть несохранённые изменения. Сохранить проект перед выходом?");
                     ui.separator();
                     ui.horizontal(|ui| {
@@ -279,47 +322,42 @@ impl eframe::App for PolygramApp {
                 });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            interaction::handle_canvas_interaction(self, ctx, ui, &published, &mut close_menu);
+        egui::CentralPanel::default().show(ui, |ui| {
+            interaction::handle_canvas_interaction(self, &ctx, ui, &published, &mut close_menu, &theme);
         });
 
-        interaction::context_menu(self, ctx, &published, &mut close_menu);
+        interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
-        interaction::handle_delete_confirm(self, ctx);
+        interaction::handle_delete_confirm(self, &ctx);
 
-        interaction::handle_reparent_confirm(self, ctx);
+        interaction::handle_reparent_confirm(self, &ctx);
 
-        interaction::inline_rename_editor(self, ctx, &published);
+        interaction::inline_rename_editor(self, &ctx, &published);
 
-        interaction::handle_rename_dialog(self, ctx);
+        interaction::handle_rename_dialog(self, &ctx);
 
-        palette::command_palette(self, ctx);
+        palette::command_palette(self, &ctx);
 
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        egui::Panel::bottom("status").show(ui, |ui| {
             status::status_bar(self, ui);
         });
 
         if self.show_command_log_panel {
-            panels::command_log_panel(self, ctx);
+            panels::command_log_panel(self, ui, &theme);
         }
 
         if self.show_frontend_log_panel {
-            panels::frontend_log_panel(self, ctx);
+            panels::frontend_log_panel(self, ui, &theme);
         }
 
-        panels::connection_panel(self, ctx);
+        panels::connection_panel(self, ui, &theme);
 
         if self.show_connectors_panel {
-            panels::connectors_panel(self, ctx);
+            panels::connectors_panel(self, ui, &theme);
         }
 
         if self.show_chat_panel {
-            panels::chat_panel(self, ctx);
-        }
-
-        if self.connection.warmup_frames > 0 {
-            self.connection.warmup_frames -= 1;
-            ctx.request_repaint_after(Duration::ZERO);
+            panels::chat_panel(self, ui, &theme);
         }
     }
 }

@@ -2,6 +2,7 @@
 //! Опрос GET /api/chat/messages каждые ~2 секунды, отправка — POST /api/chat/messages.
 
 use crate::app::PolygramApp;
+use polygram_canvas::Theme;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -120,15 +121,15 @@ impl ChatState {
     }
 }
 
-pub fn author_color(author: &str) -> egui::Color32 {
+pub fn author_color(author: &str, theme: &Theme) -> egui::Color32 {
     match author {
-        "user" => egui::Color32::from_rgb(76, 175, 80),
-        "claude" => egui::Color32::from_rgb(33, 150, 243),
-        "qwen" => egui::Color32::from_rgb(156, 39, 176),
-        "gpt" => egui::Color32::from_rgb(255, 152, 0),
-        "gemini" => egui::Color32::from_rgb(0, 150, 136),
-        "http" => egui::Color32::from_rgb(158, 158, 158),
-        _ => egui::Color32::from_rgb(158, 158, 158),
+        "user" => theme.status_ok,
+        "claude" => theme.accent_secondary,
+        "qwen" => theme.status_invalid,
+        "gpt" => theme.status_warning,
+        "gemini" => theme.accent,
+        "http" => theme.text_muted,
+        _ => theme.text_muted,
     }
 }
 
@@ -144,7 +145,7 @@ pub fn author_label(author: &str) -> &str {
     }
 }
 
-pub fn render(app: &mut PolygramApp, ui: &mut egui::Ui) {
+pub fn render(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
     app.chat.poll();
 
     ui.heading("Чат");
@@ -155,7 +156,7 @@ pub fn render(app: &mut PolygramApp, ui: &mut egui::Ui) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for message in &app.chat.messages {
-                let color = author_color(&message.author);
+                let color = author_color(&message.author, theme);
                 let label = author_label(&message.author);
                 let reply_hint = message
                     .reply_to
@@ -189,7 +190,7 @@ pub fn render(app: &mut PolygramApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label("Ответить:");
         if let Some(ref r) = app.chat.reply_to {
-            ui.colored_label(egui::Color32::from_rgb(200, 200, 0), format!("автор {}", author_label(r)));
+            ui.colored_label(theme.highlight, format!("автор {}", author_label(r)));
             if ui.button("✕").clicked() {
                 app.chat.reply_to = None;
             }

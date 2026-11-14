@@ -61,6 +61,7 @@ pub fn paint_process(
         rect_px,
         0.0,
         Stroke::new(border_width, border_color),
+        egui::StrokeKind::Middle,
     );
 
     // --- Заголовок объекта (имя + #ID) ---
@@ -97,6 +98,7 @@ pub fn paint_process(
         req_rect,
         0.0,
         Stroke::new(theme.object_border_width * zoom, req_border),
+        egui::StrokeKind::Middle,
     );
 
     // Шапка контейнера + кнопка меню
@@ -161,6 +163,7 @@ pub fn paint_process(
         out_rect,
         0.0,
         Stroke::new(theme.object_border_width * zoom, out_border),
+        egui::StrokeKind::Middle,
     );
 
     // Шапка контейнера + кнопка меню

@@ -93,7 +93,7 @@ impl Canvas {
             let cell_size = self.cell_size;
             let zoom = self.camera.zoom;
             let offset = self.camera.offset;
-            let grid_color = Color32::from_rgb(35, 35, 42);
+            let grid_color = self.theme.grid_color;
 
             let min_cx = ((clip_rect.min.x / zoom - offset.x) / cell_size).floor() as i32;
             let max_cx = ((clip_rect.max.x / zoom - offset.x) / cell_size).ceil() as i32;
@@ -223,7 +223,8 @@ impl Canvas {
                 painter.rect_stroke(
                     sr,
                     2.0,
-                    egui::Stroke::new(2.0_f32 * self.camera.zoom, egui::Color32::from_rgb(100, 180, 255)),
+                    egui::Stroke::new(2.0_f32 * self.camera.zoom, self.theme.accent_secondary),
+                    egui::StrokeKind::Middle,
                 );
             }
         }

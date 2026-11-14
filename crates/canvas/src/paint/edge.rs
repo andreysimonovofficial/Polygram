@@ -168,8 +168,8 @@ mod tests {
                 screen_rect: Some(ScreenRect::from_min_size(Pos2::ZERO, vec2(20000.0, 8000.0))),
                 ..Default::default()
             };
-            let out = ctx.run(input, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     layer.sync(&g, 16.0);
                     for edge in &g.edges {
                         paint_edge(
@@ -186,6 +186,7 @@ mod tests {
                     }
                 });
             });
+            out.textures_delta.clear();
 
             let lines: Vec<Vec<Pos2>> = out
                 .shapes

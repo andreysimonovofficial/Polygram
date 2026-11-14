@@ -1,8 +1,6 @@
 use crate::app::drag::DragInteractionState;
 use crate::app::PolygramApp;
-use polygram_canvas::{
-    MetricBinding, paint_dashed_rect, paint_drag_preview,
-};
+use polygram_canvas::{MetricBinding, paint_dashed_rect, paint_drag_preview, Theme};
 use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
 use polygram_core::{Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
@@ -17,6 +15,7 @@ pub fn handle_canvas_interaction(
     ui: &mut egui::Ui,
     published: &Published,
     _close_menu: &mut bool,
+    theme: &Theme,
 ) {
     // Установка области взаимодействия холста
     let canvas_response = ui.interact(
@@ -163,8 +162,9 @@ pub fn handle_canvas_interaction(
                                 2.0,
                                 Stroke::new(
                                     2.0_f32 * app.canvas.camera.zoom,
-                                    Color32::from_rgb(0, 217, 255),
+                                    theme.accent,
                                 ),
+                                egui::StrokeKind::Middle,
                             );
                         }
                     }
@@ -198,7 +198,8 @@ pub fn handle_canvas_interaction(
                 painter.rect_stroke(
                     rect_px.expand(2.0),
                     2.0,
-                    Stroke::new(2.0_f32 * zoom, Color32::WHITE),
+                    Stroke::new(2.0_f32 * zoom, theme.text),
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -224,7 +225,7 @@ pub fn handle_canvas_interaction(
                     ),
                 );
                 let painter = ui.painter();
-                paint_dashed_rect(painter, rect_px, zoom, Color32::from_rgb(0, 217, 255));
+                paint_dashed_rect(painter, rect_px, zoom, theme.accent);
             }
         }
     }
@@ -245,6 +246,7 @@ pub fn handle_canvas_interaction(
                     box_rect,
                     0.0,
                     Stroke::new(2.0_f32, Color32::from_rgb(0, 217, 255)),
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -335,5 +337,5 @@ pub fn handle_canvas_interaction(
         }
     }
 
-    super::container_menu::handle_container_menu_dialog(app, ctx, published);
+    super::container_menu::handle_container_menu_dialog(app, ctx, published, theme);
 }

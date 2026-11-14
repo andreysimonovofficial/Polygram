@@ -39,6 +39,7 @@ pub fn paint_metric_row(
         rect,
         0.0,
         Stroke::new(ROW_BORDER_WIDTH * zoom, theme.card_border),
+        egui::StrokeKind::Middle,
     );
 
     // Символы сцепления слева и справа внутри тела строки.
@@ -77,9 +78,9 @@ pub fn paint_metric_row(
     // Иконка привязки + время последнего опроса (внутри строки, масштабируются с zoom).
     if let Some(b) = binding {
         let icon_color = if b.ok {
-            egui::Color32::from_rgb(0, 200, 80)
+            theme.status_ok
         } else {
-            egui::Color32::from_rgb(240, 80, 80)
+            theme.status_deficit
         };
         let icon_text = if b.ok { "🌐" } else { "⚠" };
         let name_w_est = entry.name.len() as f32 * 7.0 * zoom;
@@ -97,7 +98,7 @@ pub fn paint_metric_row(
                 egui::Align2::LEFT_CENTER,
                 ts,
                 egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
-                egui::Color32::from_gray(170),
+                theme.text_muted,
             );
         }
         // Кликабельная зона иконки ошибки — копировать текст ошибки по клику.

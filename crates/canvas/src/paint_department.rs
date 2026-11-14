@@ -13,7 +13,7 @@ pub fn paint_department_frame(
 ) {
     // Контур отдела (аура) — только обводка, без заливки, чтобы отдел не выглядел
     // как материальный объект. Он следует за дочерними процессами.
-    painter.rect_stroke(rect_px, theme.object_corner_radius * zoom, Stroke::new(theme.object_border_width * zoom, theme.card_border));
+    painter.rect_stroke(rect_px, theme.object_corner_radius * zoom, Stroke::new(theme.object_border_width * zoom, theme.card_border), egui::StrokeKind::Middle);
 
     // Шапка отдела — только текст, без заливки фона.
     let header_h = cell_px * theme.object_header_height_cells;

@@ -85,7 +85,7 @@ pub fn inline_rename_editor(
         .show(ctx, |ui| {
             ui.set_min_width(edit_rect.width().max(40.0));
             ui.set_min_height(edit_rect.height().max(16.0));
-            egui::Frame::none().show(ui, |ui| {
+            egui::Frame::NONE.show(ui, |ui| {
                 let response = ui.text_edit_singleline(&mut app.dialogs.edit_input);
                 response.request_focus();
 

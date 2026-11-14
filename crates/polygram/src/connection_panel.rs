@@ -1,19 +1,20 @@
 use crate::app::PolygramApp;
 use polygram_core::Command;
+use polygram_canvas::Theme;
 
 /// Панель подключения к API-серверу.
 /// Показывает статус, адрес, последнюю ошибку и лог попыток подключения.
-pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
+pub fn connection_panel(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
     if !app.show_sidebar {
         return;
     }
 
-    egui::SidePanel::left("connection_panel")
-        .default_width(360.0)
+    egui::Panel::left("connection_panel")
+        .exact_size(360.0)
         .resizable(true)
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             egui::ScrollArea::vertical()
-                .id_source("connection_panel")
+                .id_salt("connection_panel")
                 .show(ui, |ui| {
                     // API collapsible header.
                     egui::CollapsingHeader::new("API").show(ui, |ui| {
@@ -22,9 +23,9 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         let api_alive = app.connection.api_connected || api_running;
                         ui.horizontal(|ui| {
                             if api_alive {
-                                ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
+                                ui.colored_label(theme.status_ok, "● запущен");
                             } else {
-                                ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
+                                ui.colored_label(theme.status_deficit, "● остановлен");
                             }
                         });
 
@@ -54,9 +55,9 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                 app.try_connect_once();
                             }
                             if app.connection.api_connected {
-                                ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● онлайн");
+                                ui.colored_label(theme.status_ok, "● онлайн");
                             } else {
-                                ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● офлайн");
+                                ui.colored_label(theme.status_deficit, "● офлайн");
                             }
                         });
                         if app.connection.api_connected {
@@ -68,7 +69,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         if let Some(ref err) = app.connection.api_error {
                             ui.separator();
                             ui.label("Ошибка:");
-                            ui.colored_label(egui::Color32::from_rgb(244, 67, 54), err);
+                            ui.colored_label(theme.status_deficit, err);
                         }
 
                         ui.separator();
@@ -76,14 +77,14 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         // Лог подключения.
                         ui.heading("Лог подключения");
                         egui::ScrollArea::vertical()
-                            .id_source("connection_log")
+                            .id_salt("connection_log")
                             .max_height(150.0)
                             .show(ui, |ui| {
                                 for entry in &app.connection.connection_log {
                                     let color = if entry.ok {
-                                        egui::Color32::from_rgb(76, 175, 80)
+                                        theme.status_ok
                                     } else {
-                                        egui::Color32::from_rgb(244, 67, 54)
+                                        theme.status_deficit
                                     };
                                     ui.colored_label(color, format!("[{}] {}", entry.time, entry.message));
                                 }
@@ -141,9 +142,9 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         let mcp_running = app.mcp_process_running();
                         ui.horizontal(|ui| {
                             if mcp_running {
-                                ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "● запущен");
+                                ui.colored_label(theme.status_ok, "● запущен");
                             } else {
-                                ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "● остановлен");
+                                ui.colored_label(theme.status_deficit, "● остановлен");
                             }
                         });
                         ui.horizontal(|ui| {
@@ -172,7 +173,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                             mcp_exe_json
                         );
                         egui::ScrollArea::vertical()
-                            .id_source("claude_config")
+                            .id_salt("claude_config")
                             .max_height(100.0)
                             .show(ui, |ui| {
                                 ui.add(
@@ -183,7 +184,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                 );
                             });
                         if ui.button("Копировать конфиг Claude Desktop").clicked() {
-                            ctx.copy_text(claude_config);
+                            ui.ctx().copy_text(claude_config);
                         }
 
                         ui.separator();
@@ -203,7 +204,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                                     .interactive(false),
                             );
                             if ui.button("Копировать").clicked() {
-                                ctx.copy_text(mcp_exe_str.clone());
+                                ui.ctx().copy_text(mcp_exe_str.clone());
                             }
                         });
                         ui.label("Аргументы:");
@@ -213,7 +214,7 @@ pub fn connection_panel(app: &mut PolygramApp, ctx: &egui::Context) {
                         // Примеры команд.
                         ui.heading("Примеры команд");
                         egui::ScrollArea::vertical()
-                            .id_source("example_commands")
+                            .id_salt("example_commands")
                             .max_height(100.0)
                             .show(ui, |ui| {
                                 for cmd in [
