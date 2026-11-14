@@ -144,8 +144,8 @@ fn extract_spreadsheet_id(url: &str) -> Option<String> {
 
 /// Путь к бинарнику gws.exe.
 fn gws_binary_path() -> String {
-    if Command::new("gws.exe").arg("--help").output().is_ok() {
-        return "gws.exe".to_owned();
+    if Command::new("gws").arg("--help").output().is_ok() {
+        return "gws".to_owned();
     }
     r"C:\Users\andre\AppData\Roaming\npm\node_modules\@googleworkspace\cli\bin\gws.exe"
         .to_owned()
