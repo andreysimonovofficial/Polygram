@@ -84,7 +84,7 @@ pub fn paint_process(
                 let hit_bottom = if i + 1 < visible {
                     container_top + row_offsets[i + 1] * zoom
                 } else {
-                    container_top + container_h * zoom
+                    container_top + container_h
                 };
                 let hit_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, hit_bottom - row_y));
                 if hit_rect.contains(pos) {
