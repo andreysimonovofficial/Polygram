@@ -45,49 +45,7 @@ pub fn paint_process(
     let card_w = 256.0 * zoom;
     let card_h = 256.0 * zoom;
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, card_h));
-    let body_hovered = mouse_pos.map_or(false, |pos| card_rect.contains(pos));
-    let border_color = if body_hovered { theme.text } else { theme.card_border };
-    let border_width = if body_hovered {
-        theme.object_border_hover_width * zoom
-    } else {
-        theme.object_border_width * zoom
-    };
     painter.rect_filled(card_rect, 0.0, theme.card_bg);
-    painter.rect_stroke(
-        card_rect,
-        0.0,
-        Stroke::new(border_width, border_color),
-        egui::StrokeKind::Middle,
-    );
-
-    // --- Заголовок объекта: ◆ + {Имя процесса} + {ID процесса} ---
-    // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18
-    let header_h = 28.0 * zoom;
-    let header_cy = oy + 4.0 * zoom + header_h / 2.0;
-    let body_text_color = if body_hovered { theme.text } else { theme.text_muted };
-    painter.text(
-        Pos2::new(ox + 16.0 * zoom, header_cy),
-        egui::Align2::CENTER_CENTER,
-        "◆",
-        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        body_text_color,
-    );
-    let id_text = format!("#{}", object.id);
-    painter.text(
-        Pos2::new(ox + 248.0 * zoom, header_cy),
-        egui::Align2::RIGHT_CENTER,
-        &id_text,
-        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        body_text_color,
-    );
-    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
-    painter.text(
-        Pos2::new(ox + 24.0 * zoom, header_cy),
-        egui::Align2::LEFT_CENTER,
-        &title,
-        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        body_text_color,
-    );
 
     // Геометрия контейнеров (из CSS-спецификации)
     let container_w = 248.0 * zoom;
@@ -153,6 +111,47 @@ pub fn paint_process(
         && row_hovered_rect.is_none();
 
     let border_color = if body_hovered { theme.text } else { theme.card_border };
+    let border_width = if body_hovered {
+        theme.object_border_hover_width * zoom
+    } else {
+        theme.object_border_width * zoom
+    };
+    painter.rect_stroke(
+        card_rect,
+        0.0,
+        Stroke::new(border_width, border_color),
+        egui::StrokeKind::Middle,
+    );
+
+    let body_text_color = if body_hovered { theme.text } else { theme.text_muted };
+
+    // --- Заголовок объекта: ◆ + {Имя процесса} + {ID процесса} ---
+    // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18
+    let header_h = 28.0 * zoom;
+    let header_cy = oy + 4.0 * zoom + header_h / 2.0;
+    painter.text(
+        Pos2::new(ox + 16.0 * zoom, header_cy),
+        egui::Align2::CENTER_CENTER,
+        "◆",
+        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
+        body_text_color,
+    );
+    let id_text = format!("#{}", object.id);
+    painter.text(
+        Pos2::new(ox + 248.0 * zoom, header_cy),
+        egui::Align2::RIGHT_CENTER,
+        &id_text,
+        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
+        body_text_color,
+    );
+    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
+    painter.text(
+        Pos2::new(ox + 24.0 * zoom, header_cy),
+        egui::Align2::LEFT_CENTER,
+        &title,
+        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
+        body_text_color,
+    );
 
     // === Контейнер: ЗАПРОС (top: 32) ===
     let req_rect = Rect::from_min_size(
