@@ -359,7 +359,15 @@ impl eframe::App for PolygramApp {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
-            interaction::handle_canvas_interaction(self, &ctx, ui, &published, &mut close_menu, &theme);
+            if self.show_metrics_screen {
+                interaction::container_menu::render_metrics_screen(
+                    self, &ctx, ui, &published, &theme,
+                );
+            } else {
+                interaction::handle_canvas_interaction(
+                    self, &ctx, ui, &published, &mut close_menu, &theme,
+                );
+            }
         });
 
         // Подтверждение закрытия с несохранёнными изменениями.

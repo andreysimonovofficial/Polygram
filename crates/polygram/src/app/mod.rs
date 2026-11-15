@@ -55,6 +55,10 @@ pub struct PolygramApp {
     pub show_cursor_coords: bool,
     /// Окно настроек темы открыто.
     pub show_settings: bool,
+    /// Полноэкранный экран показателей открыт.
+    pub show_metrics_screen: bool,
+    /// Объект, для которого открыт экран показателей.
+    pub metrics_target_object: Option<String>,
     pub last_status: String,
     pub chat: ChatState,
     /// Экспорт/импорт отдела: флаги запроса открытия диалога файла.
@@ -110,6 +114,8 @@ impl PolygramApp {
             grid_color,
             show_cursor_coords: ui_config.show_cursor_coords,
             show_settings: false,
+            show_metrics_screen: false,
+            metrics_target_object: None,
             last_status: "API сервер не подключён".to_owned(),
             chat,
             export_requested: false,

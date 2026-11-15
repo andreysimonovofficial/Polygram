@@ -7,7 +7,7 @@ mod api_settings;
 mod camera;
 mod canvas;
 mod context_menu;
-mod container_menu;
+pub mod container_menu;
 mod delete;
 mod drag_object;
 mod reparent_confirm;
