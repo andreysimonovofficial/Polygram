@@ -225,7 +225,14 @@ fn paint_metric_container(
     let cx = container_rect.min.x;
     let cy = container_rect.min.y;
 
-    // --- Рамка контейнера ---
+    // --- Шапка контейнера: ◆ слева (top:4), текст (left:20, top:4), высота 24 ---
+    let header_rect = Rect::from_min_size(
+        Pos2::new(cx + 0.0 * zoom, cy + 4.0 * zoom),
+        Vec2::new(container_rect.width(), container_header_h),
+    );
+    painter.rect_filled(header_rect, 0.0, theme.card_bg);
+
+    // --- Рамка контейнера (рисуется после заливки шапки, чтобы не перекрывалась fill'ом) ---
     let border_color = if container_hovered { theme.text } else { theme.card_border };
     painter.rect_stroke(
         container_rect,
@@ -233,13 +240,6 @@ fn paint_metric_container(
         Stroke::new(theme.object_border_width * zoom, border_color),
         egui::StrokeKind::Middle,
     );
-
-    // --- Шапка контейнера: ◆ слева (top:4), текст (left:20, top:4), высота 24 ---
-    let header_rect = Rect::from_min_size(
-        Pos2::new(cx + 0.0 * zoom, cy + 4.0 * zoom),
-        Vec2::new(container_rect.width(), container_header_h),
-    );
-    painter.rect_filled(header_rect, 0.0, theme.card_bg);
 
     // Статус контейнера
     let status = worst_status(entries, dynamic);
