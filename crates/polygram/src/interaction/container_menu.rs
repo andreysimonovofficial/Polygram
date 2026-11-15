@@ -74,8 +74,16 @@ pub fn handle_container_menu_dialog(
     let mut apply_edits = false;
     let mut close_dialog = false;
 
+    let screen_rect = ctx.input(|i| {
+        i.viewport()
+            .inner_rect
+            .unwrap_or(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::Vec2::new(1200.0, 900.0),
+            ))
+    });
     Window::new(format!("Показатели — {object_id}"))
-        .default_size([500.0, 450.0])
+        .default_size([screen_rect.width(), screen_rect.height()])
         .resizable(true)
         .collapsible(false)
         .show(ctx, |ui| {
