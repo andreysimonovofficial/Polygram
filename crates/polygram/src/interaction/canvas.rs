@@ -29,19 +29,20 @@ pub fn handle_canvas_interaction(
     // объекта попадал в тот же объект, даже если позиция ещё не подтверждена сервером.
     let geometry = app.geometry_with_predictions(published);
 
-    // Двойной клик по заголовку контейнера показателей — открыть окно показателей ("Показатели — ЗАПРОС/ВЫХОД").
+    // Двойной клик по заголовку контейнера показателей — открыть окно показателей с развёрнутым разделом.
     let mut handled_by_container = false;
     if let Some(pos) = canvas_response.interact_pointer_pos() {
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         if is_double {
             for (object_id, dir, rect) in &app.canvas.container_header_hotspots {
                 if rect.contains(pos) {
-                    app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                    app.dialogs.container_menu_target = Some(object_id.clone());
+                    app.dialogs.container_menu_active_section = Some(*dir);
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(
                         "info",
                         "ui",
-                        &format!("Открыто окно показателей контейнера «{object_id}» ({dir:?})"),
+                        &format!("Открыто окно показателей объекта «{object_id}» ({dir:?})"),
                         None,
                     );
                     handled_by_container = true;
@@ -51,13 +52,14 @@ pub fn handle_canvas_interaction(
         }
     }
 
-    // Двойной клик по строке показателя — открыть окно настроек этого показателя ("Показатели — ЗАПРОС/ВЫХОД").
+    // Двойной клик по строке показателя — открыть окно показателей с настройками этого показателя.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         if is_double && !handled_by_container {
             for (object_id, dir, entry, rect) in &app.canvas.drag_metric_hotspots {
                 if rect.contains(pos) {
-                    app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                    app.dialogs.container_menu_target = Some(object_id.clone());
+                    app.dialogs.container_menu_active_section = Some(*dir);
                     app.dialogs.container_menu_api_expanded = Some(entry.clone());
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(
@@ -372,12 +374,13 @@ pub fn handle_canvas_interaction(
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         for (object_id, dir, rect) in &app.canvas.container_menu_hotspots {
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
-                app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                app.dialogs.container_menu_target = Some(object_id.clone());
+                app.dialogs.container_menu_active_section = None;
                 app.drag.state = DragInteractionState::Idle;
                 app.add_event_log(
                     "info",
                     "ui",
-                    &format!("Открыто меню показателей объекта «{object_id}» ({dir:?})"),
+                    &format!("Открыто меню показателей объекта «{object_id}»"),
                     None,
                 );
                 break;

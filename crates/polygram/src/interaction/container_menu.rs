@@ -1,30 +1,24 @@
-//! Диалог редактирования списка показателей контейнера (запросы/выходы) и
-//! привязки к API.
+//! Диалог редактирования списка показателей объекта (запросы и выходы) в едином окне.
+//! Два раскрывающихся раздела: ЗАПРОС и ВЫХОД с показаниями каждого.
 
 use crate::app::{PolygramApp, dialogs::EntryApiBinding};
 use crate::interaction::api_settings::render_entry_api_settings;
-use polygram_core::{MetricValue, Published};
+use polygram_core::{Direction, MetricValue, Published};
 use polygram_canvas::Theme;
 use egui::{Context, Window};
 
-/// Диалог редактирования списка показателей контейнера (запросы/выходы) и
-/// привязки к API.
+/// Диалог редактирования списка показателей объекта в едином окне с двумя разделами.
 pub fn handle_container_menu_dialog(
     app: &mut PolygramApp,
     ctx: &Context,
     published: &Published,
     theme: &Theme,
 ) {
-    let Some((object_id, dir)) = &app.dialogs.container_menu_target else {
+    let Some(object_id) = &app.dialogs.container_menu_target else {
         return;
     };
     let object_id = object_id.clone();
-    let dir = *dir;
-
-    let label = match dir {
-        polygram_core::types::Direction::Request => "ЗАПРОС",
-        polygram_core::types::Direction::Output => "ВЫХОД",
-    };
+    let active_section = app.dialogs.container_menu_active_section;
 
     let obj = match published
         .geometry
@@ -39,24 +33,29 @@ pub fn handle_container_menu_dialog(
         }
     };
 
-    let entries: Vec<&polygram_core::geometry::EntryGeom> = match dir {
-        polygram_core::types::Direction::Request => obj.requests.iter().collect(),
-        polygram_core::types::Direction::Output => obj.outputs.iter().collect(),
-    };
+    let requests: Vec<&polygram_core::geometry::EntryGeom> = obj.requests.iter().collect();
+    let outputs: Vec<&polygram_core::geometry::EntryGeom> = obj.outputs.iter().collect();
 
-    // Загрузить существующие API-привязки для каждой записи в настройки диалога.
+    // Загрузить существующие API-привязки для всех записей обоих направлений.
     if app.dialogs.container_menu_api_settings.is_empty() {
         let bindings = app.get_bindings();
-        for entry in &entries {
+        for entry in requests.iter().chain(outputs.iter()) {
             let binding_id = format!("{}:{}", object_id, entry.name);
             for b in &bindings {
                 if b.get("id").and_then(|v| v.as_str()) == Some(&binding_id) {
                     app.dialogs.container_menu_api_settings.insert(
                         entry.name.clone(),
                         EntryApiBinding {
-                            connector: b.get("connector").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+                            connector: b
+                                .get("connector")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_owned(),
                             cell: b.get("cell").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
-                            interval_secs: b.get("interval_secs").and_then(|v| v.as_u64()).unwrap_or(30),
+                            interval_secs: b
+                                .get("interval_secs")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(30),
                         },
                     );
                     break;
@@ -65,153 +64,62 @@ pub fn handle_container_menu_dialog(
         }
     }
 
-    // Инициализировать буферы редактирования (имя, значение, единица).
-    // Для запроса редактируем required, для выхода — value.
-    if app.dialogs.container_menu_edits.is_empty() {
-        for entry in &entries {
-            let buf_value = match dir {
-                polygram_core::types::Direction::Request => format!(
-                    "{:.0}",
-                    published.dynamic.required[entry.ix as usize]
-                ),
-                polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
-            };
-            app.dialogs.container_menu_edits.push((
-                entry.name.clone(),
-                buf_value,
-                entry.unit.clone(),
-            ));
-        }
-    } else {
-        let entry_names: std::collections::HashSet<&str> =
-            entries.iter().map(|e| e.name.as_str()).collect();
-        app.dialogs.container_menu_edits
-            .retain(|(n, _, _)| entry_names.contains(n.as_str()));
-        for entry in &entries {
-            if !app
-                .dialogs.container_menu_edits
-                .iter()
-                .any(|(n, _, _)| *n == entry.name)
-            {
-                let buf_value = match dir {
-                    polygram_core::types::Direction::Request => format!(
-                        "{:.0}",
-                        published.dynamic.required[entry.ix as usize]
-                    ),
-                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
-                };
-                app.dialogs.container_menu_edits.push((
-                    entry.name.clone(),
-                    buf_value,
-                    entry.unit.clone(),
-                ));
-            }
-        }
-    }
+    // Инициализировать буферы редактирования для обоих направлений.
+    app.dialogs
+        .ensure_container_menu_edits(&requests, Direction::Request, published);
+    app.dialogs
+        .ensure_container_menu_edits(&outputs, Direction::Output, published);
 
-    let mut delete_entry: Option<String> = None;
+    let mut delete_entry: Option<(String, Direction)> = None;
     let mut apply_edits = false;
     let mut close_dialog = false;
 
-    Window::new(format!("Показатели — {label} ({object_id})"))
+    Window::new(format!("Показатели — {object_id}"))
         .default_size([500.0, 450.0])
         .resizable(true)
         .collapsible(false)
         .show(ctx, |ui| {
-            ui.label(format!("{label} — {}", entries.len()));
+            ui.label(format!("Объект «{object_id}»"));
             ui.separator();
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for entry in entries.iter() {
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        ui.label(&entry.name);
-                        let field_label = match dir {
-                            polygram_core::types::Direction::Request => "необходимое (required):",
-                            polygram_core::types::Direction::Output => "значение (value):",
-                        };
-                        ui.label(field_label);
-
-                        let buf_idx = app
-                            .dialogs.container_menu_edits
-                            .iter()
-                            .position(|(n, _, _)| *n == entry.name);
-                        if buf_idx.is_none() {
-                            app.dialogs.container_menu_edits.push((
-                                entry.name.clone(),
-                                match dir {
-                                    polygram_core::types::Direction::Request => format!(
-                                        "{:.0}",
-                                        published.dynamic.required[entry.ix as usize]
-                                    ),
-                                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
-                                },
-                                entry.unit.clone(),
-                            ));
-                        }
-                        let buf_idx = app
-                            .dialogs.container_menu_edits
-                            .iter()
-                            .position(|(n, _, _)| *n == entry.name)
-                            .unwrap();
-                        let (value_buf, unit_buf) = {
-                            let e = &mut app.dialogs.container_menu_edits[buf_idx];
-                            (&mut e.1, &mut e.2)
-                        };
-
-                        ui.text_edit_singleline(value_buf);
-                        ui.label("единица:");
-                        ui.text_edit_singleline(unit_buf);
-
-                        // Статус привязки и время последнего опроса для этой записи.
-                        let binding_id = format!("{}:{}", object_id, entry.name);
-                        if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
-                            let icon_color = if info.ok {
-                                theme.status_ok
-                            } else {
-                                theme.status_deficit
-                            };
-                            let icon_text = if info.ok { "🌐" } else { "⚠" };
-                            // Кнопка иконки привязки: при клике на ⚠ копируем текст ошибки.
-                            let btn = egui::Button::new(icon_text);
-                            if ui.add(btn).clicked() {
-                                if let Some(e) = &info.error {
-                                    ctx.copy_text(e.clone());
-                                }
-                            }
-                            if let Some(ts) = &info.last_updated {
-                                ui.label(ts);
-                            }
-                        }
-
-                        if ui.button("⚙").clicked() {
-                            if app
-                                .dialogs
-                                .container_menu_api_expanded
-                                .as_deref()
-                                == Some(entry.name.as_str())
-                            {
-                                app.dialogs.container_menu_api_expanded = None;
-                            } else {
-                                app.dialogs.container_menu_api_expanded =
-                                    Some(entry.name.clone());
-                            }
-                        }
-                        if ui.button("🗑").clicked() {
-                            delete_entry = Some(entry.name.clone());
-                        }
+                // Раздел: ЗАПРОС
+                let req_default_open = active_section == Some(Direction::Request);
+                egui::CollapsingHeader::new(format!("ЗАПРОС ({})", requests.len()))
+                    .default_open(req_default_open)
+                    .show(ui, |ui| {
+                        render_metric_section(
+                            ui,
+                            app,
+                            ctx,
+                            published,
+                            theme,
+                            &object_id,
+                            Direction::Request,
+                            &requests,
+                            &mut delete_entry,
+                        );
                     });
 
-                    // Развёрнутые настройки привязки для этой записи.
-                    if app
-                        .dialogs
-                        .container_menu_api_expanded
-                        .as_deref()
-                        == Some(entry.name.as_str())
-                    {
-                        render_entry_api_settings(ui, app, &object_id, *entry, dir);
-                    }
-                }
+                ui.separator();
+
+                // Раздел: ВЫХОД
+                let out_default_open = active_section == Some(Direction::Output);
+                egui::CollapsingHeader::new(format!("ВЫХОД ({})", outputs.len()))
+                    .default_open(out_default_open)
+                    .show(ui, |ui| {
+                        render_metric_section(
+                            ui,
+                            app,
+                            ctx,
+                            published,
+                            theme,
+                            &object_id,
+                            Direction::Output,
+                            &outputs,
+                            &mut delete_entry,
+                        );
+                    });
             });
 
             ui.separator();
@@ -227,35 +135,15 @@ pub fn handle_container_menu_dialog(
 
     // Применить изменения значений и единиц измерения.
     if apply_edits {
-        let value_cmds: Vec<(String, f64)> = app
-            .dialogs.container_menu_edits
-            .iter()
-            .filter_map(|(entry_name, value_str, _)| {
-                let value: f64 = value_str.trim().parse().unwrap_or(0.0);
-                Some((entry_name.clone(), value))
-            })
-            .collect();
-        let unit_cmds: Vec<(String, String)> = app
-            .dialogs.container_menu_edits
-            .iter()
-            .filter_map(|(entry_name, _, unit_str)| {
-                let unit = unit_str.trim().to_owned();
-                if !unit.is_empty() {
-                    Some((entry_name.clone(), unit))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        app.dialogs.container_menu_edits.clear();
-        for (entry_name, value) in value_cmds {
+        let (value_cmds, unit_cmds) = app.dialogs.apply_container_edits();
+        for (entry_name, dir, value) in value_cmds {
             match dir {
-                polygram_core::types::Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
+                Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
                     object: object_id.clone(),
                     entry: entry_name.clone(),
                     required: MetricValue::Number(value),
                 }),
-                polygram_core::types::Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
+                Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
                     object: object_id.clone(),
                     entry: entry_name.clone(),
                     value: MetricValue::Number(value),
@@ -283,7 +171,7 @@ pub fn handle_container_menu_dialog(
     }
 
     // Удалить показатель.
-    if let Some(entry_name) = delete_entry {
+    if let Some((entry_name, dir)) = delete_entry {
         app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
             object: object_id.clone(),
             entry: entry_name.clone(),
@@ -298,8 +186,105 @@ pub fn handle_container_menu_dialog(
 
     if close_dialog {
         app.dialogs.container_menu_target = None;
+        app.dialogs.container_menu_active_section = None;
         app.dialogs.container_menu_edits.clear();
         app.dialogs.container_menu_api_settings.clear();
         app.dialogs.container_menu_api_expanded = None;
+    }
+}
+
+/// Отрисовать список метрик одного направления внутри раздела.
+fn render_metric_section(
+    ui: &mut egui::Ui,
+    app: &mut PolygramApp,
+    ctx: &Context,
+    published: &Published,
+    theme: &Theme,
+    object_id: &str,
+    dir: Direction,
+    entries: &[&polygram_core::geometry::EntryGeom],
+    delete_entry: &mut Option<(String, Direction)>,
+) {
+    let field_label = match dir {
+        Direction::Request => "необходимое (required):",
+        Direction::Output => "значение (value):",
+    };
+
+    for entry in entries.iter() {
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(&entry.name);
+            ui.label(field_label);
+
+            let buf_idx = app.dialogs.find_container_menu_edit(&entry.name, dir);
+            if buf_idx.is_none() {
+                app.dialogs.container_menu_edits.push((
+                    entry.name.clone(),
+                    dir,
+                    match dir {
+                        Direction::Request => format!(
+                            "{:.0}",
+                            published.dynamic.required[entry.ix as usize]
+                        ),
+                        Direction::Output => format!("{:.0}", entry.value),
+                    },
+                    entry.unit.clone(),
+                ));
+            }
+            let buf_idx = app
+                .dialogs
+                .find_container_menu_edit(&entry.name, dir)
+                .unwrap();
+            let (value_buf, unit_buf) = {
+                let e = &mut app.dialogs.container_menu_edits[buf_idx];
+                (&mut e.2, &mut e.3)
+            };
+
+            ui.text_edit_singleline(value_buf);
+            ui.label("единица:");
+            ui.text_edit_singleline(unit_buf);
+
+            // Статус привязки и время последнего опроса для этой записи.
+            let binding_id = format!("{}:{}", object_id, entry.name);
+            if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
+                let icon_text = if info.ok { "🌐" } else { "⚠" };
+                let btn = egui::Button::new(icon_text);
+                if ui.add(btn).clicked() {
+                    if let Some(e) = &info.error {
+                        ctx.copy_text(e.clone());
+                    }
+                }
+                if let Some(ts) = &info.last_updated {
+                    ui.label(ts);
+                }
+            }
+
+            if ui.button("⚙").clicked() {
+                if app
+                    .dialogs
+                    .container_menu_api_expanded
+                    .as_deref()
+                    == Some(entry.name.as_str())
+                {
+                    app.dialogs.container_menu_api_expanded = None;
+                } else {
+                    app.dialogs.container_menu_api_expanded =
+                        Some(entry.name.clone());
+                }
+            }
+            if ui.button("🗑").clicked() {
+                *delete_entry = Some((entry.name.clone(), dir));
+            }
+        });
+
+        // Развёрнутые настройки привязки для этой записи.
+        if app
+            .dialogs
+            .container_menu_api_expanded
+            .as_deref()
+            == Some(entry.name.as_str())
+        {
+            render_entry_api_settings(ui, app, object_id, *entry, dir);
+        }
     }
 }

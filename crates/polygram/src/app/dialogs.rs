@@ -26,8 +26,10 @@ pub struct DialogState {
     pub add_metric_unit: String,
     pub add_metric_api_connector: String,
     pub add_metric_api_cell: String,
-    pub container_menu_target: Option<(String, Direction)>,
-    pub container_menu_edits: Vec<(String, String, String)>,
+    pub container_menu_target: Option<String>,
+    pub container_menu_active_section: Option<Direction>,
+    /// Per-metric edit buffers: (entry_name, direction, value_str, unit_str).
+    pub container_menu_edits: Vec<(String, Direction, String, String)>,
     /// Per-entry API binding settings being edited in the container menu dialog.
     pub container_menu_api_settings: HashMap<String, EntryApiBinding>,
     /// Entry name whose settings block is currently expanded.
@@ -58,6 +60,7 @@ impl DialogState {
             add_metric_api_connector: String::new(),
             add_metric_api_cell: String::new(),
             container_menu_target: None,
+            container_menu_active_section: None,
             container_menu_edits: Vec::new(),
             container_menu_api_settings: HashMap::new(),
             container_menu_api_expanded: None,
@@ -93,6 +96,7 @@ impl DialogState {
 
     pub fn reset_container_menu(&mut self) {
         self.container_menu_target = None;
+        self.container_menu_active_section = None;
         self.container_menu_edits.clear();
         self.container_menu_api_settings.clear();
         self.container_menu_api_expanded = None;
@@ -137,15 +141,34 @@ impl DialogState {
     }
 
     pub fn container_menu_entry_names(&self) -> Vec<String> {
-        self.container_menu_edits.iter().map(|(n, _, _)| n.clone()).collect()
+        self.container_menu_edits.iter().map(|(n, _, _, _)| n.clone()).collect()
     }
 
-    pub fn ensure_container_menu_edits(&mut self, entries: &[polygram_core::geometry::EntryGeom]) {
+    pub fn find_container_menu_edit(&self, entry_name: &str, dir: Direction) -> Option<usize> {
+        self.container_menu_edits
+            .iter()
+            .position(|(n, d, _, _)| *n == entry_name && *d == dir)
+    }
+
+    pub fn ensure_container_menu_edits(
+        &mut self,
+        entries: &[&polygram_core::geometry::EntryGeom],
+        dir: Direction,
+        published: &polygram_core::Published,
+    ) {
         if self.container_menu_edits.is_empty() {
             for entry in entries {
+                let buf_value = match dir {
+                    polygram_core::types::Direction::Request => format!(
+                        "{:.0}",
+                        published.dynamic.required[entry.ix as usize]
+                    ),
+                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
+                };
                 self.container_menu_edits.push((
                     entry.name.clone(),
-                    format!("{:.0}", entry.value),
+                    dir,
+                    buf_value,
                     entry.unit.clone(),
                 ));
             }
@@ -153,36 +176,50 @@ impl DialogState {
             let entry_names: std::collections::HashSet<&str> =
                 entries.iter().map(|e| e.name.as_str()).collect();
             self.container_menu_edits
-                .retain(|(n, _, _)| entry_names.contains(n.as_str()));
+                .retain(|(n, d, _, _)| *d != dir || entry_names.contains(n.as_str()));
             for entry in entries {
-                if !self
+                if self
                     .container_menu_edits
                     .iter()
-                    .any(|(n, _, _)| *n == entry.name)
+                    .any(|(n, d, _, _)| *n == entry.name && *d == dir)
                 {
-                    self.container_menu_edits.push((
-                        entry.name.clone(),
-                        format!("{:.0}", entry.value),
-                        entry.unit.clone(),
-                    ));
+                    continue;
                 }
+                let buf_value = match dir {
+                    polygram_core::types::Direction::Request => format!(
+                        "{:.0}",
+                        published.dynamic.required[entry.ix as usize]
+                    ),
+                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
+                };
+                self.container_menu_edits.push((
+                    entry.name.clone(),
+                    dir,
+                    buf_value,
+                    entry.unit.clone(),
+                ));
             }
         }
     }
 
-    pub fn apply_container_edits(&mut self) -> (Vec<(String, f64)>, Vec<(String, String)>) {
-        let value_cmds: Vec<(String, f64)> = self
+    pub fn apply_container_edits(
+        &mut self,
+    ) -> (
+        Vec<(String, Direction, f64)>,
+        Vec<(String, String)>,
+    ) {
+        let value_cmds: Vec<(String, Direction, f64)> = self
             .container_menu_edits
             .iter()
-            .filter_map(|(entry_name, value_str, _)| {
+            .filter_map(|(entry_name, dir, value_str, _)| {
                 let value: f64 = value_str.trim().parse().unwrap_or(0.0);
-                Some((entry_name.clone(), value))
+                Some((entry_name.clone(), *dir, value))
             })
             .collect();
         let unit_cmds: Vec<(String, String)> = self
             .container_menu_edits
             .iter()
-            .filter_map(|(entry_name, _, unit_str)| {
+            .filter_map(|(entry_name, _, _, unit_str)| {
                 let unit = unit_str.trim().to_owned();
                 if !unit.is_empty() {
                     Some((entry_name.clone(), unit))
