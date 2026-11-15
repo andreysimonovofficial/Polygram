@@ -77,9 +77,17 @@ pub fn paint_process(
             for i in 0..visible {
                 let row_y = container_top + row_offsets[i] * zoom;
                 let row_x = container_x + 4.0 * zoom;
-                let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
-                if row_rect.contains(pos) {
-                    row_hovered_rect = Some(row_rect);
+                // Прямоугольник для hit-testing строки расширен вниз до следующей строки
+                // (или до низа контейнера для последней), чтобы при движении мыши по
+                // промежуткам между строками не вспыхивал контейнер Запрос/Выход.
+                let hit_bottom = if i + 1 < visible {
+                    container_top + row_offsets[i + 1] * zoom
+                } else {
+                    container_top + container_h * zoom
+                };
+                let hit_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, hit_bottom - row_y));
+                if hit_rect.contains(pos) {
+                    row_hovered_rect = Some(hit_rect);
                     break;
                 }
             }
