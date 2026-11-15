@@ -20,7 +20,6 @@ use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use reqwest::blocking::Client;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -468,16 +467,6 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
             let mut app = PolygramApp::new(snapshot_rx);
-
-            // Передаём HWND окна в систему скриншотов.
-            if let Some(winit_window) = cc.winit_window() {
-                if let Ok(handle) = winit_window.raw_window_handle() {
-                    if let RawWindowHandle::Win32(wh) = handle {
-                        app.screenshot.set_hwnd(Some(wh.hwnd as *mut std::ffi::c_void as isize));
-                    }
-                }
-            }
-
             app.start_api_process();
             app.try_connect_once();
 

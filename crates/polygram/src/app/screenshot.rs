@@ -6,18 +6,15 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use image::RgbaImage;
-use windows_sys::Win32::Foundation::{HWND, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits,
-    GetDeviceCaps, GetDC, GetWindowDC, ReleaseDC, SelectObject, SRCCOPY, BITMAPINFO,
-    BITMAPINFOHEADER, DIB_RGB_COLORS,
+    GetDeviceCaps, GetDC, ReleaseDC, SelectObject, SRCCOPY, BITMAPINFO, BITMAPINFOHEADER,
+    DIB_RGB_COLORS,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetDesktopWindow, GetWindowRect};
+use windows_sys::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
 
 /// Состояние системы скриншотов.
 pub struct ScreenshotState {
-    /// Дескриптор окна приложения (HWND), если известен.
-    pub hwnd: Option<isize>,
     /// Директория для сохранения скриншотов.
     pub dir: PathBuf,
     /// Флаг запроса скриншота (устанавливается из меню).
@@ -31,7 +28,6 @@ pub struct ScreenshotState {
 impl Default for ScreenshotState {
     fn default() -> Self {
         Self {
-            hwnd: None,
             dir: PathBuf::from("screenshots"),
             requested: false,
             auto_capture_frames: 0,
@@ -41,11 +37,6 @@ impl Default for ScreenshotState {
 }
 
 impl ScreenshotState {
-    /// Установить HWND окна.
-    pub fn set_hwnd(&mut self, hwnd: Option<isize>) {
-        self.hwnd = hwnd;
-    }
-
     /// Запросить скриншот.
     pub fn request(&mut self) {
         self.requested = true;
@@ -57,38 +48,24 @@ impl ScreenshotState {
         let _ = std::fs::write("capture_debug.txt", format!("capture() called, frames={}", self.auto_capture_frames));
         eprintln!("SCREENSHOT: capture() called");
         unsafe {
-            let (window_dc, width, height, release_target) = if let Some(hwnd_ptr) = self.hwnd {
-                let hwnd = hwnd_ptr as *mut std::ffi::c_void;
-                let mut rect = RECT::default();
-                if GetWindowRect(hwnd, &mut rect) == 0 {
-                    return Err("GetWindowRect failed".to_owned());
-                }
-                let width = (rect.right - rect.left).max(1) as u32;
-                let height = (rect.bottom - rect.top).max(1) as u32;
-                let window_dc = GetWindowDC(hwnd);
-                let _ = std::fs::write("capture_debug.txt", format!("window_dc={:p}", window_dc));
-                if window_dc.is_null() {
-                    return Err("GetWindowDC failed".to_owned());
-                }
-                (window_dc, width, height, Some(hwnd))
-            } else {
-                let desktop_hwnd = GetDesktopWindow();
-                let _ = std::fs::write("capture_debug.txt", format!("desktop={:p}", desktop_hwnd));
-                let window_dc = GetDC(desktop_hwnd);
-                let _ = std::fs::write("capture_debug.txt", format!("window_dc={:p}", window_dc));
-                if window_dc.is_null() {
-                    return Err("GetDC(0) failed".to_owned());
-                }
-                let width = GetDeviceCaps(window_dc, 8i32) as u32;
-                let height = GetDeviceCaps(window_dc, 10i32) as u32;
-                (window_dc, width, height, Some(desktop_hwnd))
-            };
+            let desktop_hwnd = GetDesktopWindow();
+            let _ = std::fs::write("capture_debug.txt", format!("desktop={:p}", desktop_hwnd));
+            let window_dc = GetDC(desktop_hwnd);
+            let _ = std::fs::write("capture_debug.txt", format!("window_dc={:p}", window_dc));
+            if window_dc.is_null() {
+                return Err("GetDC(0) failed".to_owned());
+            }
+            let _ = std::fs::write("capture_debug.txt", format!("window_dc={:p}", window_dc));
+            if window_dc.is_null() {
+                return Err("GetDC(0) failed".to_owned());
+            }
+
+            let width = GetDeviceCaps(window_dc, 8i32) as u32;
+            let height = GetDeviceCaps(window_dc, 10i32) as u32;
             let mem_dc = CreateCompatibleDC(window_dc);
             let _ = std::fs::write("capture_debug.txt", format!("mem_dc={:p}", mem_dc));
             if mem_dc.is_null() {
-                if let Some(hwnd) = release_target {
-                    ReleaseDC(hwnd, window_dc);
-                }
+                ReleaseDC(desktop_hwnd, window_dc);
                 return Err("CreateCompatibleDC failed".to_owned());
             }
 
@@ -96,9 +73,7 @@ impl ScreenshotState {
             let _ = std::fs::write("capture_debug.txt", format!("bitmap={:p}", bitmap));
             if bitmap.is_null() {
                 DeleteDC(mem_dc);
-                if let Some(hwnd) = release_target {
-                    ReleaseDC(hwnd, window_dc);
-                }
+                ReleaseDC(desktop_hwnd, window_dc);
                 return Err("CreateCompatibleBitmap failed".to_owned());
             }
 
@@ -122,9 +97,7 @@ impl ScreenshotState {
                 SelectObject(mem_dc, old_bitmap);
                 DeleteObject(bitmap);
                 DeleteDC(mem_dc);
-                if let Some(target) = release_target {
-                    ReleaseDC(target, window_dc);
-                }
+                ReleaseDC(desktop_hwnd, window_dc);
                 return Err("BitBlt failed".to_owned());
             }
 
@@ -165,9 +138,7 @@ impl ScreenshotState {
             SelectObject(mem_dc, old_bitmap);
             DeleteObject(bitmap);
             DeleteDC(mem_dc);
-            if let Some(hwnd) = release_target {
-                ReleaseDC(hwnd, window_dc);
-            }
+            ReleaseDC(desktop_hwnd, window_dc);
 
             if scanned == 0 {
                 return Err("GetDIBits returned 0".to_owned());
