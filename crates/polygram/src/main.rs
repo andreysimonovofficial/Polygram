@@ -402,7 +402,7 @@ impl eframe::App for PolygramApp {
 
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
-        // РЎРЅРёРјРѕРє СЌРєСЂР°РЅР° С‡РµСЂРµР· egui API (С‚РѕР»СЊРєРѕ СЃРѕРґРµСЂР¶РёРјРѕРµ РѕРєРЅР° РїСЂРёР»РѕР¶РµРЅРёСЏ).
+        // Снимок экрана через egui API (только содержимое окна приложения).
         if self.screenshot_requested {
             let result = self.screenshot_result.clone();
             self.screenshot_requested = false;
@@ -417,7 +417,7 @@ impl eframe::App for PolygramApp {
             });
         }
 
-        // РџРѕРєР°Р·Р°С‚СЊ СЃС‚Р°С‚СѓСЃ РїРѕСЃР»РµРґРЅРµРіРѕ СЃРєСЂРёРЅС€РѕС‚Р°.
+        // Показать статус последнего скриншота.
         let screenshot_res = {
             let mut guard = self.screenshot_result.lock().unwrap();
             guard.take()
@@ -425,17 +425,17 @@ impl eframe::App for PolygramApp {
         if let Some(res) = screenshot_res {
             match res {
                 Ok(path) => {
-                    self.last_status = format!("РЎРЅРёРјРѕРє СЌРєСЂР°РЅР° СЃРѕС…СЂР°РЅС‘РЅ: {}", path.display());
-                    self.add_event_log("info", "screenshot", &format!("РЎРѕС…СЂР°РЅС‘РЅ: {}", path.display()), None);
+                    self.last_status = format!("Снимок экрана сохранён: {}", path.display());
+                    self.add_event_log("info", "screenshot", &format!("Сохранён: {}", path.display()), None);
                 }
                 Err(e) => {
-                    self.last_status = format!("РћС€РёР±РєР° СЃРєСЂРёРЅС€РѕС‚Р°: {}", e);
+                    self.last_status = format!("Ошибка скриншота: {}", e);
                     self.add_event_log("error", "screenshot", &e, None);
                 }
             }
         }
 
-        // РћРєРЅРѕ РґРµС‚Р°Р»СЊРЅС‹С… РЅР°СЃС‚СЂРѕРµРє С‚РµРјС‹.
+        // Окно детальных настроек темы.
         if self.show_settings {
             if crate::app::settings::render_settings(self, ui) {
                 self.ui_config_save();
@@ -489,14 +489,14 @@ fn main() -> eframe::Result {
         .unwrap();
     let api_base = "http://127.0.0.1:8080".to_owned();
 
-    // Р¤РѕРЅРѕРІС‹Р№ РѕРїСЂРѕСЃ СЃРЅРёРјРєР° СЃРѕСЃС‚РѕСЏРЅРёСЏ РёР· API-СЃРµСЂРІРµСЂР°.
+    // Фоновый опрос снимка состояния из API-сервера.
     let (snapshot_tx, snapshot_rx) = mpsc::channel();
     PolygramApp::start_snapshot_polling(api_client.clone(), api_base.clone(), snapshot_tx);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("Polygram вЂ” Р¶РёРІР°СЏ РєР°СЂС‚Р° СЃРёСЃС‚РµРјС‹")
+            .with_title("Polygram — живая карта системы")
             .with_icon(load_icon()),
         ..Default::default()
     };
@@ -509,7 +509,7 @@ fn main() -> eframe::Result {
             app.start_api_process();
             app.try_connect_once();
 
-            // Р•СЃР»Рё РµСЃС‚СЊ РїРѕСЃР»РµРґРЅРёР№ РѕС‚РєСЂС‹С‚С‹Р№ С„Р°Р№Р» вЂ” РѕС‚РєСЂС‹РІР°РµРј РµРіРѕ РїСЂРё СЃС‚Р°СЂС‚Рµ.
+            // Если есть последний открытый файл — открываем его при старте.
             if let Some(ref path) = app.last_opened_file {
                 if std::path::Path::new(path).exists() {
                     app.open_project_requested = true;
