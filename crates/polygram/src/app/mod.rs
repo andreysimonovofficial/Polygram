@@ -30,6 +30,8 @@ use commands::CommandState;
 use ui_config::UiConfig;
 use connectors::ConnectorManager;
 use bindings::BindingManager;
+use std::path::PathBuf;
+use std::sync::Mutex;
 
 pub use state::CommandLogEntry;
 
@@ -78,6 +80,10 @@ pub struct PolygramApp {
     pub last_opened_file: Option<String>,
     /// Подтверждение закрытия с несохранёнными изменениями ожидается.
     pub close_confirmation_pending: bool,
+    /// Запрос на снимок экрана (устанавливается из меню).
+    pub screenshot_requested: bool,
+    /// Результат последнего снимка экрана (записывается из колбэка egui).
+    pub screenshot_result: Arc<Mutex<Option<Result<PathBuf, String>>>>,
 }
 
 impl PolygramApp {
@@ -129,6 +135,8 @@ impl PolygramApp {
             dirty: false,
             last_opened_file: ui_config.last_opened_file.clone(),
             close_confirmation_pending: false,
+            screenshot_requested: false,
+            screenshot_result: Arc::new(Mutex::new(None)),
         }
     }
 }

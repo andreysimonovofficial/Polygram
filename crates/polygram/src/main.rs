@@ -1,7 +1,7 @@
-//! Окно Polygram: egui-оболочка с меню, палитрой команд, строкой статуса и холстом.
-//! Shell — thin-клиент: все команды уходят через HTTP на polygram-api (8080),
-//! состояние подтягивается через /api/snapshot. API-сервер работает 24/7,
-//! GUI можно пересобирать и перезапускать сколько угодно.
+﻿//! РћРєРЅРѕ Polygram: egui-РѕР±РѕР»РѕС‡РєР° СЃ РјРµРЅСЋ, РїР°Р»РёС‚СЂРѕР№ РєРѕРјР°РЅРґ, СЃС‚СЂРѕРєРѕР№ СЃС‚Р°С‚СѓСЃР° Рё С…РѕР»СЃС‚РѕРј.
+//! Shell вЂ” thin-РєР»РёРµРЅС‚: РІСЃРµ РєРѕРјР°РЅРґС‹ СѓС…РѕРґСЏС‚ С‡РµСЂРµР· HTTP РЅР° polygram-api (8080),
+//! СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРґС‚СЏРіРёРІР°РµС‚СЃСЏ С‡РµСЂРµР· /api/snapshot. API-СЃРµСЂРІРµСЂ СЂР°Р±РѕС‚Р°РµС‚ 24/7,
+//! GUI РјРѕР¶РЅРѕ РїРµСЂРµСЃРѕР±РёСЂР°С‚СЊ Рё РїРµСЂРµР·Р°РїСѓСЃРєР°С‚СЊ СЃРєРѕР»СЊРєРѕ СѓРіРѕРґРЅРѕ.
 
 mod app;
 mod interaction;
@@ -17,13 +17,14 @@ mod frontend_log_panel;
 mod status;
 
 use app::PolygramApp;
-use eframe::egui::{self, FontData, FontDefinitions};
+use eframe::egui::{self, ColorImage, FontData, FontDefinitions};
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
 use reqwest::blocking::Client;
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 fn load_icon() -> egui::IconData {
     let img = image::load_from_memory(include_bytes!("../assets/favicon.png"))
@@ -196,13 +197,13 @@ fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
 
 impl eframe::App for PolygramApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Опрос снимка состояния из API-сервера.
+        // РћРїСЂРѕСЃ СЃРЅРёРјРєР° СЃРѕСЃС‚РѕСЏРЅРёСЏ РёР· API-СЃРµСЂРІРµСЂР°.
         self.poll_snapshot();
 
-        // Опрос ленты чата.
+        // РћРїСЂРѕСЃ Р»РµРЅС‚С‹ С‡Р°С‚Р°.
         self.poll_chat();
 
-        // Периодическая попытка переподключения, если API недоступен (раз в ~50 кадров ≈ 1 сек).
+        // РџРµСЂРёРѕРґРёС‡РµСЃРєР°СЏ РїРѕРїС‹С‚РєР° РїРµСЂРµРїРѕРґРєР»СЋС‡РµРЅРёСЏ, РµСЃР»Рё API РЅРµРґРѕСЃС‚СѓРїРµРЅ (СЂР°Р· РІ ~50 РєР°РґСЂРѕРІ в‰€ 1 СЃРµРє).
         if !self.connection.api_connected {
             self.connection.reconnect_tick = self.connection.reconnect_tick.saturating_sub(1);
             if self.connection.reconnect_tick == 0 {
@@ -211,7 +212,7 @@ impl eframe::App for PolygramApp {
             }
         }
 
-        // Обновление статусов API-привязок (раз в ~100 кадров ≈ 2 сек).
+        // РћР±РЅРѕРІР»РµРЅРёРµ СЃС‚Р°С‚СѓСЃРѕРІ API-РїСЂРёРІСЏР·РѕРє (СЂР°Р· РІ ~100 РєР°РґСЂРѕРІ в‰€ 2 СЃРµРє).
         self.bindings.api_bindings_tick = self.bindings.api_bindings_tick.saturating_sub(1);
         if self.bindings.api_bindings_tick == 0 {
             self.bindings.api_bindings_tick = 100;
@@ -223,10 +224,10 @@ impl eframe::App for PolygramApp {
             ctx.request_repaint_after(Duration::ZERO);
         }
 
-        // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта, отступы, скругление, шрифты).
+        // РџСЂРёРјРµРЅРµРЅРёРµ С‚РµРјС‹ Рє СЃС‚РёР»СЋ egui (С†РІРµС‚Р° РїР°РЅРµР»РµР№, РѕРєРѕРЅ, РІРёРґР¶РµС‚РѕРІ, СЃРµР»РµРєС‚Р°, РѕС‚СЃС‚СѓРїС‹, СЃРєСЂСѓРіР»РµРЅРёРµ, С€СЂРёС„С‚С‹).
         let theme = self.canvas.theme;
         ctx.style_mut_of(egui::Theme::Dark, |style| {
-            // Отступы и интервалы.
+            // РћС‚СЃС‚СѓРїС‹ Рё РёРЅС‚РµСЂРІР°Р»С‹.
             style.spacing.item_spacing = egui::vec2(theme.item_spacing[0], theme.item_spacing[1]);
             style.spacing.window_margin = egui::Margin {
                 left: theme.window_margin[0] as i8,
@@ -244,18 +245,18 @@ impl eframe::App for PolygramApp {
             style.spacing.combo_height = theme.combo_height;
             style.spacing.slider_width = theme.slider_width;
             style.visuals.resize_corner_size = theme.resize_corner_size;
-            // Цвета панелей и окон.
+            // Р¦РІРµС‚Р° РїР°РЅРµР»РµР№ Рё РѕРєРѕРЅ.
             style.visuals.window_fill = theme.panel_bg;
             style.visuals.panel_fill = theme.panel_bg;
             style.visuals.faint_bg_color = theme.faint_bg_color;
             style.visuals.extreme_bg_color = theme.extreme_bg_color;
             style.visuals.code_bg_color = theme.code_bg_color;
 
-            // Обводки окон/панелей.
+            // РћР±РІРѕРґРєРё РѕРєРѕРЅ/РїР°РЅРµР»РµР№.
             style.visuals.window_stroke = egui::Stroke::new(1.0, theme.panel_border);
             style.visuals.window_corner_radius = theme.window_rounding();
 
-            // Виджеты.
+            // Р’РёРґР¶РµС‚С‹.
             style.visuals.widgets.noninteractive.bg_fill = theme.panel_bg;
             style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
             style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
@@ -274,14 +275,14 @@ impl eframe::App for PolygramApp {
             style.visuals.widgets.active.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.open.corner_radius = theme.widget_rounding_egui();
 
-            // Выделение, ссылки, предупреждения, ошибки.
+            // Р’С‹РґРµР»РµРЅРёРµ, СЃСЃС‹Р»РєРё, РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ, РѕС€РёР±РєРё.
             style.visuals.selection.bg_fill = theme.accent;
             style.visuals.selection.stroke = egui::Stroke::new(1.0, theme.accent);
             style.visuals.hyperlink_color = theme.link_color;
             style.visuals.warn_fg_color = theme.status_warning;
             style.visuals.error_fg_color = theme.status_deficit;
 
-            // Тени окон и popup.
+            // РўРµРЅРё РѕРєРѕРЅ Рё popup.
             style.visuals.window_shadow = egui::epaint::Shadow {
                 offset: [theme.shadow_offset[0] as i8, theme.shadow_offset[1] as i8],
                 blur: theme.shadow_blur as u8,
@@ -295,7 +296,7 @@ impl eframe::App for PolygramApp {
                 color: theme.shadow_color,
             };
 
-            // Текстовые стили / шрифты.
+            // РўРµРєСЃС‚РѕРІС‹Рµ СЃС‚РёР»Рё / С€СЂРёС„С‚С‹.
             style.text_styles.get_mut(&egui::TextStyle::Body).map(|f| f.size = theme.text_size_body);
             style.text_styles.get_mut(&egui::TextStyle::Button).map(|f| f.size = theme.text_size_button);
             style.text_styles.get_mut(&egui::TextStyle::Small).map(|f| f.size = theme.text_size_small);
@@ -319,7 +320,7 @@ impl eframe::App for PolygramApp {
 
         let theme = self.canvas.theme;
 
-        // Горячая перезагрузка больше не нужна — состояние приходит из API по HTTP.
+        // Р“РѕСЂСЏС‡Р°СЏ РїРµСЂРµР·Р°РіСЂСѓР·РєР° Р±РѕР»СЊС€Рµ РЅРµ РЅСѓР¶РЅР° вЂ” СЃРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёС…РѕРґРёС‚ РёР· API РїРѕ HTTP.
         menu::top_menu(self, ui, &theme);
 
         document::export_department(self);
@@ -370,30 +371,30 @@ impl eframe::App for PolygramApp {
             }
         });
 
-        // Подтверждение закрытия с несохранёнными изменениями.
+        // РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ Р·Р°РєСЂС‹С‚РёСЏ СЃ РЅРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё РёР·РјРµРЅРµРЅРёСЏРјРё.
         if self.close_confirmation_pending {
             self.close_confirmation_pending = false;
-            egui::Window::new("Несохранённые изменения")
+            egui::Window::new("РќРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ РёР·РјРµРЅРµРЅРёСЏ")
                 .collapsible(false)
                 .resizable(false)
                 .show(&ctx, |ui| {
-                    ui.label("Есть несохранённые изменения. Сохранить проект перед выходом?");
+                    ui.label("Р•СЃС‚СЊ РЅРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ РёР·РјРµРЅРµРЅРёСЏ. РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕРµРєС‚ РїРµСЂРµРґ РІС‹С…РѕРґРѕРј?");
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("Сохранить и выйти").clicked() {
+                        if ui.button("РЎРѕС…СЂР°РЅРёС‚СЊ Рё РІС‹Р№С‚Рё").clicked() {
                             if self.last_opened_file.is_some() {
                                 self.save_project_requested = true;
                             } else {
                                 self.save_project_as_requested = true;
                             }
-                            // Даем время на сохранение перед выходом.
+                            // Р”Р°РµРј РІСЂРµРјСЏ РЅР° СЃРѕС…СЂР°РЅРµРЅРёРµ РїРµСЂРµРґ РІС‹С…РѕРґРѕРј.
                             ctx.request_repaint();
                         }
-                        if ui.button("Выйти без сохранения").clicked() {
+                        if ui.button("Р’С‹Р№С‚Рё Р±РµР· СЃРѕС…СЂР°РЅРµРЅРёСЏ").clicked() {
                             std::process::exit(0);
                         }
-                        if ui.button("Отмена").clicked() {
-                            // Не закрываем.
+                        if ui.button("РћС‚РјРµРЅР°").clicked() {
+                            // РќРµ Р·Р°РєСЂС‹РІР°РµРј.
                         }
                     });
                 });
@@ -401,7 +402,40 @@ impl eframe::App for PolygramApp {
 
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
-        // Окно детальных настроек темы.
+        // РЎРЅРёРјРѕРє СЌРєСЂР°РЅР° С‡РµСЂРµР· egui API (С‚РѕР»СЊРєРѕ СЃРѕРґРµСЂР¶РёРјРѕРµ РѕРєРЅР° РїСЂРёР»РѕР¶РµРЅРёСЏ).
+        if self.screenshot_requested {
+            let result = self.screenshot_result.clone();
+            self.screenshot_requested = false;
+            let ctx_repaint = ctx.clone();
+            ctx.request_screenshot(move |image: Arc<ColorImage>| {
+                let dir = PathBuf::from("screenshots");
+                let res = save_screenshot(&image, &dir);
+                let mut guard = result.lock().unwrap();
+                *guard = Some(res.clone().map(|p| Ok(p)).unwrap_or_else(|e| Err(e)));
+                drop(guard);
+                ctx_repaint.request_repaint();
+            });
+        }
+
+        // РџРѕРєР°Р·Р°С‚СЊ СЃС‚Р°С‚СѓСЃ РїРѕСЃР»РµРґРЅРµРіРѕ СЃРєСЂРёРЅС€РѕС‚Р°.
+        let screenshot_res = {
+            let mut guard = self.screenshot_result.lock().unwrap();
+            guard.take()
+        };
+        if let Some(res) = screenshot_res {
+            match res {
+                Ok(path) => {
+                    self.last_status = format!("РЎРЅРёРјРѕРє СЌРєСЂР°РЅР° СЃРѕС…СЂР°РЅС‘РЅ: {}", path.display());
+                    self.add_event_log("info", "screenshot", &format!("РЎРѕС…СЂР°РЅС‘РЅ: {}", path.display()), None);
+                }
+                Err(e) => {
+                    self.last_status = format!("РћС€РёР±РєР° СЃРєСЂРёРЅС€РѕС‚Р°: {}", e);
+                    self.add_event_log("error", "screenshot", &e, None);
+                }
+            }
+        }
+
+        // РћРєРЅРѕ РґРµС‚Р°Р»СЊРЅС‹С… РЅР°СЃС‚СЂРѕРµРє С‚РµРјС‹.
         if self.show_settings {
             if crate::app::settings::render_settings(self, ui) {
                 self.ui_config_save();
@@ -419,6 +453,34 @@ impl eframe::App for PolygramApp {
         palette::command_palette(self, &ctx);
     }
 }
+/// РЎРѕС…СЂР°РЅРёС‚СЊ РєР°РґСЂ egui ColorImage РєР°Рє PNG РІ СѓРєР°Р·Р°РЅРЅСѓСЋ РґРёСЂРµРєС‚РѕСЂРёСЋ.
+fn save_screenshot(image: &ColorImage, dir: &PathBuf) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    let path = dir.join(format!("screenshot_{}.png", ts));
+
+    let width = image.width() as u32;
+    let height = image.height() as u32;
+    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+    for pixel in &image.pixels {
+        let [r, g, b, a] = pixel.to_array();
+        rgba.push(r);
+        rgba.push(g);
+        rgba.push(b);
+        rgba.push(a);
+    }
+
+    let img = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or("Failed to create RgbaImage from screenshot pixels")?;
+    img.save(&path)
+        .map_err(|e| format!("Failed to save screenshot PNG: {}", e))?;
+
+    Ok(path)
+}
 
 fn main() -> eframe::Result {
     let api_client = Client::builder()
@@ -427,14 +489,14 @@ fn main() -> eframe::Result {
         .unwrap();
     let api_base = "http://127.0.0.1:8080".to_owned();
 
-    // Фоновый опрос снимка состояния из API-сервера.
+    // Р¤РѕРЅРѕРІС‹Р№ РѕРїСЂРѕСЃ СЃРЅРёРјРєР° СЃРѕСЃС‚РѕСЏРЅРёСЏ РёР· API-СЃРµСЂРІРµСЂР°.
     let (snapshot_tx, snapshot_rx) = mpsc::channel();
     PolygramApp::start_snapshot_polling(api_client.clone(), api_base.clone(), snapshot_tx);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("Polygram — живая карта системы")
+            .with_title("Polygram вЂ” Р¶РёРІР°СЏ РєР°СЂС‚Р° СЃРёСЃС‚РµРјС‹")
             .with_icon(load_icon()),
         ..Default::default()
     };
@@ -447,7 +509,7 @@ fn main() -> eframe::Result {
             app.start_api_process();
             app.try_connect_once();
 
-            // Если есть последний открытый файл — открываем его при старте.
+            // Р•СЃР»Рё РµСЃС‚СЊ РїРѕСЃР»РµРґРЅРёР№ РѕС‚РєСЂС‹С‚С‹Р№ С„Р°Р№Р» вЂ” РѕС‚РєСЂС‹РІР°РµРј РµРіРѕ РїСЂРё СЃС‚Р°СЂС‚Рµ.
             if let Some(ref path) = app.last_opened_file {
                 if std::path::Path::new(path).exists() {
                     app.open_project_requested = true;
