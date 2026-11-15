@@ -99,12 +99,65 @@ pub fn paint_process(
     // Смещения строк показателя внутри контейнера: 28, 48, 68, 88
     let row_offsets: [f32; 4] = [28.0, 48.0, 68.0, 88.0];
 
+    // Определяем зону наведения (взаимоисключающе):
+    // строка показателя > контейнер > тело карточки.
+    let mut container_hovered_dir: Option<Direction> = None;
+    let mut row_hovered_rect: Option<Rect> = None;
+
+    if let Some(pos) = mouse_pos {
+        // Контейнеры
+        let req_rect = Rect::from_min_size(
+            Pos2::new(container_x, oy + 32.0 * zoom),
+            Vec2::new(container_w, container_h),
+        );
+        let out_rect = Rect::from_min_size(
+            Pos2::new(container_x, oy + 144.0 * zoom),
+            Vec2::new(container_w, container_h),
+        );
+        if req_rect.contains(pos) {
+            container_hovered_dir = Some(Direction::Request);
+        } else if out_rect.contains(pos) {
+            container_hovered_dir = Some(Direction::Output);
+        } else {
+            // Строки показателя (и в запросе, и в выходе)
+            for (dir, entries) in [
+                (Direction::Request, &object.requests as &[EntryGeom]),
+                (Direction::Output, &object.outputs as &[EntryGeom]),
+            ] {
+                let visible = entries.len().min(MAX_VISIBLE_METRICS);
+                for i in 0..visible {
+                    let row_y = if dir == Direction::Request {
+                        oy + 32.0 * zoom + row_offsets[i] * zoom
+                    } else {
+                        oy + 144.0 * zoom + row_offsets[i] * zoom
+                    };
+                    let row_x = container_x + 4.0 * zoom;
+                    let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
+                    if row_rect.contains(pos) {
+                        row_hovered_rect = Some(row_rect);
+                        container_hovered_dir = None; // строка имеет приоритет над контейнером
+                        break;
+                    }
+                }
+                if row_hovered_rect.is_some() {
+                    break;
+                }
+            }
+        }
+    }
+
+    let body_hovered = mouse_pos.map_or(false, |pos| card_rect.contains(pos))
+        && container_hovered_dir.is_none()
+        && row_hovered_rect.is_none();
+
+    let border_color = if body_hovered { theme.text } else { theme.card_border };
+
     // === Контейнер: ЗАПРОС (top: 32) ===
     let req_rect = Rect::from_min_size(
         Pos2::new(container_x, oy + 32.0 * zoom),
         Vec2::new(container_w, container_h),
     );
-    let req_hovered = mouse_pos.map_or(false, |pos| req_rect.contains(pos));
+    let req_hovered = container_hovered_dir == Some(Direction::Request);
     paint_metric_container(
         painter, object, dynamic, theme, zoom,
         req_hovered,
@@ -120,7 +173,7 @@ pub fn paint_process(
         Pos2::new(container_x, oy + 144.0 * zoom),
         Vec2::new(container_w, container_h),
     );
-    let out_hovered = mouse_pos.map_or(false, |pos| out_rect.contains(pos));
+    let out_hovered = container_hovered_dir == Some(Direction::Output);
     paint_metric_container(
         painter, object, dynamic, theme, zoom,
         out_hovered,
