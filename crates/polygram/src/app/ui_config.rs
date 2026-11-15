@@ -27,7 +27,7 @@ fn app_data_dir() -> PathBuf {
 }
 
 /// Настройки отображения UI, которые сохраняются в polygram_ui_config.json.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct UiConfig {
     pub show_sidebar: bool,
     pub show_command_log_panel: bool,
@@ -36,9 +36,32 @@ pub struct UiConfig {
     pub show_connectors_panel: bool,
     #[serde(default)]
     pub grid_mode: GridMode,
+    #[serde(default = "default_grid_color")]
+    pub grid_color: [u8; 3],
     pub show_cursor_coords: bool,
     /// Последний открытый файл проекта.
     pub last_opened_file: Option<String>,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            show_sidebar: false,
+            show_command_log_panel: false,
+            show_frontend_log_panel: false,
+            show_chat_panel: false,
+            show_connectors_panel: false,
+            grid_mode: GridMode::default(),
+            grid_color: default_grid_color(),
+            show_cursor_coords: false,
+            last_opened_file: None,
+        }
+    }
+}
+
+/// Цвет сетки по умолчанию (как в Theme::default).
+fn default_grid_color() -> [u8; 3] {
+    [35, 35, 42]
 }
 
 impl UiConfig {

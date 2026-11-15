@@ -36,6 +36,7 @@ impl PolygramApp {
             show_chat_panel: self.show_chat_panel,
             show_connectors_panel: self.show_connectors_panel,
             grid_mode: self.grid_mode,
+            grid_color: self.grid_color,
             show_cursor_coords: self.show_cursor_coords,
             last_opened_file: self.last_opened_file.clone(),
         };

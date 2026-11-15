@@ -1,4 +1,5 @@
 use polygram_canvas::{Canvas, GridMode};
+use egui::Color32;
 use polygram_core::Published;
 use reqwest::blocking::Client;
 use std::sync::mpsc;
@@ -49,6 +50,7 @@ pub struct PolygramApp {
     pub show_chat_panel: bool,
     pub show_connectors_panel: bool,
     pub grid_mode: GridMode,
+    pub grid_color: [u8; 3],
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
@@ -73,7 +75,7 @@ pub struct PolygramApp {
 
 impl PolygramApp {
     pub fn new(snapshot_rx: mpsc::Receiver<Arc<Published>>) -> Self {
-        let canvas = Canvas::new();
+        let mut canvas = Canvas::new();
         let api_client = Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
@@ -82,6 +84,8 @@ impl PolygramApp {
         let mut chat = ChatState::default();
         chat.chat_rx = ChatState::start_polling(api_client.clone(), api_base.clone());
         let ui_config = UiConfig::load();
+        let grid_color = ui_config.grid_color;
+        canvas.theme.grid_color = Color32::from_rgb(grid_color[0], grid_color[1], grid_color[2]);
         Self {
             canvas,
             connection: ConnectionState::new(api_client, api_base, snapshot_rx),
@@ -98,6 +102,7 @@ impl PolygramApp {
             show_chat_panel: ui_config.show_chat_panel,
             show_connectors_panel: ui_config.show_connectors_panel,
             grid_mode: ui_config.grid_mode,
+            grid_color,
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,

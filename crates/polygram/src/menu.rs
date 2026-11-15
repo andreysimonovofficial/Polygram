@@ -1,4 +1,5 @@
 use crate::app::PolygramApp;
+use egui::Color32;
 use polygram_canvas::{Camera, GridMode, Theme};
 use polygram_core::Command;
 
@@ -75,12 +76,26 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                     
                 }
                 ui.separator();
-                ui.menu_button("Сетка", |ui| {
-                    ui.radio_value(&mut app.grid_mode, GridMode::None, "Отключить");
-                    ui.radio_value(&mut app.grid_mode, GridMode::Lines, "Из линий");
-                    ui.radio_value(&mut app.grid_mode, GridMode::Dots, "Из точек");
+            ui.menu_button("Сетка", |ui| {
+                ui.menu_button("Оформление", |ui| {
+                    if ui.color_edit_button_srgb(&mut app.grid_color).changed() {
+                        app.canvas.theme.grid_color =
+                            Color32::from_rgb(app.grid_color[0], app.grid_color[1], app.grid_color[2]);
+                        app.ui_config_save();
+                    }
                 });
-                if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
+                ui.separator();
+                ui.menu_button("Отображение", |ui| {
+                    let mut changed = false;
+                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::None, "Отключить").changed();
+                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::Lines, "Из линий").changed();
+                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::Dots, "Из точки").changed();
+                    if changed {
+                        app.ui_config_save();
+                    }
+                });
+            });
+            if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
                 if ui.checkbox(&mut app.show_connectors_panel, "Коннекторы").changed() {
                     app.ui_config_save();
                 }
