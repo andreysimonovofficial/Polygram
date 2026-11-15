@@ -51,6 +51,27 @@ pub fn handle_canvas_interaction(
         }
     }
 
+    // Двойной клик по строке показателя — открыть окно настроек этого показателя ("Показатели — ЗАПРОС/ВЫХОД").
+    if let Some(pos) = canvas_response.interact_pointer_pos() {
+        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        if is_double && !handled_by_container {
+            for (object_id, dir, _entry, rect) in &app.canvas.drag_metric_hotspots {
+                if rect.contains(pos) {
+                    app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                    app.drag.state = DragInteractionState::Idle;
+                    app.add_event_log(
+                        "info",
+                        "ui",
+                        &format!("Открыто окно настроек показателя «{object_id}» ({dir:?})"),
+                        None,
+                    );
+                    handled_by_container = true;
+                    break;
+                }
+            }
+        }
+    }
+
     // Двойной клик по объекту — инлайн-редактирование названия прямо на холсте.
     if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) && !handled_by_container {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
