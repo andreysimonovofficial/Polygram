@@ -77,23 +77,37 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                 }
                 ui.separator();
             ui.menu_button("Сетка", |ui| {
-                ui.menu_button("Оформление", |ui| {
-                    if ui.color_edit_button_srgb(&mut app.grid_color).changed() {
-                        app.canvas.theme.grid_color =
-                            Color32::from_rgb(app.grid_color[0], app.grid_color[1], app.grid_color[2]);
-                        app.ui_config_save();
-                    }
-                });
+                ui.label("Оформление");
+                if ui.button("Цвет сетки").clicked() {
+                    app.show_color_picker = true;
+                }
+                if app.show_color_picker {
+                    let mut open = app.show_color_picker;
+                    egui::Window::new("Цвет сетки")
+                        .open(&mut open)
+                        .show(ui.ctx(), |ui| {
+                            let mut color =
+                                Color32::from_rgb(app.grid_color[0], app.grid_color[1], app.grid_color[2]);
+                            egui::widgets::color_picker::color_picker_color32(
+                                ui,
+                                &mut color,
+                                egui::widgets::color_picker::Alpha::Opaque,
+                            );
+                            app.grid_color = [color.r(), color.g(), color.b()];
+                            app.canvas.theme.grid_color = color;
+                            app.ui_config_save();
+                        });
+                    app.show_color_picker = open;
+                }
                 ui.separator();
-                ui.menu_button("Отображение", |ui| {
-                    let mut changed = false;
-                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::None, "Отключить").changed();
-                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::Lines, "Из линий").changed();
-                    changed |= ui.radio_value(&mut app.grid_mode, GridMode::Dots, "Из точки").changed();
-                    if changed {
-                        app.ui_config_save();
-                    }
-                });
+                ui.label("Отображение");
+                let mut changed = false;
+                changed |= ui.radio_value(&mut app.grid_mode, GridMode::None, "Отключить").changed();
+                changed |= ui.radio_value(&mut app.grid_mode, GridMode::Lines, "Из линий").changed();
+                changed |= ui.radio_value(&mut app.grid_mode, GridMode::Dots, "Из точки").changed();
+                if changed {
+                    app.ui_config_save();
+                }
             });
             if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
                 if ui.checkbox(&mut app.show_connectors_panel, "Коннекторы").changed() {
