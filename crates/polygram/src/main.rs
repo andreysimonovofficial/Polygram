@@ -293,6 +293,32 @@ impl eframe::App for PolygramApp {
 
         document::save_project_as(self);
 
+        egui::Panel::bottom("status").show(ui, |ui| {
+            status::status_bar(self, ui);
+        });
+
+        panels::connection_panel(self, ui, &theme);
+
+        if self.show_connectors_panel {
+            panels::connectors_panel(self, ui, &theme);
+        }
+
+        if self.show_chat_panel {
+            panels::chat_panel(self, ui, &theme);
+        }
+
+        if self.show_command_log_panel {
+            panels::command_log_panel(self, ui, &theme);
+        }
+
+        if self.show_frontend_log_panel {
+            panels::frontend_log_panel(self, ui, &theme);
+        }
+
+        egui::CentralPanel::default().show(ui, |ui| {
+            interaction::handle_canvas_interaction(self, &ctx, ui, &published, &mut close_menu, &theme);
+        });
+
         // Подтверждение закрытия с несохранёнными изменениями.
         if self.close_confirmation_pending {
             self.close_confirmation_pending = false;
@@ -322,10 +348,6 @@ impl eframe::App for PolygramApp {
                 });
         }
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            interaction::handle_canvas_interaction(self, &ctx, ui, &published, &mut close_menu, &theme);
-        });
-
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
         interaction::handle_delete_confirm(self, &ctx);
@@ -337,28 +359,6 @@ impl eframe::App for PolygramApp {
         interaction::handle_rename_dialog(self, &ctx);
 
         palette::command_palette(self, &ctx);
-
-        egui::Panel::bottom("status").show(ui, |ui| {
-            status::status_bar(self, ui);
-        });
-
-        if self.show_command_log_panel {
-            panels::command_log_panel(self, ui, &theme);
-        }
-
-        if self.show_frontend_log_panel {
-            panels::frontend_log_panel(self, ui, &theme);
-        }
-
-        panels::connection_panel(self, ui, &theme);
-
-        if self.show_connectors_panel {
-            panels::connectors_panel(self, ui, &theme);
-        }
-
-        if self.show_chat_panel {
-            panels::chat_panel(self, ui, &theme);
-        }
     }
 }
 
