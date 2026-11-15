@@ -7,6 +7,7 @@ use egui::{Pos2, Vec2};
 use polygram_core::geometry::EntryGeom;
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::EntryIx;
+use polygram_core::types::NodeKind;
 
 /// Точка сцепления строки показателя в клетках сетки, при зуме 1 и нулевом смещении камеры.
 /// Не зависит от камеры, поэтому годится для кэша маршрутов. `exit_right` — сторона карточки.
@@ -17,6 +18,7 @@ pub fn port_in_cells(
     is_output: bool,
     exit_right: bool,
     cell_size: f32,
+    kind: NodeKind,
 ) -> Option<Port> {
     let p = visual_port_screen(
         object_rect,
@@ -27,13 +29,16 @@ pub fn port_in_cells(
         cell_size,
         Vec2::ZERO,
         1.0,
+        kind,
     )?;
-    Some(Port { x: p.x / cell_size, y: p.y / cell_size })
+    Some(Port {
+        x: p.x / cell_size,
+        y: p.y / cell_size,
+    })
 }
 
 /// Вычислить экранную позицию точки сцепления строки показателя.
-/// Логика идентична paint_process: одинаковая высота строки, зазоры между строками.
-/// Точка находится внутри тела строки: слева или справа в зависимости от `exit_right`.
+/// Для Process используется фиксированная CSS-геометрия 256×256px.
 /// `is_output` определяет контейнер (запрос — выше, выход — ниже), `exit_right` — сторону X.
 pub fn visual_port_screen(
     object_rect: &CoreRect,
@@ -44,8 +49,36 @@ pub fn visual_port_screen(
     cell_px: f32,
     camera_offset: Vec2,
     camera_zoom: f32,
+    kind: NodeKind,
 ) -> Option<Pos2> {
     let k = entries.iter().position(|e| e.ix == target_ix.0)?;
+
+    if kind == NodeKind::Process {
+        // Фиксированная CSS-геометрия: карточка 256×256px, контейнеры на top:32 и top:144,
+        // строки на y:28/48/68/88 внутри контейнера, порты на символах ◀/▶.
+        let cell_size = cell_size_from_px(cell_px, camera_zoom);
+        let ox = (object_rect.x as f32 * cell_size + camera_offset.x) * camera_zoom;
+        let oy = (object_rect.y as f32 * cell_size + camera_offset.y) * camera_zoom;
+
+        let row_offsets: [f32; 4] = [28.0, 48.0, 68.0, 88.0];
+        if k >= row_offsets.len() {
+            return None;
+        }
+
+        let container_top = if is_output { 144.0 } else { 32.0 };
+        let y = oy + (container_top + row_offsets[k] + 8.0) * camera_zoom; // +8 = центр строки 16px
+
+        // Порт на символе ▶ (источник связи): Request — справа (x=232), Output — слева (x=8)
+        let x = if exit_right {
+            ox + 232.0 * camera_zoom
+        } else {
+            ox + 8.0 * camera_zoom
+        };
+
+        return Some(Pos2::new(x, y));
+    }
+
+    // Существующая логика для остальных типов объектов.
     let y = metric_row_center_y(object_rect, k, is_output, cell_px, camera_offset, camera_zoom);
     let x = metric_port_screen_x(object_rect, exit_right, cell_px, camera_offset, camera_zoom);
     Some(Pos2::new(x, y))

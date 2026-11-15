@@ -216,8 +216,8 @@ fn paint_metric_container(
     let show_add = visible < MAX_VISIBLE_METRICS;
 
     let (left_sym, right_sym) = match dir {
-        Direction::Request => ("▶", "◀"),
-        Direction::Output => ("◀", "▶"),
+        Direction::Request => ("◀", "▶"),
+        Direction::Output => ("▶", "◀"),
     };
     let symbol_font = egui::FontId::new((8.0 * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
 

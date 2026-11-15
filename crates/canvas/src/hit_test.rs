@@ -10,13 +10,14 @@ fn rect_to_screen(
     camera_zoom: f32,
 ) -> egui::Rect {
     let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
-    egui::Rect::from_min_size(
-        world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_size, camera_offset, camera_zoom),
-        egui::Vec2::new(
-            r.w as f32 * cell_size * camera_zoom,
-            r.h as f32 * cell_size * camera_zoom,
-        ),
-    )
+    let min = world_to_screen(Pos2::new(r.x as f32, r.y as f32), cell_size, camera_offset, camera_zoom);
+    // Процесс всегда 256×256px по CSS-спецификации, независимо от хранимого rect в клетках.
+    let size = if object.kind == NodeKind::Process {
+        egui::Vec2::new(256.0 * camera_zoom, 256.0 * camera_zoom)
+    } else {
+        egui::Vec2::new(r.w as f32 * cell_size * camera_zoom, r.h as f32 * cell_size * camera_zoom)
+    };
+    egui::Rect::from_min_size(min, size)
 }
 
 /// Итерация по всем объектам (сначала обычные, потом отделы) с остановкой на первом совпадении.

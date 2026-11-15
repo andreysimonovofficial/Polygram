@@ -8,7 +8,7 @@ use super::model::{Route, Side, Terminal};
 use super::ports::port_in_cells;
 use super::router;
 use polygram_core::geometry::{EdgeGeom, Geometry, ObjectGeom};
-use polygram_core::layout::Rect;
+use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::NodeKind;
 use polygram_core::EntryIx;
 use std::collections::hash_map::DefaultHasher;
@@ -48,7 +48,7 @@ pub struct EdgeLayer {
     generation: u64,
     entries: HashMap<u32, EntryPos>,
     /// Карточки, которые линии обходят (отделы-рамки — не препятствие).
-    cards: Vec<Rect>,
+    cards: Vec<CoreRect>,
     routes: HashMap<u32, Cached>,
     /// Сколько раз запускался маршрутизатор (для тестов кэша).
     #[cfg(test)]
@@ -94,7 +94,12 @@ impl EdgeLayer {
                 );
             }
             if o.kind != NodeKind::Department {
-                self.cards.push(o.rect);
+                let card_rect = if o.kind == NodeKind::Process {
+                    CoreRect::new(o.rect.x, o.rect.y, 16, 16)
+                } else {
+                    o.rect
+                };
+                self.cards.push(card_rect);
             }
         }
         let alive: HashSet<u32> = geometry.edges.iter().map(|e| e.ix).collect();
@@ -183,10 +188,16 @@ pub(crate) fn terminal(
             is_output,
             side == Side::Right,
             cell_size,
+            o.kind,
         )
     };
+    let rect = if o.kind == NodeKind::Process {
+        CoreRect::new(o.rect.x, o.rect.y, 16, 16)
+    } else {
+        o.rect
+    };
     Some(Terminal {
-        rect: o.rect,
+        rect,
         left: port(Side::Left)?,
         right: port(Side::Right)?,
     })

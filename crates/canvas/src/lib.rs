@@ -189,11 +189,18 @@ impl Canvas {
             }
             let is_hovered = hovered_object == Some(&object.id);
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
-            let rect_px = Rect::from_min_size(
+            let mut rect_px = Rect::from_min_size(
                 self.camera
                     .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
+            // Процесс всегда рисуется по фиксированной CSS-геометрии 256×256px,
+            // независимо от хранимого rect в клетках.
+            if object.kind == NodeKind::Process {
+                let card_w = 256.0 * self.camera.zoom;
+                let card_h = 256.0 * self.camera.zoom;
+                rect_px = Rect::from_min_size(rect_px.min, Vec2::new(card_w, card_h));
+            }
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
@@ -253,11 +260,16 @@ impl Canvas {
                     continue;
                 }
                 let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
-                let rect_px = Rect::from_min_size(
+                let mut rect_px = Rect::from_min_size(
                     self.camera
                         .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
                     Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
                 );
+                if object.kind == NodeKind::Process {
+                    let card_w = 256.0 * self.camera.zoom;
+                    let card_h = 256.0 * self.camera.zoom;
+                    rect_px = Rect::from_min_size(rect_px.min, Vec2::new(card_w, card_h));
+                }
                 if !rect_px.intersects(clip_rect) {
                     continue;
                 }

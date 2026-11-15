@@ -74,6 +74,7 @@ pub fn paint_edge(
         cell_px,
         camera_offset,
         camera_zoom,
+        from_obj.kind,
     );
     let dst_port = visual_port_screen(
         &to_obj.rect,
@@ -84,6 +85,7 @@ pub fn paint_edge(
         cell_px,
         camera_offset,
         camera_zoom,
+        to_obj.kind,
     );
     let (Some(src_port), Some(dst_port)) = (src_port, dst_port) else {
         return;
@@ -292,6 +294,7 @@ mod tests {
                     cell_px,
                     offset,
                     zoom,
+                    ends.from.kind,
                 )
                 .unwrap();
                 let want_dst = visual_port_screen(
@@ -303,6 +306,7 @@ mod tests {
                     cell_px,
                     offset,
                     zoom,
+                    ends.to.kind,
                 )
                 .unwrap();
                 let n = pts.len();
