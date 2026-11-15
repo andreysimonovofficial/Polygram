@@ -1,4 +1,4 @@
-use polygram_canvas::Canvas;
+use polygram_canvas::{Canvas, GridMode};
 use polygram_core::Published;
 use reqwest::blocking::Client;
 use std::sync::mpsc;
@@ -48,7 +48,7 @@ pub struct PolygramApp {
     pub show_frontend_log_panel: bool,
     pub show_chat_panel: bool,
     pub show_connectors_panel: bool,
-    pub show_grid: bool,
+    pub grid_mode: GridMode,
     pub show_cursor_coords: bool,
     pub last_status: String,
     pub chat: ChatState,
@@ -97,7 +97,7 @@ impl PolygramApp {
             show_frontend_log_panel: ui_config.show_frontend_log_panel,
             show_chat_panel: ui_config.show_chat_panel,
             show_connectors_panel: ui_config.show_connectors_panel,
-            show_grid: ui_config.show_grid,
+            grid_mode: ui_config.grid_mode,
             show_cursor_coords: ui_config.show_cursor_coords,
             last_status: "API сервер не подключён".to_owned(),
             chat,

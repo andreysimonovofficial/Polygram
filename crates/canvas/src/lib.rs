@@ -17,6 +17,17 @@ pub use paint_department::paint_department_frame;
 pub use paint_object::paint_object;
 pub use theme::Theme;
 
+/// Режим отрисовки сетки на холсте.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum GridMode {
+    #[default]
+    None,
+    /// Сетка из линий (как раньше при «Отображать сетку»).
+    Lines,
+    /// Точечная сетка — точки на пересечениях линий (как в Figma/Miro/Mural).
+    Dots,
+}
+
 use egui::{Color32, Pos2, Rect, Vec2};
 use polygram_core::layout::Rect as CoreRect;
 use polygram_core::types::{Direction, NodeKind};
@@ -73,7 +84,7 @@ impl Canvas {
         hovered_object: Option<&str>,
         edit_target: Option<&str>,
         selected_objects: &[String],
-        show_grid: bool,
+        grid_mode: GridMode,
         bindings: &HashMap<(String, String), MetricBinding>,
     ) {
         let painter = ui.painter();
@@ -89,30 +100,60 @@ impl Canvas {
         painter.rect_filled(clip_rect, 0.0, self.theme.bg);
 
         // Сетка — нижний слой, после фона.
-        if show_grid {
+        if grid_mode != GridMode::None {
             let cell_size = self.cell_size;
             let zoom = self.camera.zoom;
             let offset = self.camera.offset;
             let grid_color = self.theme.grid_color;
 
-            let min_cx = ((clip_rect.min.x / zoom - offset.x) / cell_size).floor() as i32;
-            let max_cx = ((clip_rect.max.x / zoom - offset.x) / cell_size).ceil() as i32;
-            let min_cy = ((clip_rect.min.y / zoom - offset.y) / cell_size).floor() as i32;
-            let max_cy = ((clip_rect.max.y / zoom - offset.y) / cell_size).ceil() as i32;
+            // Затухание сетки при отдалении зума, чтобы не пестрить в глазах.
+            const FADE_ZOOM_MAX: f32 = 1.0;
+            const FADE_ZOOM_MIN: f32 = 0.2;
+            let alpha = ((zoom - FADE_ZOOM_MIN) / (FADE_ZOOM_MAX - FADE_ZOOM_MIN)).clamp(0.0, 1.0);
+            if alpha <= 0.0 {
+                // Сетка полностью скрыта при удалённом зуме.
+            } else {
+                let color = Color32::from_rgba_unmultiplied(
+                    grid_color.r(),
+                    grid_color.g(),
+                    grid_color.b(),
+                    (255.0 * alpha) as u8,
+                );
 
-            for c in min_cx..=max_cx {
-                let sx = (c as f32 * cell_size + offset.x) * zoom;
-                painter.line_segment(
-                    [Pos2::new(sx, clip_rect.min.y), Pos2::new(sx, clip_rect.max.y)],
-                    egui::Stroke::new(1.0_f32, grid_color),
-                );
-            }
-            for r in min_cy..=max_cy {
-                let sy = (r as f32 * cell_size + offset.y) * zoom;
-                painter.line_segment(
-                    [Pos2::new(clip_rect.min.x, sy), Pos2::new(clip_rect.max.x, sy)],
-                    egui::Stroke::new(1.0_f32, grid_color),
-                );
+                let min_cx = ((clip_rect.min.x / zoom - offset.x) / cell_size).floor() as i32;
+                let max_cx = ((clip_rect.max.x / zoom - offset.x) / cell_size).ceil() as i32;
+                let min_cy = ((clip_rect.min.y / zoom - offset.y) / cell_size).floor() as i32;
+                let max_cy = ((clip_rect.max.y / zoom - offset.y) / cell_size).ceil() as i32;
+
+                match grid_mode {
+                    GridMode::Lines => {
+                        for c in min_cx..=max_cx {
+                            let sx = (c as f32 * cell_size + offset.x) * zoom;
+                            painter.line_segment(
+                                [Pos2::new(sx, clip_rect.min.y), Pos2::new(sx, clip_rect.max.y)],
+                                egui::Stroke::new(1.0_f32, color),
+                            );
+                        }
+                        for r in min_cy..=max_cy {
+                            let sy = (r as f32 * cell_size + offset.y) * zoom;
+                            painter.line_segment(
+                                [Pos2::new(clip_rect.min.x, sy), Pos2::new(clip_rect.max.x, sy)],
+                                egui::Stroke::new(1.0_f32, color),
+                            );
+                        }
+                    }
+                    GridMode::Dots => {
+                        const DOT_RADIUS: f32 = 2.0;
+                        for c in min_cx..=max_cx {
+                            let sx = (c as f32 * cell_size + offset.x) * zoom;
+                            for r in min_cy..=max_cy {
+                                let sy = (r as f32 * cell_size + offset.y) * zoom;
+                                painter.circle_filled(Pos2::new(sx, sy), DOT_RADIUS, color);
+                            }
+                        }
+                    }
+                    GridMode::None => {}
+                }
             }
         }
 

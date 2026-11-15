@@ -35,7 +35,7 @@ impl PolygramApp {
             show_frontend_log_panel: self.show_frontend_log_panel,
             show_chat_panel: self.show_chat_panel,
             show_connectors_panel: self.show_connectors_panel,
-            show_grid: self.show_grid,
+            grid_mode: self.grid_mode,
             show_cursor_coords: self.show_cursor_coords,
             last_opened_file: self.last_opened_file.clone(),
         };

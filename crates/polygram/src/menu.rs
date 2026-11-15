@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_canvas::{Camera, Theme};
+use polygram_canvas::{Camera, GridMode, Theme};
 use polygram_core::Command;
 
 pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
@@ -75,7 +75,11 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                     
                 }
                 ui.separator();
-                if ui.checkbox(&mut app.show_grid, "Отображать сетку").changed() {}
+                ui.menu_button("Сетка", |ui| {
+                    ui.radio_value(&mut app.grid_mode, GridMode::None, "Отключить");
+                    ui.radio_value(&mut app.grid_mode, GridMode::Lines, "Из линий");
+                    ui.radio_value(&mut app.grid_mode, GridMode::Dots, "Из точек");
+                });
                 if ui.checkbox(&mut app.show_cursor_coords, "Показать координаты курсора").changed() {}
                 if ui.checkbox(&mut app.show_connectors_panel, "Коннекторы").changed() {
                     app.ui_config_save();

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use polygram_canvas::GridMode;
+
 /// Директория данных приложения (%LOCALAPPDATA%\Polygram\ на Windows).
 fn app_data_dir() -> PathBuf {
     if cfg!(target_os = "windows") {
@@ -32,7 +34,8 @@ pub struct UiConfig {
     pub show_frontend_log_panel: bool,
     pub show_chat_panel: bool,
     pub show_connectors_panel: bool,
-    pub show_grid: bool,
+    #[serde(default)]
+    pub grid_mode: GridMode,
     pub show_cursor_coords: bool,
     /// Последний открытый файл проекта.
     pub last_opened_file: Option<String>,
