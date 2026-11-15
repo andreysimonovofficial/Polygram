@@ -1,11 +1,14 @@
 use egui::Color32;
 
 /// Единая тёмная тема приложения Polygram.
-/// Источник истины для всех цветов: холст (canvas) и оболочка (polygram shell).
+/// Источник истины для всех цветов и геометрии: холст (canvas) и оболочка (polygram shell).
 /// При появлении DesignDocument.theme в polygram-core — значения берутся оттуда.
+///
+/// Все поля копируются (Copy), чтобы легко передавать по значению в функции рисования.
+/// Сериализуемая копия для хранения на диске находится в `polygram::app::ui_config::ThemeConfig`.
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
-    // --- Холст (canvas) ---
+    // ========== Холст (canvas) ==========
     pub bg: Color32,
     pub card_bg: Color32,
     pub card_border: Color32,
@@ -14,7 +17,7 @@ pub struct Theme {
     pub line_hover: Color32,
     pub grid_color: Color32,
 
-    // --- Статусы (общие для холста и оболочки) ---
+    // ========== Статусы (общие для холста и оболочки) ==========
     pub status_ok: Color32,
     pub status_warning: Color32,
     pub status_deficit: Color32,
@@ -22,11 +25,11 @@ pub struct Theme {
     pub status_unconnected: Color32,
     pub status_invalid: Color32,
 
-    // --- Текст (общие) ---
+    // ========== Текст (общие) ==========
     pub text: Color32,
     pub text_muted: Color32,
 
-    // --- Оболочка (shell): панели, меню, строка статуса ---
+    // ========== Оболочка (shell): панели, меню, строка статуса ==========
     pub panel_bg: Color32,
     pub panel_border: Color32,
     pub panel_text: Color32,
@@ -36,13 +39,19 @@ pub struct Theme {
     pub status_bar_bg: Color32,
     pub status_bar_text: Color32,
 
-    // --- Акцентные цвета ---
+    // ========== Акцентные цвета ==========
     pub accent: Color32,
     pub accent_secondary: Color32,
     pub highlight: Color32,
 
-    // --- Геометрия объектов (из ObjectStyle) ---
-    pub object_corner_radius: f32,
+    // ========== Дополнительные цвета egui ==========
+    pub faint_bg_color: Color32,
+    pub extreme_bg_color: Color32,
+    pub code_bg_color: Color32,
+    pub link_color: Color32,
+
+    // ========== Геометрия объектов (из ObjectStyle) ==========
+    pub object_corner_radius: f32,      // скругление краёв карточек (отделы, процессы, отделы)
     pub object_border_width: f32,
     pub object_border_hover_width: f32,
     pub object_header_height_cells: f32,
@@ -50,10 +59,41 @@ pub struct Theme {
     pub port_radius: f32,
     pub text_size: f32,
 
-    // --- Геометрия линий ---
+    // ========== Геометрия линий ==========
     pub edge_width: f32,
+    /// Скруглённые углы ортогональных линий связи (0 = прямые углы, как сейчас).
+    pub line_corner_radius: f32,
 
-    // --- Тень и свечение ---
+    // ========== Отступы и интервалы (egui::Spacing) ==========
+    /// Расстояние между соседними виджетами [x, y].
+    pub item_spacing: [f32; 2],
+    /// Внешний отступ окна [x, y].
+    pub window_margin: [f32; 2],
+    /// Отступ внутри меню [x, y].
+    pub menu_margin: [f32; 2],
+    /// Отступ для иерархических виджетов (дерево, collapsing).
+    pub indent: f32,
+    /// Высота выпадающих списков.
+    pub combo_height: f32,
+    /// Ширина ползунка.
+    pub slider_width: f32,
+    /// Размер маркера изменения размера угла.
+    pub resize_corner_size: f32,
+
+    // ========== Скругление (egui visuals) ==========
+    /// Скругление углов окон и панелей.
+    pub window_corner_radius: f32,
+    /// Скругление углов виджетов (кнопки, поля ввода, фреймы).
+    pub widget_rounding: f32,
+
+    // ========== Шрифты / текстовые стили egui (размеры в пикселях) ==========
+    pub text_size_body: f32,
+    pub text_size_button: f32,
+    pub text_size_small: f32,
+    pub text_size_heading: f32,
+    pub text_size_monospace: f32,
+
+    // ========== Тень и свечение ==========
     pub shadow_offset: [f32; 2],
     pub shadow_blur: f32,
     pub shadow_color: Color32,
@@ -102,6 +142,12 @@ impl Default for Theme {
             accent_secondary: Color32::from_rgb(100, 180, 255),
             highlight: Color32::from_rgb(200, 200, 0),
 
+            // Дополнительные цвета egui
+            faint_bg_color: Color32::from_rgb(38, 38, 44),
+            extreme_bg_color: Color32::from_rgb(10, 10, 12),
+            code_bg_color: Color32::from_rgb(30, 30, 36),
+            link_color: Color32::from_rgb(100, 180, 255),
+
             // Геометрия объектов
             object_corner_radius: 2.0,
             object_border_width: 1.0,
@@ -111,6 +157,27 @@ impl Default for Theme {
             port_radius: 3.0,
             text_size: 14.0,
             edge_width: 1.5,
+            line_corner_radius: 0.0,
+
+            // Отступы и интервалы (egui::Spacing по умолчанию)
+            item_spacing: [8.0, 8.0],
+            window_margin: [8.0, 8.0],
+            menu_margin: [8.0, 8.0],
+            indent: 16.0,
+            combo_height: 180.0,
+            slider_width: 140.0,
+            resize_corner_size: 12.0,
+
+            // Скругление
+            window_corner_radius: 4.0,
+            widget_rounding: 2.0,
+
+            // Шрифты / текстовые стили
+            text_size_body: 14.0,
+            text_size_button: 14.0,
+            text_size_small: 12.0,
+            text_size_heading: 20.0,
+            text_size_monospace: 13.0,
 
             // Тень и свечение
             shadow_offset: [4.0, 4.0],
@@ -121,5 +188,40 @@ impl Default for Theme {
             glow_size: 6.0,
             glow_enabled: false,
         }
+    }
+}
+
+impl Theme {
+    /// Скругление углов окон/панелей в терминах egui.
+    pub fn window_rounding(&self) -> egui::epaint::CornerRadius {
+        egui::epaint::CornerRadius::from(self.window_corner_radius)
+    }
+
+    /// Скругление углов виджетов в терминах egui.
+    pub fn widget_rounding_egui(&self) -> egui::epaint::CornerRadius {
+        egui::epaint::CornerRadius::from(self.widget_rounding)
+    }
+
+    /// Скругление краёв карточек холста с учётом зума.
+    pub fn object_rounding(&self, zoom: f32) -> f32 {
+        self.object_corner_radius * zoom
+    }
+
+    /// Скругление углов линий связи с учётом зума.
+    pub fn line_rounding(&self, zoom: f32) -> f32 {
+        self.line_corner_radius * zoom
+    }
+}
+
+/// Вспомогательные преобразования цвета <-> [u8; 4] для серийного хранения.
+pub mod color_array {
+    use egui::Color32;
+
+    pub fn to_array(c: Color32) -> [u8; 4] {
+        [c.r(), c.g(), c.b(), c.a()]
+    }
+
+    pub fn from_array(a: [u8; 4]) -> Color32 {
+        Color32::from_rgba_unmultiplied(a[0], a[1], a[2], a[3])
     }
 }

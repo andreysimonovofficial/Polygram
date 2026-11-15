@@ -97,10 +97,15 @@ pub fn paint_edge(
         camera_offset,
         camera_zoom,
     );
-    painter.add(Shape::line(
-        pts,
-        Stroke::new(theme.edge_width * camera_zoom, color),
-    ));
+    let radius = theme.line_rounding(camera_zoom);
+    if radius > 0.0 {
+        paint_rounded_polyline(painter, &pts, Stroke::new(theme.edge_width * camera_zoom, color), radius);
+    } else {
+        painter.add(Shape::line(
+            pts,
+            Stroke::new(theme.edge_width * camera_zoom, color),
+        ));
+    }
 }
 
 /// Цвет линии по статусу: сначала проблема выхода источника, потом входа приёмника.
@@ -143,6 +148,79 @@ fn screen_polyline(
         pts[n - 2].y = dst_port.y;
     }
     pts
+}
+
+/// Рисует ломаную с скруглёнными углами в местах поворота (филип radius).
+/// Прямые участки обрезаются на `radius` у каждого угла, а между ними дуга radius,
+/// касающаяся обоих отрезков. Если radius <= 0 — обычная прямая ломаная.
+fn paint_rounded_polyline(painter: &Painter, pts: &[Pos2], stroke: Stroke, radius: f32) {
+    let n = pts.len();
+    if n < 2 {
+        return;
+    }
+    if radius <= 0.0 {
+        painter.add(Shape::line(pts.to_vec(), stroke));
+        return;
+    }
+
+    // Ограничим радиус половиной самого короткого отрезка, чтобы обрезки не накладывались.
+    let mut min_len = f32::INFINITY;
+    for w in pts.windows(2) {
+        let d = (w[1] - w[0]).length();
+        if d < min_len {
+            min_len = d;
+        }
+    }
+    let radius = radius.min(min_len * 0.5);
+    if radius <= 0.0 {
+        painter.add(Shape::line(pts.to_vec(), stroke));
+        return;
+    }
+
+    let pi2 = std::f32::consts::FRAC_PI_2;
+    let steps: usize = 8;
+    let mut cursor = pts[0];
+
+    for i in 0..n - 1 {
+        let p0 = pts[i];
+        let p1 = pts[i + 1];
+        let dir = (p1 - p0).normalized();
+
+        let is_corner = i + 1 < n - 1;
+        let turn = if is_corner {
+            let nd = (pts[i + 2] - p1).normalized();
+            (dir.x * nd.y - dir.y * nd.x).abs() > 1e-3
+        } else {
+            false
+        };
+
+        let seg_end = if turn { p1 - dir * radius } else { p1 };
+        if (seg_end - cursor).length_sq() > 0.0 {
+            painter.line_segment([cursor, seg_end], stroke);
+        }
+
+        if turn {
+            let corner = p1;
+            let nd = (pts[i + 2] - p1).normalized();
+            let sign = if (dir.x * nd.y - dir.y * nd.x) > 0.0 { 1.0 } else { -1.0 };
+            let v_start = Vec2::new(-dir.x * radius, -dir.y * radius);
+            let mut prev_pt = corner + v_start;
+            for k in 1..=steps {
+                let t = k as f32 / steps as f32;
+                let angle = sign * t * pi2;
+                let ca = angle.cos();
+                let sa = angle.sin();
+                let vx = v_start.x * ca - v_start.y * sa;
+                let vy = v_start.x * sa + v_start.y * ca;
+                let pt = corner + Vec2::new(vx, vy);
+                painter.line_segment([prev_pt, pt], stroke);
+                prev_pt = pt;
+            }
+            cursor = corner + Vec2::new(nd.x * radius, nd.y * radius);
+        } else {
+            cursor = seg_end;
+        }
+    }
 }
 
 #[cfg(test)]

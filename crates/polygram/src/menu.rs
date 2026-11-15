@@ -114,6 +114,11 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
             });
 
             ui.separator();
+            if ui.button("Настройки темы…").clicked() {
+                app.show_settings = true;
+            }
+
+            ui.separator();
 
             // Показать/скрыть боковые панели.
             let mut changed = false;

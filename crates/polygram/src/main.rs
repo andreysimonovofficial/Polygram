@@ -223,29 +223,65 @@ impl eframe::App for PolygramApp {
             ctx.request_repaint_after(Duration::ZERO);
         }
 
-        // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта).
+        // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта, отступы, скругление, шрифты).
         let theme = self.canvas.theme;
         ctx.style_mut_of(egui::Theme::Dark, |style| {
+            // Отступы и интервалы.
+            style.spacing.item_spacing = egui::vec2(theme.item_spacing[0], theme.item_spacing[1]);
+            style.spacing.window_margin = egui::Margin {
+                left: theme.window_margin[0] as i8,
+                right: theme.window_margin[0] as i8,
+                top: theme.window_margin[1] as i8,
+                bottom: theme.window_margin[1] as i8,
+            };
+            style.spacing.menu_margin = egui::Margin {
+                left: theme.menu_margin[0] as i8,
+                right: theme.menu_margin[0] as i8,
+                top: theme.menu_margin[1] as i8,
+                bottom: theme.menu_margin[1] as i8,
+            };
+            style.spacing.indent = theme.indent;
+            style.spacing.combo_height = theme.combo_height;
+            style.spacing.slider_width = theme.slider_width;
+            style.visuals.resize_corner_size = theme.resize_corner_size;
+            // Цвета панелей и окон.
             style.visuals.window_fill = theme.panel_bg;
             style.visuals.panel_fill = theme.panel_bg;
+            style.visuals.faint_bg_color = theme.faint_bg_color;
+            style.visuals.extreme_bg_color = theme.extreme_bg_color;
+            style.visuals.code_bg_color = theme.code_bg_color;
+
+            // Обводки окон/панелей.
             style.visuals.window_stroke = egui::Stroke::new(1.0, theme.panel_border);
+            style.visuals.window_corner_radius = theme.window_rounding();
+
+            // Виджеты.
             style.visuals.widgets.noninteractive.bg_fill = theme.panel_bg;
             style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
             style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.noninteractive.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.inactive.bg_fill = theme.panel_bg;
             style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
             style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.inactive.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.hovered.bg_fill = theme.menu_hover;
             style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, theme.accent_secondary);
             style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.hovered.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.active.bg_fill = theme.accent;
             style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, theme.accent);
             style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, theme.panel_bg);
+            style.visuals.widgets.active.corner_radius = theme.widget_rounding_egui();
+            style.visuals.widgets.open.corner_radius = theme.widget_rounding_egui();
+
+            // Выделение, ссылки, предупреждения, ошибки.
             style.visuals.selection.bg_fill = theme.accent;
             style.visuals.selection.stroke = egui::Stroke::new(1.0, theme.accent);
-            style.visuals.hyperlink_color = theme.accent_secondary;
+            style.visuals.hyperlink_color = theme.link_color;
             style.visuals.warn_fg_color = theme.status_warning;
             style.visuals.error_fg_color = theme.status_deficit;
+
+            // Тени окон и popup.
             style.visuals.window_shadow = egui::epaint::Shadow {
                 offset: [theme.shadow_offset[0] as i8, theme.shadow_offset[1] as i8],
                 blur: theme.shadow_blur as u8,
@@ -258,6 +294,13 @@ impl eframe::App for PolygramApp {
                 spread: 0,
                 color: theme.shadow_color,
             };
+
+            // Текстовые стили / шрифты.
+            style.text_styles.get_mut(&egui::TextStyle::Body).map(|f| f.size = theme.text_size_body);
+            style.text_styles.get_mut(&egui::TextStyle::Button).map(|f| f.size = theme.text_size_button);
+            style.text_styles.get_mut(&egui::TextStyle::Small).map(|f| f.size = theme.text_size_small);
+            style.text_styles.get_mut(&egui::TextStyle::Heading).map(|f| f.size = theme.text_size_heading);
+            style.text_styles.get_mut(&egui::TextStyle::Monospace).map(|f| f.size = theme.text_size_monospace);
         });
     }
 
@@ -349,6 +392,13 @@ impl eframe::App for PolygramApp {
         }
 
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
+
+        // Окно детальных настроек темы.
+        if self.show_settings {
+            if crate::app::settings::render_settings(self, ui) {
+                self.ui_config_save();
+            }
+        }
 
         interaction::handle_delete_confirm(self, &ctx);
 

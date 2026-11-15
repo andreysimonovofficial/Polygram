@@ -1,4 +1,5 @@
 use crate::app::PolygramApp;
+use crate::app::ui_config::ThemeConfig;
 use chrono::Local;
 
 pub struct CommandLogEntry {
@@ -38,6 +39,7 @@ impl PolygramApp {
             grid_mode: self.grid_mode,
             grid_color: self.grid_color,
             show_cursor_coords: self.show_cursor_coords,
+            theme: ThemeConfig::from_theme(&self.canvas.theme),
             last_opened_file: self.last_opened_file.clone(),
         };
         ui_config.save();

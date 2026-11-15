@@ -19,6 +19,7 @@ pub mod state;
 pub mod cmd;
 pub mod snapshot;
 pub mod process;
+pub mod settings;
 pub mod binding;
 
 use connection::ConnectionState;
@@ -52,6 +53,8 @@ pub struct PolygramApp {
     pub grid_mode: GridMode,
     pub grid_color: [u8; 3],
     pub show_cursor_coords: bool,
+    /// Окно настроек темы открыто.
+    pub show_settings: bool,
     pub last_status: String,
     pub chat: ChatState,
     /// Экспорт/импорт отдела: флаги запроса открытия диалога файла.
@@ -85,6 +88,8 @@ impl PolygramApp {
         chat.chat_rx = ChatState::start_polling(api_client.clone(), api_base.clone());
         let ui_config = UiConfig::load();
         let grid_color = ui_config.grid_color;
+        // Применяем сохранённую тему оформления.
+        canvas.theme = ui_config.theme.into_theme();
         canvas.theme.grid_color = Color32::from_rgb(grid_color[0], grid_color[1], grid_color[2]);
         Self {
             canvas,
@@ -104,6 +109,7 @@ impl PolygramApp {
             grid_mode: ui_config.grid_mode,
             grid_color,
             show_cursor_coords: ui_config.show_cursor_coords,
+            show_settings: false,
             last_status: "API сервер не подключён".to_owned(),
             chat,
             export_requested: false,

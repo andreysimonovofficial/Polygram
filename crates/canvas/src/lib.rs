@@ -8,7 +8,7 @@ mod paint;
 mod paint_department;
 mod paint_object;
 mod routing;
-mod theme;
+pub mod theme;
 
 pub use camera::Camera;
 pub use hit_test::{header_at, object_at, object_at_cell, department_at, find_ghost_cell, find_ghost_cell_in_dept, rect_is_free};
