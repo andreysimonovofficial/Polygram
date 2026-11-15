@@ -76,6 +76,9 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                     
                 }
                 ui.separator();
+                if ui.button("Снимок экрана").clicked() {
+                    app.screenshot.request();
+                }
             ui.menu_button("Сетка", |ui| {
                 ui.label("Оформление");
                 ui.menu_button("Цвет сетки", |ui| {

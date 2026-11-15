@@ -401,6 +401,23 @@ impl eframe::App for PolygramApp {
 
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
+        // Снимок экрана (блокирующая операция GDI, вызывается редко).
+        if self.screenshot.requested {
+            self.screenshot.requested = false;
+            match self.screenshot.capture() {
+                Ok(path) => {
+                    self.screenshot.result = Some(Ok(path.clone()));
+                    self.last_status = format!("Снимок экрана сохранён: {}", path.display());
+                    self.add_event_log("info", "screenshot", &format!("Сохранён: {}", path.display()), None);
+                }
+                Err(e) => {
+                    self.screenshot.result = Some(Err(e.clone()));
+                    self.last_status = format!("Ошибка скриншота: {}", e);
+                    self.add_event_log("error", "screenshot", &e, None);
+                }
+            }
+        }
+
         // Окно детальных настроек темы.
         if self.show_settings {
             if crate::app::settings::render_settings(self, ui) {
