@@ -52,7 +52,6 @@ pub struct PolygramApp {
     pub grid_mode: GridMode,
     pub grid_color: [u8; 3],
     pub show_cursor_coords: bool,
-    pub show_color_picker: bool,
     pub last_status: String,
     pub chat: ChatState,
     /// Экспорт/импорт отдела: флаги запроса открытия диалога файла.
@@ -105,7 +104,6 @@ impl PolygramApp {
             grid_mode: ui_config.grid_mode,
             grid_color,
             show_cursor_coords: ui_config.show_cursor_coords,
-            show_color_picker: false,
             last_status: "API сервер не подключён".to_owned(),
             chat,
             export_requested: false,

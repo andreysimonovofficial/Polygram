@@ -78,27 +78,25 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                 ui.separator();
             ui.menu_button("Сетка", |ui| {
                 ui.label("Оформление");
-                if ui.button("Цвет сетки").clicked() {
-                    app.show_color_picker = true;
-                }
-                if app.show_color_picker {
-                    let mut open = app.show_color_picker;
-                    egui::Window::new("Цвет сетки")
-                        .open(&mut open)
-                        .show(ui.ctx(), |ui| {
-                            let mut color =
-                                Color32::from_rgb(app.grid_color[0], app.grid_color[1], app.grid_color[2]);
-                            egui::widgets::color_picker::color_picker_color32(
-                                ui,
-                                &mut color,
-                                egui::widgets::color_picker::Alpha::Opaque,
-                            );
-                            app.grid_color = [color.r(), color.g(), color.b()];
-                            app.canvas.theme.grid_color = color;
-                            app.ui_config_save();
-                        });
-                    app.show_color_picker = open;
-                }
+                ui.menu_button("Цвет сетки", |ui| {
+                    let mut color =
+                        Color32::from_rgb(app.grid_color[0], app.grid_color[1], app.grid_color[2]);
+                    if egui::widgets::color_picker::color_picker_color32(
+                        ui,
+                        &mut color,
+                        egui::widgets::color_picker::Alpha::Opaque,
+                    ) {
+                        app.grid_color = [color.r(), color.g(), color.b()];
+                        app.canvas.theme.grid_color = color;
+                        app.ui_config_save();
+                    }
+                    if ui.button("Сброс").clicked() {
+                        app.grid_color = [35, 35, 42];
+                        let color = Color32::from_rgb(35, 35, 42);
+                        app.canvas.theme.grid_color = color;
+                        app.ui_config_save();
+                    }
+                });
                 ui.separator();
                 ui.label("Отображение");
                 let mut changed = false;
