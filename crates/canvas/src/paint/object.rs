@@ -24,6 +24,7 @@ pub fn paint_process(
     zoom: f32,
     mouse_pos: Option<Pos2>,
     _edit_target: Option<&str>,
+    is_selected: bool,
     bindings: &HashMap<(String, String), crate::paint::row::MetricBinding>,
     error_hotspots: &mut Vec<(Rect, String)>,
 ) -> (
@@ -117,9 +118,10 @@ pub fn paint_process(
     let body_hovered = mouse_pos.map_or(false, |pos| card_rect.contains(pos))
         && container_hovered_dir.is_none()
         && row_hovered_rect.is_none();
+    let body_highlighted = body_hovered || is_selected;
 
-    let border_color = if body_hovered { theme.text } else { theme.card_border };
-    let border_width = if body_hovered {
+    let border_color = if body_highlighted { theme.text } else { theme.card_border };
+    let border_width = if body_highlighted {
         theme.object_border_hover_width * zoom
     } else {
         theme.object_border_width * zoom
@@ -131,7 +133,7 @@ pub fn paint_process(
         egui::StrokeKind::Middle,
     );
 
-    let body_text_color = if body_hovered { theme.text } else { theme.text_muted };
+    let body_text_color = if body_highlighted { theme.text } else { theme.text_muted };
 
     // --- Заголовок объекта: ◆ + {Имя процесса} + {ID процесса} ---
     // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18

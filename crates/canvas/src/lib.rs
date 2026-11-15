@@ -209,6 +209,7 @@ impl Canvas {
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
+            let is_selected = selected_objects.iter().any(|id| id == &object.id);
             if object.kind == NodeKind::Process {
             let (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots) = paint_process(
                 painter,
@@ -220,6 +221,7 @@ impl Canvas {
                 self.camera.zoom,
                 mouse_pos,
                 edit_target,
+                is_selected,
                 bindings,
                 &mut error_hotspots,
             );
@@ -237,6 +239,7 @@ impl Canvas {
                     cell_px,
                     self.camera.zoom,
                     mouse_pos.map_or(false, |pos| rect_px.contains(pos)),
+                    is_selected,
                 );
             }
         }
@@ -259,35 +262,6 @@ impl Canvas {
             );
         }
 
-        // Рамки выделения вокруг выделенных объектов (рисуются поверх всего).
-        if !selected_objects.is_empty() {
-            for object in &geometry.objects {
-                if !selected_objects.iter().any(|id| id == &object.id) {
-                    continue;
-                }
-                let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
-                let mut rect_px = Rect::from_min_size(
-                    self.camera
-                        .world_to_screen(Pos2::new(r.x as f32, r.y as f32), self.cell_size),
-                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-                );
-                if object.kind == NodeKind::Process {
-                    let card_w = 256.0 * self.camera.zoom;
-                    let card_h = 256.0 * self.camera.zoom;
-                    rect_px = Rect::from_min_size(rect_px.min, Vec2::new(card_w, card_h));
-                }
-                if !rect_px.intersects(clip_rect) {
-                    continue;
-                }
-                let sr = rect_px.expand(4.0);
-                painter.rect_stroke(
-                    sr,
-                    2.0,
-                    egui::Stroke::new(2.0_f32 * self.camera.zoom, self.theme.accent_secondary),
-                    egui::StrokeKind::Middle,
-                );
-            }
-        }
     }
 
     pub fn object_at<'a>(&self, geometry: &'a Geometry, screen_pos: Pos2) -> Option<&'a str> {

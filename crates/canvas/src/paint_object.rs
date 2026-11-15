@@ -11,6 +11,7 @@ pub fn paint_object(
     cell_px: f32,
     zoom: f32,
     is_hovered: bool,
+    is_selected: bool,
 ) {
     // Свечение за объектом (если включено в стиле)
     if theme.glow_enabled {
@@ -25,12 +26,13 @@ pub fn paint_object(
     }
 
     // Внешняя рамка
-    let border_color = if is_hovered {
+    let highlighted = is_hovered || is_selected;
+    let border_color = if highlighted {
         theme.text
     } else {
         theme.card_border
     };
-    let border_width = if is_hovered {
+    let border_width = if highlighted {
         theme.object_border_hover_width * zoom
     } else {
         theme.object_border_width * zoom
@@ -49,7 +51,7 @@ pub fn paint_object(
     painter.rect_filled(header_rect, 0.0, theme.card_header);
 
     let title = format!("{} '{}'", object.kind.label_ru(), object.name);
-    let name_color = if is_hovered {
+    let name_color = if highlighted {
         theme.text
     } else {
         theme.text_muted
