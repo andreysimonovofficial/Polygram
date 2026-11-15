@@ -21,7 +21,6 @@ pub mod snapshot;
 pub mod process;
 pub mod settings;
 pub mod binding;
-pub mod screenshot;
 
 use connection::ConnectionState;
 use chat::ChatState;
@@ -31,7 +30,6 @@ use commands::CommandState;
 use ui_config::UiConfig;
 use connectors::ConnectorManager;
 use bindings::BindingManager;
-use screenshot::ScreenshotState;
 
 pub use state::CommandLogEntry;
 
@@ -80,8 +78,6 @@ pub struct PolygramApp {
     pub last_opened_file: Option<String>,
     /// Подтверждение закрытия с несохранёнными изменениями ожидается.
     pub close_confirmation_pending: bool,
-    /// Состояние системы скриншотов.
-    pub screenshot: ScreenshotState,
 }
 
 impl PolygramApp {
@@ -133,7 +129,6 @@ impl PolygramApp {
             dirty: false,
             last_opened_file: ui_config.last_opened_file.clone(),
             close_confirmation_pending: false,
-            screenshot: ScreenshotState::default(),
         }
     }
 }

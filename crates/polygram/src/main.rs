@@ -223,11 +223,6 @@ impl eframe::App for PolygramApp {
             ctx.request_repaint_after(Duration::ZERO);
         }
 
-        // Поддерживаем перерисовку пока идет автозахват скриншотов.
-        if self.screenshot.auto_capture_frames > 0 {
-            ctx.request_repaint_after(Duration::ZERO);
-        }
-
         // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта, отступы, скругление, шрифты).
         let theme = self.canvas.theme;
         ctx.style_mut_of(egui::Theme::Dark, |style| {
@@ -405,24 +400,6 @@ impl eframe::App for PolygramApp {
         }
 
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
-
-        // Снимок экрана (блокирующая операция GDI, вызывается редко).
-        if self.screenshot.requested || self.screenshot.auto_capture_frames > 0 {
-            self.screenshot.requested = false;
-            self.screenshot.auto_capture_frames = self.screenshot.auto_capture_frames.saturating_sub(1);
-            match self.screenshot.capture() {
-                Ok(path) => {
-                    self.screenshot.result = Some(Ok(path.clone()));
-                    self.last_status = format!("Снимок экрана сохранён: {}", path.display());
-                    self.add_event_log("info", "screenshot", &format!("Сохранён: {}", path.display()), None);
-                }
-                Err(e) => {
-                    self.screenshot.result = Some(Err(e.clone()));
-                    self.last_status = format!("Ошибка скриншота: {}", e);
-                    self.add_event_log("error", "screenshot", &e, None);
-                }
-            }
-        }
 
         // Окно детальных настроек темы.
         if self.show_settings {
