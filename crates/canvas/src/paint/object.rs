@@ -22,9 +22,7 @@ pub fn paint_process(
     rect_px: Rect,
     _cell_px: f32,
     zoom: f32,
-    body_hovered: bool,
-    container_header_hovered: Option<Direction>,
-    hovered_row_rect: Option<Rect>,
+    mouse_pos: Option<Pos2>,
     _edit_target: Option<&str>,
     bindings: &HashMap<(String, String), crate::paint::row::MetricBinding>,
     error_hotspots: &mut Vec<(Rect, String)>,
@@ -47,6 +45,7 @@ pub fn paint_process(
     let card_w = 256.0 * zoom;
     let card_h = 256.0 * zoom;
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, card_h));
+    let body_hovered = mouse_pos.map_or(false, |pos| card_rect.contains(pos));
     let border_color = if body_hovered { theme.text } else { theme.card_border };
     let border_width = if body_hovered {
         theme.object_border_hover_width * zoom
@@ -105,10 +104,11 @@ pub fn paint_process(
         Pos2::new(container_x, oy + 32.0 * zoom),
         Vec2::new(container_w, container_h),
     );
+    let req_hovered = mouse_pos.map_or(false, |pos| req_rect.contains(pos));
     paint_metric_container(
         painter, object, dynamic, theme, zoom,
-        container_header_hovered == Some(Direction::Request),
-        hovered_row_rect,
+        req_hovered,
+        mouse_pos,
         Direction::Request, &object.requests, req_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
@@ -120,10 +120,11 @@ pub fn paint_process(
         Pos2::new(container_x, oy + 144.0 * zoom),
         Vec2::new(container_w, container_h),
     );
+    let out_hovered = mouse_pos.map_or(false, |pos| out_rect.contains(pos));
     paint_metric_container(
         painter, object, dynamic, theme, zoom,
-        container_header_hovered == Some(Direction::Output),
-        hovered_row_rect,
+        out_hovered,
+        mouse_pos,
         Direction::Output, &object.outputs, out_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
@@ -141,7 +142,7 @@ fn paint_metric_container(
     theme: &crate::theme::Theme,
     zoom: f32,
     container_hovered: bool,
-    hovered_row_rect: Option<Rect>,
+    mouse_pos: Option<Pos2>,
     dir: Direction,
     entries: &[EntryGeom],
     container_rect: Rect,
@@ -238,7 +239,7 @@ fn paint_metric_container(
         let row_y = cy + row_offsets[i] * zoom;
         let row_x = cx + 4.0 * zoom; // left:4 относительно контейнера
         let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
-        let row_hovered = hovered_row_rect == Some(row_rect);
+        let row_hovered = mouse_pos.map_or(false, |pos| row_rect.contains(pos));
         if row_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
