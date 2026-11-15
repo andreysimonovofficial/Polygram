@@ -143,7 +143,7 @@ impl Canvas {
                         }
                     }
                     GridMode::Dots => {
-                        const DOT_RADIUS_WORLD: f32 = 0.12;
+                        const DOT_RADIUS_WORLD: f32 = 0.04;
                         let dot_radius_px = (DOT_RADIUS_WORLD * cell_px).max(0.5);
                         for c in min_cx..=max_cx {
                             let sx = (c as f32 * cell_size + offset.x) * zoom;
