@@ -143,12 +143,13 @@ impl Canvas {
                         }
                     }
                     GridMode::Dots => {
-                        const DOT_RADIUS: f32 = 2.0;
+                        const DOT_RADIUS_WORLD: f32 = 0.12;
+                        let dot_radius_px = (DOT_RADIUS_WORLD * cell_px).max(0.5);
                         for c in min_cx..=max_cx {
                             let sx = (c as f32 * cell_size + offset.x) * zoom;
                             for r in min_cy..=max_cy {
                                 let sy = (r as f32 * cell_size + offset.y) * zoom;
-                                painter.circle_filled(Pos2::new(sx, sy), DOT_RADIUS, color);
+                                painter.circle_filled(Pos2::new(sx, sy), dot_radius_px, color);
                             }
                         }
                     }
