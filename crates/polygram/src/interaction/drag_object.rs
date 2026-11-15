@@ -65,10 +65,16 @@ pub fn handle_drag(
                     .iter()
                     .find(|o| o.id == *object_id);
                 if let Some(o) = object {
+                    let click_world =
+                        app.canvas.camera.screen_to_world(pos, app.canvas.cell_size);
+                    let card_top_left_cell =
+                        Pos2::new(o.rect.x as f32, o.rect.y as f32);
+                    let drag_offset_cell = click_world - card_top_left_cell;
                     app.drag.start_drag_object(
                         object_id.to_owned(),
                         pos,
                         (o.rect.x, o.rect.y),
+                        drag_offset_cell,
                     );
                     app.add_event_log(
                         "info",
@@ -91,6 +97,14 @@ pub fn handle_drag(
         if let Some(cur) = canvas_response.interact_pointer_pos() {
             let object_id = app.drag.drag_object().map(|s| s.to_string()).unwrap_or_default();
             let _start_cell = app.drag.drag_start_cell().unwrap_or((0, 0));
+            let drag_offset_cell = app.drag.drag_offset_cell().unwrap_or_default();
+            let cursor_world =
+                app.canvas.camera.screen_to_world(cur, app.canvas.cell_size);
+            let target_world = cursor_world - drag_offset_cell;
+            let target_x = target_world.x.round() as i32;
+            let target_y = target_world.y.round() as i32;
+            let cursor_cell = (target_x, target_y);
+
             let dragged_size = geometry
                 .objects
                 .iter()
@@ -103,10 +117,6 @@ pub fn handle_drag(
                     }
                 })
                 .unwrap_or((0, 0));
-
-            let target_x = ((cur.x / app.canvas.camera.zoom - app.canvas.camera.offset.x) / app.canvas.cell_size).round() as i32;
-            let target_y = ((cur.y / app.canvas.camera.zoom - app.canvas.camera.offset.y) / app.canvas.cell_size).round() as i32;
-            let cursor_cell = (target_x, target_y);
 
             let input = DragPreviewInput {
                 geometry: geometry.clone(),

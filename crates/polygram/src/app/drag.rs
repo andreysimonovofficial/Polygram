@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use egui::Pos2;
+use egui::{Pos2, Vec2};
 use polygram_core::{EntryGeom, types::Direction};
 
 /// Конечный автомат взаимодействия с графом на холсте.
@@ -14,6 +14,9 @@ pub enum DragInteractionState {
         object_id: String,
         start_screen: Pos2,
         start_cell: (i32, i32),
+        /// Смещение курсора относительно левого верхнего угла объекта в клетках,
+        /// чтобы карточка следовала за курсором без перескака левого верхнего угла.
+        drag_offset_cell: Vec2,
     },
     /// Перетаскивание показателя (метрики) из одного объекта в другой.
     DraggingMetric {
@@ -98,6 +101,16 @@ impl DragState {
         }
     }
 
+    /// Смещение курсора относительно левого верхнего угла объекта в клетках.
+    pub fn drag_offset_cell(&self) -> Option<Vec2> {
+        match &self.state {
+            DragInteractionState::DraggingObject { drag_offset_cell, .. } => {
+                Some(*drag_offset_cell)
+            }
+            _ => None,
+        }
+    }
+
     /// Начало выделения рамкой.
     pub fn selection_box_start(&self) -> Option<Pos2> {
         match &self.state {
@@ -159,11 +172,13 @@ impl DragState {
         object_id: String,
         start_screen: Pos2,
         start_cell: (i32, i32),
+        drag_offset_cell: Vec2,
     ) {
         self.state = DragInteractionState::DraggingObject {
             object_id,
             start_screen,
             start_cell,
+            drag_offset_cell,
         };
         self.drag_ghost = None;
         self.drag_over = None;
