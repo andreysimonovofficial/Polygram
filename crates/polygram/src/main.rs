@@ -20,6 +20,7 @@ use app::PolygramApp;
 use eframe::egui::{self, FontData, FontDefinitions};
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use reqwest::blocking::Client;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -223,6 +224,11 @@ impl eframe::App for PolygramApp {
             ctx.request_repaint_after(Duration::ZERO);
         }
 
+        // Поддерживаем перерисовку пока идет автозахват скриншотов.
+        if self.screenshot.auto_capture_frames > 0 {
+            ctx.request_repaint_after(Duration::ZERO);
+        }
+
         // Применение темы к стилю egui (цвета панелей, окон, виджетов, селекта, отступы, скругление, шрифты).
         let theme = self.canvas.theme;
         ctx.style_mut_of(egui::Theme::Dark, |style| {
@@ -402,8 +408,9 @@ impl eframe::App for PolygramApp {
         interaction::context_menu(self, &ctx, &published, &mut close_menu);
 
         // Снимок экрана (блокирующая операция GDI, вызывается редко).
-        if self.screenshot.requested {
+        if self.screenshot.requested || self.screenshot.auto_capture_frames > 0 {
             self.screenshot.requested = false;
+            self.screenshot.auto_capture_frames = self.screenshot.auto_capture_frames.saturating_sub(1);
             match self.screenshot.capture() {
                 Ok(path) => {
                     self.screenshot.result = Some(Ok(path.clone()));
@@ -461,6 +468,16 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             register_fonts(&cc.egui_ctx);
             let mut app = PolygramApp::new(snapshot_rx);
+
+            // Передаём HWND окна в систему скриншотов.
+            if let Some(winit_window) = cc.winit_window() {
+                if let Ok(handle) = winit_window.raw_window_handle() {
+                    if let RawWindowHandle::Win32(wh) = handle {
+                        app.screenshot.set_hwnd(Some(wh.hwnd as *mut std::ffi::c_void as isize));
+                    }
+                }
+            }
+
             app.start_api_process();
             app.try_connect_once();
 

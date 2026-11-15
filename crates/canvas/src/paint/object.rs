@@ -319,9 +319,10 @@ fn paint_metric_container(
         let row_dot_color = status_dot_color(row_status, dir, theme);
         let cy_row = row_rect.center().y;
 
-        // Символ сцепления слева — начинается на одной вертикали с ромбом заголовка контейнера (cx+12)
+        // Символ сцепления слева — выровнен по левому краю ромба заголовка контейнера.
+        // Ромб: центр в cx+12, шрифт 9px → левый край ≈ cx+12-4.5 = cx+7.5.
         painter.text(
-            Pos2::new(cx + 12.0 * zoom, cy_row),
+            Pos2::new(cx + 8.0 * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             left_sym,
             symbol_font.clone(),
