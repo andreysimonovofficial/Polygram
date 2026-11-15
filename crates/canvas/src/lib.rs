@@ -144,12 +144,19 @@ impl Canvas {
                     }
                     GridMode::Dots => {
                         const DOT_RADIUS_WORLD: f32 = 0.04;
+                        // Точки в два раза светлее линии сетки.
+                        let dot_color = Color32::from_rgba_unmultiplied(
+                            ((grid_color.r() as u32 + 255) / 2) as u8,
+                            ((grid_color.g() as u32 + 255) / 2) as u8,
+                            ((grid_color.b() as u32 + 255) / 2) as u8,
+                            (255.0 * alpha) as u8,
+                        );
                         let dot_radius_px = (DOT_RADIUS_WORLD * cell_px).max(0.5);
                         for c in min_cx..=max_cx {
                             let sx = (c as f32 * cell_size + offset.x) * zoom;
                             for r in min_cy..=max_cy {
                                 let sy = (r as f32 * cell_size + offset.y) * zoom;
-                                painter.circle_filled(Pos2::new(sx, sy), dot_radius_px, color);
+                                painter.circle_filled(Pos2::new(sx, sy), dot_radius_px, dot_color);
                             }
                         }
                     }
