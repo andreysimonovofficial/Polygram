@@ -210,24 +210,28 @@ pub fn handle_canvas_interaction(
     if app.drag.drag_ghost.is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
-        if let Some((gx, gy)) = app.drag.drag_ghost {
-            if let Some(dragged) = geometry.objects.iter().find(|o| {
-                o.id == app.drag.drag_object().as_deref().unwrap_or("")
-            }) {
-                let cell_px = app.canvas.cell_px();
-                let offset = app.canvas.camera.offset;
-                let zoom = app.canvas.camera.zoom;
-                let rect_px = Rect::from_min_size(
-                    Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
-                    Vec2::new(
-                        dragged.rect.w as f32 * cell_px,
-                        dragged.rect.h as f32 * cell_px,
-                    ),
-                );
-                let painter = ui.painter();
-                paint_dashed_rect(painter, rect_px, zoom, theme.accent);
-            }
-        }
+                if let Some((gx, gy)) = app.drag.drag_ghost {
+                    if let Some(dragged) = geometry.objects.iter().find(|o| {
+                        o.id == app.drag.drag_object().as_deref().unwrap_or("")
+                    }) {
+                        let cell_px = app.canvas.cell_px();
+                        let offset = app.canvas.camera.offset;
+                        let zoom = app.canvas.camera.zoom;
+                        // Процесс всегда 256×256px = 16×16 клеток по CSS-спецификации,
+                        // независимо от хранимого rect.w/h.
+                        let (gw, gh) = if dragged.kind == NodeKind::Process {
+                            (16, 16)
+                        } else {
+                            (dragged.rect.w, dragged.rect.h)
+                        };
+                        let rect_px = Rect::from_min_size(
+                            Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
+                            Vec2::new(gw as f32 * cell_px, gh as f32 * cell_px),
+                        );
+                        let painter = ui.painter();
+                        paint_dashed_rect(painter, rect_px, zoom, theme.accent);
+                    }
+                }
     }
 
     // Selection Box: рисуем резиновый прямоугольник поверх холста.

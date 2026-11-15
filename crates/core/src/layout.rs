@@ -57,9 +57,11 @@ impl Rect {
 }
 
 /// Размер карточки в клетках по числу запросов и выходов.
-pub fn footprint_for(n_req: usize, n_out: usize) -> (u16, u16) {
-    let rows = n_req.max(n_out).max(29);
-    (NODE_W, (1 + rows) as u16)
+pub fn footprint_for(kind: NodeKind, n_req: usize, n_out: usize) -> (u16, u16) {
+    match kind {
+        NodeKind::Process => (16, 16), // 256×256px при cell_size=16px
+        NodeKind::Department => (NODE_W, (1 + n_req.max(n_out).max(29)) as u16),
+    }
 }
 
 #[derive(Clone, Debug, Default)]

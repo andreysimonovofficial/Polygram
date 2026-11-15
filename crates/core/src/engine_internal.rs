@@ -53,7 +53,7 @@ impl crate::engine::Engine {
         n_req: usize,
         n_out: usize,
     ) -> Result<Option<crate::layout::Rect>> {
-        let (w, h) = crate::layout::footprint_for(n_req, n_out);
+        let (w, h) = crate::layout::footprint_for(self.hier.object(o).kind, n_req, n_out);
         let (w, h) = (w as i32, h as i32);
         let r = self.layout.rect_of(o);
         if r.w == w && r.h == h {

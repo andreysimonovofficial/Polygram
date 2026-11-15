@@ -118,12 +118,19 @@ impl Layout {
             let mut y = 0i32;
             for &v in col.iter() {
                 let o = h.object(ObjectIx(v));
-                let (w, hh) = footprint_for(o.requests.len(), o.outputs.len());
+                let (w, hh) = footprint_for(o.kind, o.requests.len(), o.outputs.len());
                 placed_rect[v as usize] = Rect::new(col_x, y, w as i32, hh as i32);
                 center_y[v as usize] = y as f64 + hh as f64 / 2.0;
                 y += hh as i32 + GAP_ROWS;
             }
-            col_x += crate::layout::NODE_W as i32 + GAP_COLS;
+            let col_w: i32 = col.iter()
+                .map(|&v| {
+                    let o = h.object(ObjectIx(v));
+                    if o.kind == NodeKind::Process { 16 } else { crate::layout::NODE_W as i32 }
+                })
+                .max()
+                .unwrap_or(crate::layout::NODE_W as i32);
+            col_x += col_w + GAP_COLS;
         }
 
         // Применить: снять всех, поставить заново.

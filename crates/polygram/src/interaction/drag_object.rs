@@ -95,7 +95,13 @@ pub fn handle_drag(
                 .objects
                 .iter()
                 .find(|o| o.id == object_id)
-                .map(|o| (o.rect.w, o.rect.h))
+                .map(|o| {
+                    if o.kind == NodeKind::Process {
+                        (16, 16)
+                    } else {
+                        (o.rect.w, o.rect.h)
+                    }
+                })
                 .unwrap_or((0, 0));
 
             let target_x = ((cur.x / app.canvas.camera.zoom - app.canvas.camera.offset.x) / app.canvas.cell_size).round() as i32;

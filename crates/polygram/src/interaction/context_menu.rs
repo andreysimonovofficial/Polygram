@@ -288,7 +288,7 @@ pub fn context_menu(
                             .screen_to_world(*pos, app.canvas.cell_size);
                         let wx = world_pos.x.round() as i32;
                         let wy = world_pos.y.round() as i32;
-                        let (pw, ph) = footprint_for(0, 0);
+                        let (pw, ph) = footprint_for(NodeKind::Process, 0, 0);
                         let (pw, ph) = (pw as i32, ph as i32);
                         let (fx, fy) = find_free_near(
                             &published.geometry.objects,

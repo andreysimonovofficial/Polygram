@@ -22,7 +22,7 @@ pub fn handle_add_object(
         // поместить первый процесс.
         (34, 34)
     } else {
-        let (w, h) = footprint_for(0, 0);
+        let (w, h) = footprint_for(kind, 0, 0);
         (w as i32, h as i32)
     };
     let parent_ix = match &parent {
