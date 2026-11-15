@@ -55,10 +55,12 @@ pub fn paint_process(
 
     // --- Заголовок объекта: ◆ + {Имя процесса} + {ID процесса} ---
     let header_h = 28.0 * zoom;
-    painter.circle_filled(
+    painter.text(
         Pos2::new(ox + 16.0 * zoom, oy + header_h / 2.0),
-        theme.port_radius.max(2.0) * zoom,
-        theme.text_muted,
+        egui::Align2::CENTER_CENTER,
+        "◆",
+        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
+        theme.text,
     );
     let id_text = format!("#{}", object.id);
     painter.text(
@@ -177,10 +179,12 @@ fn paint_metric_container(
     let header_text_color = if is_hovered { theme.text } else { dot_color };
 
     // ◆ символ (слева, left: 4)
-    painter.circle_filled(
+    painter.text(
         Pos2::new(cx + 12.0 * zoom, cy + container_header_h / 2.0),
-        theme.port_radius.max(2.0) * zoom,
-        dot_color,
+        egui::Align2::CENTER_CENTER,
+        "◆",
+        egui::FontId::new(9.0 * zoom, egui::FontFamily::Proportional),
+        theme.text,
     );
 
     // Текст шапки: "ЗАПРОС (N) СТАТУС" (left: 20)
