@@ -93,6 +93,39 @@ impl Canvas {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
         let cell_px = self.cell_px();
+
+        // Подсветка при наведении вычисляется по горячим зонам предыдущего кадра
+        // (до их очистки), чтобы избежать мерцания.
+        let mouse_pos = ui.ctx().input(|i| i.pointer.hover_pos());
+        let mut body_hovered = false;
+        let mut container_header_hovered: Option<Direction> = None;
+        let mut hovered_row_rect: Option<Rect> = None;
+
+        if let Some(pos) = mouse_pos {
+            if let Some(obj_id) = hovered_object {
+                // Проверяем заголовки контейнеров
+                for (id, dir, rect) in &self.container_header_hotspots {
+                    if id == obj_id && rect.contains(pos) {
+                        container_header_hovered = Some(*dir);
+                        break;
+                    }
+                }
+                // Проверяем строки показателя
+                if container_header_hovered.is_none() {
+                    for (id, _, _, rect) in &self.drag_metric_hotspots {
+                        if id == obj_id && rect.contains(pos) {
+                            hovered_row_rect = Some(*rect);
+                            break;
+                        }
+                    }
+                }
+                // Ховер над телом карточки (не над заголовком/строкой)
+                if container_header_hovered.is_none() && hovered_row_rect.is_none() {
+                    body_hovered = true;
+                }
+            }
+        }
+
         self.add_metric_hotspots.clear();
         self.container_menu_hotspots.clear();
         self.container_header_hotspots.clear();
@@ -191,7 +224,6 @@ impl Canvas {
             if object.kind == NodeKind::Department {
                 continue;
             }
-            let is_hovered = hovered_object == Some(&object.id);
             let r = CoreRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
             let mut rect_px = Rect::from_min_size(
                 self.camera
@@ -217,7 +249,9 @@ impl Canvas {
                 rect_px,
                 cell_px,
                 self.camera.zoom,
-                is_hovered,
+                body_hovered,
+                container_header_hovered,
+                hovered_row_rect,
                 edit_target,
                 bindings,
                 &mut error_hotspots,
@@ -235,7 +269,7 @@ impl Canvas {
                     rect_px,
                     cell_px,
                     self.camera.zoom,
-                    is_hovered,
+                    body_hovered,
                 );
             }
         }

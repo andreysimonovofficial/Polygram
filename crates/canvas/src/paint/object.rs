@@ -22,7 +22,9 @@ pub fn paint_process(
     rect_px: Rect,
     _cell_px: f32,
     zoom: f32,
-    is_hovered: bool,
+    body_hovered: bool,
+    container_header_hovered: Option<Direction>,
+    hovered_row_rect: Option<Rect>,
     _edit_target: Option<&str>,
     bindings: &HashMap<(String, String), crate::paint::row::MetricBinding>,
     error_hotspots: &mut Vec<(Rect, String)>,
@@ -45,8 +47,8 @@ pub fn paint_process(
     let card_w = 256.0 * zoom;
     let card_h = 256.0 * zoom;
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, card_h));
-    let border_color = if is_hovered { theme.text } else { theme.card_border };
-    let border_width = if is_hovered {
+    let border_color = if body_hovered { theme.text } else { theme.card_border };
+    let border_width = if body_hovered {
         theme.object_border_hover_width * zoom
     } else {
         theme.object_border_width * zoom
@@ -63,12 +65,13 @@ pub fn paint_process(
     // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18
     let header_h = 28.0 * zoom;
     let header_cy = oy + 4.0 * zoom + header_h / 2.0;
+    let body_text_color = if body_hovered { theme.text } else { theme.text_muted };
     painter.text(
         Pos2::new(ox + 16.0 * zoom, header_cy),
         egui::Align2::CENTER_CENTER,
         "◆",
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        theme.text,
+        body_text_color,
     );
     let id_text = format!("#{}", object.id);
     painter.text(
@@ -76,7 +79,7 @@ pub fn paint_process(
         egui::Align2::RIGHT_CENTER,
         &id_text,
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        theme.text,
+        body_text_color,
     );
     let title = format!("{} '{}'", object.kind.label_ru(), object.name);
     painter.text(
@@ -84,7 +87,7 @@ pub fn paint_process(
         egui::Align2::LEFT_CENTER,
         &title,
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
-        theme.text,
+        body_text_color,
     );
 
     // Геометрия контейнеров (из CSS-спецификации)
@@ -103,7 +106,9 @@ pub fn paint_process(
         Vec2::new(container_w, container_h),
     );
     paint_metric_container(
-        painter, object, dynamic, theme, zoom, is_hovered,
+        painter, object, dynamic, theme, zoom,
+        container_header_hovered == Some(Direction::Request),
+        hovered_row_rect,
         Direction::Request, &object.requests, req_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
@@ -116,7 +121,9 @@ pub fn paint_process(
         Vec2::new(container_w, container_h),
     );
     paint_metric_container(
-        painter, object, dynamic, theme, zoom, is_hovered,
+        painter, object, dynamic, theme, zoom,
+        container_header_hovered == Some(Direction::Output),
+        hovered_row_rect,
         Direction::Output, &object.outputs, out_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
@@ -133,7 +140,8 @@ fn paint_metric_container(
     dynamic: &DynamicState,
     theme: &crate::theme::Theme,
     zoom: f32,
-    is_hovered: bool,
+    container_hovered: bool,
+    hovered_row_rect: Option<Rect>,
     dir: Direction,
     entries: &[EntryGeom],
     container_rect: Rect,
@@ -153,7 +161,7 @@ fn paint_metric_container(
     let cy = container_rect.min.y;
 
     // --- Рамка контейнера ---
-    let border_color = if is_hovered { theme.text } else { theme.card_border };
+    let border_color = if container_hovered { theme.text } else { theme.card_border };
     painter.rect_stroke(
         container_rect,
         0.0,
@@ -185,16 +193,17 @@ fn paint_metric_container(
     } else {
         status_text.to_string()
     };
-    let header_text_color = if is_hovered { theme.text } else { dot_color };
+    let header_text_color = if container_hovered { theme.text } else { dot_color };
     let header_cy = cy + 16.0 * zoom; // top:4 + h:24/2 = 16
 
     // ◆ символ (слева, left:4, top:4, center x=12 y=16)
+    let header_symbol_color = if container_hovered { theme.text } else { theme.text_muted };
     painter.text(
         Pos2::new(cx + 12.0 * zoom, header_cy),
         egui::Align2::CENTER_CENTER,
         "◆",
         egui::FontId::new(9.0 * zoom, egui::FontFamily::Proportional),
-        theme.text,
+        header_symbol_color,
     );
 
     // Текст шапки: "ЗАПРОС (N) СТАТУС" (left:20, top:4, center y=16)
@@ -229,14 +238,16 @@ fn paint_metric_container(
         let row_y = cy + row_offsets[i] * zoom;
         let row_x = cx + 4.0 * zoom; // left:4 относительно контейнера
         let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
-        if is_hovered {
+        let row_hovered = hovered_row_rect == Some(row_rect);
+        if row_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
         // Рамка строки
+        let row_border_color = if row_hovered { theme.text } else { theme.card_border };
         painter.rect_stroke(
             row_rect,
             0.0,
-            Stroke::new(theme.object_border_width * zoom, theme.card_border),
+            Stroke::new(theme.object_border_width * zoom, row_border_color),
             egui::StrokeKind::Middle,
         );
         let row_status = dynamic.status[entry.ix as usize];
@@ -260,13 +271,13 @@ fn paint_metric_container(
             row_dot_color,
         );
         // Имя (left: 16 относительно строки → cx+4+16)
-        let name_color = if is_hovered { theme.text } else { theme.text_muted };
+        let row_text_color = if row_hovered { theme.text } else { theme.text_muted };
         painter.text(
             Pos2::new(row_x + 16.0 * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             &entry.name,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
-            name_color,
+            row_text_color,
         );
         // Значение + ед.измерения (right-align, заканчивается в 224 относительно строки → cx+4+224)
         let unit = if entry.unit.is_empty() {
@@ -284,7 +295,7 @@ fn paint_metric_container(
             egui::Align2::RIGHT_CENTER,
             &value_text,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
-            name_color,
+            row_text_color,
         );
 
         // Горячая зона перетаскивания строки
@@ -296,7 +307,7 @@ fn paint_metric_container(
         let add_y = cy + row_offsets[visible] * zoom;
         let add_rect = Rect::from_min_size(Pos2::new(cx + 4.0 * zoom, add_y), Vec2::new(row_w, row_h));
         let add_text = "+ Добавить показатель";
-        let add_color = if is_hovered { theme.text } else { theme.text_muted };
+        let add_color = if container_hovered { theme.text } else { theme.text_muted };
         painter.text(
             add_rect.center(),
             egui::Align2::CENTER_CENTER,
