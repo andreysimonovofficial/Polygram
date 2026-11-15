@@ -55,9 +55,10 @@ pub fn handle_canvas_interaction(
     if let Some(pos) = canvas_response.interact_pointer_pos() {
         let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
         if is_double && !handled_by_container {
-            for (object_id, dir, _entry, rect) in &app.canvas.drag_metric_hotspots {
+            for (object_id, dir, entry, rect) in &app.canvas.drag_metric_hotspots {
                 if rect.contains(pos) {
                     app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                    app.dialogs.container_menu_api_expanded = Some(entry.clone());
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(
                         "info",
