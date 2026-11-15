@@ -5,7 +5,7 @@ use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 use std::collections::HashMap;
 
-use crate::paint::constants::MAX_VISIBLE_METRICS;
+use crate::paint::constants::{MAX_VISIBLE_METRICS, SYMBOL_X_PAD, TEXT_X_PAD};
 use crate::paint::status::worst_status;
 use crate::status_dot_color;
 use crate::status_label_ru;
@@ -319,32 +319,32 @@ fn paint_metric_container(
         let row_dot_color = status_dot_color(row_status, dir, theme);
         let cy_row = row_rect.center().y;
 
-        // Символ сцепления слева (left: 0 относительно строки → cx+4)
+        // Символ сцепления слева с отступом от левого края строки
         painter.text(
-            Pos2::new(row_x, cy_row),
+            Pos2::new(row_x + SYMBOL_X_PAD * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             left_sym,
             symbol_font.clone(),
             row_dot_color,
         );
-        // Символ сцепления справа (left: 224 относительно строки → cx+4+224)
+        // Символ сцепления справа с отступом от правого края строки
         painter.text(
-            Pos2::new(row_x + 224.0 * zoom, cy_row),
-            egui::Align2::LEFT_CENTER,
+            Pos2::new(row_x + row_w - SYMBOL_X_PAD * zoom, cy_row),
+            egui::Align2::RIGHT_CENTER,
             right_sym,
             symbol_font.clone(),
             row_dot_color,
         );
-        // Имя (left: 16 относительно строки → cx+4+16)
+        // Имя с отступом от левого края строки
         let row_text_color = if row_hovered { theme.text } else { theme.text_muted };
         painter.text(
-            Pos2::new(row_x + 16.0 * zoom, cy_row),
+            Pos2::new(row_x + TEXT_X_PAD * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             &entry.name,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
             row_text_color,
         );
-        // Значение + ед.измерения (right-align, заканчивается в 224 относительно строки → cx+4+224)
+        // Значение + ед.измерения (right-align, отступ от правого края строки)
         let unit = if entry.unit.is_empty() {
             String::new()
         } else {
@@ -356,7 +356,7 @@ fn paint_metric_container(
         };
         let value_text = format!("{:.0}{}", displayed_value, unit);
         painter.text(
-            Pos2::new(row_x + 224.0 * zoom, cy_row),
+            Pos2::new(row_x + row_w - TEXT_X_PAD * zoom, cy_row),
             egui::Align2::RIGHT_CENTER,
             &value_text,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
