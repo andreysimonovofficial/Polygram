@@ -73,7 +73,7 @@ impl Default for Theme {
             card_header: Color32::from_rgb(45, 45, 54),
             line: Color32::from_rgb(120, 120, 135),
             line_hover: Color32::from_rgb(160, 160, 180),
-            grid_color: Color32::from_rgb(35, 35, 42),
+            grid_color: Color32::from_rgb(49, 49, 58),
 
             // Статусы
             status_ok: Color32::from_rgb(76, 175, 80),

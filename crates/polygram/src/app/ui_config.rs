@@ -59,9 +59,9 @@ impl Default for UiConfig {
     }
 }
 
-/// Цвет сетки по умолчанию (как в Theme::default).
+/// Цвет сетки по умолчанию (R49 G49 B58).
 fn default_grid_color() -> [u8; 3] {
-    [35, 35, 42]
+    [49, 49, 58]
 }
 
 impl UiConfig {

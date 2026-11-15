@@ -91,8 +91,8 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                         app.ui_config_save();
                     }
                     if ui.button("Сброс").clicked() {
-                        app.grid_color = [35, 35, 42];
-                        let color = Color32::from_rgb(35, 35, 42);
+                        app.grid_color = [49, 49, 58];
+                        let color = Color32::from_rgb(49, 49, 58);
                         app.canvas.theme.grid_color = color;
                         app.ui_config_save();
                     }
