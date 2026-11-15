@@ -84,46 +84,68 @@ pub fn handle_container_menu_dialog(
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // Раздел: ЗАПРОС
-                let req_version = app.dialogs.container_menu_section_version;
-                let req_default_open = active_section == Some(Direction::Request);
-                egui::CollapsingHeader::new(format!("ЗАПРОС ({})##{}", requests.len(), req_version))
-                    .default_open(req_default_open)
-                    .show(ui, |ui| {
-                        render_metric_section(
-                            ui,
-                            app,
-                            ctx,
-                            published,
-                            theme,
-                            &object_id,
-                            Direction::Request,
-                            &requests,
-                            active_section,
-                            &mut delete_entry,
-                        );
-                    });
+                let req_is_open = app
+                    .dialogs
+                    .container_menu_section_open
+                    .get(&Direction::Request)
+                    .copied()
+                    .unwrap_or(false);
+                let req_arrow = if req_is_open { "▼" } else { "▶" };
+                let req_header_resp = ui.horizontal(|ui| {
+                    ui.label(req_arrow);
+                    ui.label(format!("ЗАПРОС ({})", requests.len()));
+                });
+                if req_header_resp.response.clicked() {
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Request, !req_is_open);
+                }
+                if req_is_open {
+                    render_metric_section(
+                        ui,
+                        app,
+                        ctx,
+                        published,
+                        theme,
+                        &object_id,
+                        Direction::Request,
+                        &requests,
+                        &mut delete_entry,
+                    );
+                }
 
                 ui.separator();
 
                 // Раздел: ВЫХОД
-                let out_version = app.dialogs.container_menu_section_version;
-                let out_default_open = active_section == Some(Direction::Output);
-                egui::CollapsingHeader::new(format!("ВЫХОД ({})##{}", outputs.len(), out_version))
-                    .default_open(out_default_open)
-                    .show(ui, |ui| {
-                        render_metric_section(
-                            ui,
-                            app,
-                            ctx,
-                            published,
-                            theme,
-                            &object_id,
-                            Direction::Output,
-                            &outputs,
-                            active_section,
-                            &mut delete_entry,
-                        );
-                    });
+                let out_is_open = app
+                    .dialogs
+                    .container_menu_section_open
+                    .get(&Direction::Output)
+                    .copied()
+                    .unwrap_or(false);
+                let out_arrow = if out_is_open { "▼" } else { "▶" };
+                let out_header_resp = ui.horizontal(|ui| {
+                    ui.label(out_arrow);
+                    ui.label(format!("ВЫХОД ({})", outputs.len()));
+                });
+                if out_header_resp.response.clicked() {
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Output, !out_is_open);
+                }
+                if out_is_open {
+                    render_metric_section(
+                        ui,
+                        app,
+                        ctx,
+                        published,
+                        theme,
+                        &object_id,
+                        Direction::Output,
+                        &outputs,
+                        &mut delete_entry,
+                    );
+                }
             });
 
             ui.separator();
@@ -207,7 +229,6 @@ fn render_metric_section(
     object_id: &str,
     dir: Direction,
     entries: &[&polygram_core::geometry::EntryGeom],
-    active_section: Option<Direction>,
     delete_entry: &mut Option<(String, Direction)>,
 ) {
     let field_label = match dir {

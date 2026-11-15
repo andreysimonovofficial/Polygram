@@ -127,7 +127,7 @@ impl std::fmt::Display for MetricValue {
 }
 
 /// Направление контейнера: Запрос (вход) или Выход.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
     #[default]
