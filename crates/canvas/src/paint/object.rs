@@ -54,9 +54,11 @@ pub fn paint_process(
     );
 
     // --- Заголовок объекта: ◆ + {Имя процесса} + {ID процесса} ---
+    // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18
     let header_h = 28.0 * zoom;
+    let header_cy = oy + 4.0 * zoom + header_h / 2.0;
     painter.text(
-        Pos2::new(ox + 16.0 * zoom, oy + header_h / 2.0),
+        Pos2::new(ox + 16.0 * zoom, header_cy),
         egui::Align2::CENTER_CENTER,
         "◆",
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
@@ -64,7 +66,7 @@ pub fn paint_process(
     );
     let id_text = format!("#{}", object.id);
     painter.text(
-        Pos2::new(ox + 248.0 * zoom, oy + header_h / 2.0),
+        Pos2::new(ox + 248.0 * zoom, header_cy),
         egui::Align2::RIGHT_CENTER,
         &id_text,
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
@@ -72,7 +74,7 @@ pub fn paint_process(
     );
     let title = format!("{} '{}'", object.kind.label_ru(), object.name);
     painter.text(
-        Pos2::new(ox + 24.0 * zoom, oy + header_h / 2.0),
+        Pos2::new(ox + 24.0 * zoom, header_cy),
         egui::Align2::LEFT_CENTER,
         &title,
         egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
@@ -152,9 +154,9 @@ fn paint_metric_container(
         egui::StrokeKind::Middle,
     );
 
-    // --- Шапка контейнера ---
+    // --- Шапка контейнера: ◆ слева (top:4), текст (left:20, top:4), высота 24 ---
     let header_rect = Rect::from_min_size(
-        container_rect.min,
+        Pos2::new(cx + 0.0 * zoom, cy + 4.0 * zoom),
         Vec2::new(container_rect.width(), container_header_h),
     );
     painter.rect_filled(header_rect, 0.0, theme.card_bg);
@@ -177,35 +179,35 @@ fn paint_metric_container(
         status_text.to_string()
     };
     let header_text_color = if is_hovered { theme.text } else { dot_color };
+    let header_cy = cy + 16.0 * zoom; // top:4 + h:24/2 = 16
 
-    // ◆ символ (слева, left: 4)
+    // ◆ символ (слева, left:4, top:4, center x=12 y=16)
     painter.text(
-        Pos2::new(cx + 12.0 * zoom, cy + container_header_h / 2.0),
+        Pos2::new(cx + 12.0 * zoom, header_cy),
         egui::Align2::CENTER_CENTER,
         "◆",
         egui::FontId::new(9.0 * zoom, egui::FontFamily::Proportional),
         theme.text,
     );
 
-    // Текст шапки: "ЗАПРОС (N) СТАТУС" (left: 20)
+    // Текст шапки: "ЗАПРОС (N) СТАТУС" (left:20, top:4, center y=16)
     let count_text = format!("{} ({}) {}", label, entries.len(), status_full);
     painter.text(
-        Pos2::new(cx + 20.0 * zoom, cy + container_header_h / 2.0),
+        Pos2::new(cx + 20.0 * zoom, header_cy),
         egui::Align2::LEFT_CENTER,
         &count_text,
         egui::FontId::new(9.0 * zoom, egui::FontFamily::Proportional),
         header_text_color,
     );
 
-    // Горячая зона меню (область ◆)
+    // Горячая зона меню (область ◆: left:4, top:4, w:16, h:24 относительно контейнера)
     let menu_rect = Rect::from_min_size(
-        Pos2::new(cx, cy),
-        Vec2::new(24.0 * zoom, container_header_h),
+        Pos2::new(cx + 4.0 * zoom, cy + 4.0 * zoom),
+        Vec2::new(16.0 * zoom, container_header_h),
     );
     menu_hotspots.push((object.id.clone(), dir, menu_rect));
 
-    // --- Строки показателя ---
-    let content_top = cy + container_header_h;
+    // --- Строки показателя (top: 28, 48, 68, 88 относительно контейнера) ---
     let visible = entries.len().min(MAX_VISIBLE_METRICS);
     let show_add = visible < MAX_VISIBLE_METRICS;
 
@@ -216,8 +218,9 @@ fn paint_metric_container(
     let symbol_font = egui::FontId::new((8.0 * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
 
     for (i, entry) in entries.iter().enumerate().take(MAX_VISIBLE_METRICS) {
-        let row_y = content_top + row_offsets[i] * zoom;
-        let row_rect = Rect::from_min_size(Pos2::new(cx, row_y), Vec2::new(row_w, row_h));
+        let row_y = cy + row_offsets[i] * zoom;
+        let row_x = cx + 4.0 * zoom; // left:4 относительно контейнера
+        let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
         if is_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
@@ -232,32 +235,32 @@ fn paint_metric_container(
         let row_dot_color = status_dot_color(row_status, dir, theme);
         let cy_row = row_rect.center().y;
 
-        // Символ сцепления слева (left: 0)
+        // Символ сцепления слева (left: 0 относительно строки → cx+4)
         painter.text(
-            Pos2::new(cx + 0.0 * zoom, cy_row),
+            Pos2::new(row_x, cy_row),
             egui::Align2::LEFT_CENTER,
             left_sym,
             symbol_font.clone(),
             row_dot_color,
         );
-        // Символ сцепления справа (left: 224)
+        // Символ сцепления справа (left: 224 относительно строки → cx+4+224)
         painter.text(
-            Pos2::new(cx + 224.0 * zoom, cy_row),
+            Pos2::new(row_x + 224.0 * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             right_sym,
             symbol_font.clone(),
             row_dot_color,
         );
-        // Имя (left: 16)
+        // Имя (left: 16 относительно строки → cx+4+16)
         let name_color = if is_hovered { theme.text } else { theme.text_muted };
         painter.text(
-            Pos2::new(cx + 16.0 * zoom, cy_row),
+            Pos2::new(row_x + 16.0 * zoom, cy_row),
             egui::Align2::LEFT_CENTER,
             &entry.name,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
             name_color,
         );
-        // Значение + ед.измерения (right-align, заканчивается в 224)
+        // Значение + ед.измерения (right-align, заканчивается в 224 относительно строки → cx+4+224)
         let unit = if entry.unit.is_empty() {
             String::new()
         } else {
@@ -269,7 +272,7 @@ fn paint_metric_container(
         };
         let value_text = format!("{:.0}{}", displayed_value, unit);
         painter.text(
-            Pos2::new(cx + 224.0 * zoom, cy_row),
+            Pos2::new(row_x + 224.0 * zoom, cy_row),
             egui::Align2::RIGHT_CENTER,
             &value_text,
             egui::FontId::new(8.0 * zoom, egui::FontFamily::Proportional),
@@ -282,8 +285,8 @@ fn paint_metric_container(
 
     // Строка "+ Добавить показатель" (если есть место)
     if show_add {
-        let add_y = content_top + row_offsets[visible] * zoom;
-        let add_rect = Rect::from_min_size(Pos2::new(cx, add_y), Vec2::new(row_w, row_h));
+        let add_y = cy + row_offsets[visible] * zoom;
+        let add_rect = Rect::from_min_size(Pos2::new(cx + 4.0 * zoom, add_y), Vec2::new(row_w, row_h));
         let add_text = "+ Добавить показатель";
         let add_color = if is_hovered { theme.text } else { theme.text_muted };
         painter.text(
