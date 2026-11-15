@@ -39,15 +39,19 @@ pub fn paint_process(
     let oy = rect_px.min.y;
 
     // --- Внешняя рамка объекта (256×256) ---
+    // CSS spec defines fixed card size 256×256px regardless of stored cell dimensions.
+    let card_w = 256.0 * zoom;
+    let card_h = 256.0 * zoom;
+    let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, card_h));
     let border_color = if is_hovered { theme.text } else { theme.card_border };
     let border_width = if is_hovered {
         theme.object_border_hover_width * zoom
     } else {
         theme.object_border_width * zoom
     };
-    painter.rect_filled(rect_px, 0.0, theme.card_bg);
+    painter.rect_filled(card_rect, 0.0, theme.card_bg);
     painter.rect_stroke(
-        rect_px,
+        card_rect,
         0.0,
         Stroke::new(border_width, border_color),
         egui::StrokeKind::Middle,
