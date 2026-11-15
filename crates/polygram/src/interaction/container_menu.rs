@@ -84,8 +84,9 @@ pub fn handle_container_menu_dialog(
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // Раздел: ЗАПРОС
+                let req_version = app.dialogs.container_menu_section_version;
                 let req_default_open = active_section == Some(Direction::Request);
-                egui::CollapsingHeader::new(format!("ЗАПРОС ({})", requests.len()))
+                egui::CollapsingHeader::new(format!("ЗАПРОС ({})##{}", requests.len(), req_version))
                     .default_open(req_default_open)
                     .show(ui, |ui| {
                         render_metric_section(
@@ -97,6 +98,7 @@ pub fn handle_container_menu_dialog(
                             &object_id,
                             Direction::Request,
                             &requests,
+                            active_section,
                             &mut delete_entry,
                         );
                     });
@@ -104,8 +106,9 @@ pub fn handle_container_menu_dialog(
                 ui.separator();
 
                 // Раздел: ВЫХОД
+                let out_version = app.dialogs.container_menu_section_version;
                 let out_default_open = active_section == Some(Direction::Output);
-                egui::CollapsingHeader::new(format!("ВЫХОД ({})", outputs.len()))
+                egui::CollapsingHeader::new(format!("ВЫХОД ({})##{}", outputs.len(), out_version))
                     .default_open(out_default_open)
                     .show(ui, |ui| {
                         render_metric_section(
@@ -117,6 +120,7 @@ pub fn handle_container_menu_dialog(
                             &object_id,
                             Direction::Output,
                             &outputs,
+                            active_section,
                             &mut delete_entry,
                         );
                     });
@@ -203,6 +207,7 @@ fn render_metric_section(
     object_id: &str,
     dir: Direction,
     entries: &[&polygram_core::geometry::EntryGeom],
+    active_section: Option<Direction>,
     delete_entry: &mut Option<(String, Direction)>,
 ) {
     let field_label = match dir {

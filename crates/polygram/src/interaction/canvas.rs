@@ -38,6 +38,7 @@ pub fn handle_canvas_interaction(
                 if rect.contains(pos) {
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
+                    app.dialogs.container_menu_section_version += 1;
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(
                         "info",
@@ -60,6 +61,7 @@ pub fn handle_canvas_interaction(
                 if rect.contains(pos) {
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
+                    app.dialogs.container_menu_section_version += 1;
                     app.dialogs.container_menu_api_expanded = Some(entry.clone());
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(

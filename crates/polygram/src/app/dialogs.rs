@@ -28,6 +28,9 @@ pub struct DialogState {
     pub add_metric_api_cell: String,
     pub container_menu_target: Option<String>,
     pub container_menu_active_section: Option<Direction>,
+    /// Версия ID секций — инкрементируется при смене активной секции, чтобы
+    /// egui создал новые виджеты и применил default_open для правильной секции.
+    pub container_menu_section_version: u32,
     /// Per-metric edit buffers: (entry_name, direction, value_str, unit_str).
     pub container_menu_edits: Vec<(String, Direction, String, String)>,
     /// Per-entry API binding settings being edited in the container menu dialog.
@@ -61,6 +64,7 @@ impl DialogState {
             add_metric_api_cell: String::new(),
             container_menu_target: None,
             container_menu_active_section: None,
+            container_menu_section_version: 0,
             container_menu_edits: Vec::new(),
             container_menu_api_settings: HashMap::new(),
             container_menu_api_expanded: None,
@@ -97,6 +101,7 @@ impl DialogState {
     pub fn reset_container_menu(&mut self) {
         self.container_menu_target = None;
         self.container_menu_active_section = None;
+        self.container_menu_section_version = 0;
         self.container_menu_edits.clear();
         self.container_menu_api_settings.clear();
         self.container_menu_api_expanded = None;
