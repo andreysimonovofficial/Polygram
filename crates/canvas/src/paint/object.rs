@@ -30,9 +30,11 @@ pub fn paint_process(
     Vec<(String, Direction, Rect)>,
     Vec<(String, Direction, Rect)>,
     Vec<(String, Direction, String, Rect)>,
+    Vec<(String, Direction, Rect)>,
 ) {
     let mut add_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut menu_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
+    let mut header_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut drag_hotspots: Vec<(String, Direction, String, Rect)> = Vec::new();
 
     let ox = rect_px.min.x;
@@ -105,7 +107,7 @@ pub fn paint_process(
         Direction::Request, &object.requests, req_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
-        &mut add_hotspots, &mut menu_hotspots, &mut drag_hotspots,
+        &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
     );
 
     // === Контейнер: ВЫХОД (top: 144) ===
@@ -118,10 +120,10 @@ pub fn paint_process(
         Direction::Output, &object.outputs, out_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
-        &mut add_hotspots, &mut menu_hotspots, &mut drag_hotspots,
+        &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
     );
 
-    (add_hotspots, menu_hotspots, drag_hotspots)
+    (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots)
 }
 
 /// Рисование одного контейнера показателей (Запрос или Выход): рамка, шапка, строки.
@@ -144,6 +146,7 @@ fn paint_metric_container(
     _error_hotspots: &mut Vec<(Rect, String)>,
     add_hotspots: &mut Vec<(String, Direction, Rect)>,
     menu_hotspots: &mut Vec<(String, Direction, Rect)>,
+    header_hotspots: &mut Vec<(String, Direction, Rect)>,
     drag_hotspots: &mut Vec<(String, Direction, String, Rect)>,
 ) {
     let cx = container_rect.min.x;
@@ -210,6 +213,7 @@ fn paint_metric_container(
         Vec2::new(16.0 * zoom, container_header_h),
     );
     menu_hotspots.push((object.id.clone(), dir, menu_rect));
+    header_hotspots.push((object.id.clone(), dir, header_rect));
 
     // --- Строки показателя (top: 28, 48, 68, 88 относительно контейнера) ---
     let visible = entries.len().min(MAX_VISIBLE_METRICS);

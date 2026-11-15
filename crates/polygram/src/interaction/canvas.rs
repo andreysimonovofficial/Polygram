@@ -29,8 +29,30 @@ pub fn handle_canvas_interaction(
     // объекта попадал в тот же объект, даже если позиция ещё не подтверждена сервером.
     let geometry = app.geometry_with_predictions(published);
 
+    // Двойной клик по заголовку контейнера показателей — открыть окно показателей ("Показатели — ЗАПРОС/ВЫХОД").
+    let mut handled_by_container = false;
+    if let Some(pos) = canvas_response.interact_pointer_pos() {
+        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        if is_double {
+            for (object_id, dir, rect) in &app.canvas.container_header_hotspots {
+                if rect.contains(pos) {
+                    app.dialogs.container_menu_target = Some((object_id.clone(), *dir));
+                    app.drag.state = DragInteractionState::Idle;
+                    app.add_event_log(
+                        "info",
+                        "ui",
+                        &format!("Открыто окно показателей контейнера «{object_id}» ({dir:?})"),
+                        None,
+                    );
+                    handled_by_container = true;
+                    break;
+                }
+            }
+        }
+    }
+
     // Двойной клик по объекту — инлайн-редактирование названия прямо на холсте.
-    if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
+    if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) && !handled_by_container {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
             if let Some(object_id) = app.canvas.object_at(&geometry, pos) {
                 let obj_name = geometry

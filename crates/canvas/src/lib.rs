@@ -43,6 +43,8 @@ pub struct Canvas {
     pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
     pub container_menu_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны заголовка контейнера (id объекта, направление, экранный rect шапки).
+    pub container_header_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны строк показателей для перетаскивания (id объекта, направление, имя показателя, экранный rect строки).
     pub drag_metric_hotspots: Vec<(String, Direction, String, Rect)>,
     /// Горячие зоны иконок ошибок API-привязки (экранный rect, текст ошибки для копирования).
@@ -65,6 +67,7 @@ impl Canvas {
             cell_size: 16.0,
             add_metric_hotspots: Vec::new(),
             container_menu_hotspots: Vec::new(),
+            container_header_hotspots: Vec::new(),
             drag_metric_hotspots: Vec::new(),
             api_error_hotspots: Vec::new(),
             edge_layer: routing::EdgeLayer::default(),
@@ -92,6 +95,7 @@ impl Canvas {
         let cell_px = self.cell_px();
         self.add_metric_hotspots.clear();
         self.container_menu_hotspots.clear();
+        self.container_header_hotspots.clear();
         self.drag_metric_hotspots.clear();
         self.api_error_hotspots.clear();
         let mut error_hotspots: Vec<(Rect, String)> = Vec::new();
@@ -205,22 +209,23 @@ impl Canvas {
                 continue;
             }
             if object.kind == NodeKind::Process {
-                let (add_hotspots, menu_hotspots, drag_hotspots) = paint_process(
-                    painter,
-                    object,
-                    dynamic,
-                    &self.theme,
-                    rect_px,
-                    cell_px,
-                    self.camera.zoom,
-                    is_hovered,
-                    edit_target,
-                    bindings,
-                    &mut error_hotspots,
-                );
-                self.add_metric_hotspots.extend(add_hotspots);
-                self.container_menu_hotspots.extend(menu_hotspots);
-                self.drag_metric_hotspots.extend(drag_hotspots);
+            let (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots) = paint_process(
+                painter,
+                object,
+                dynamic,
+                &self.theme,
+                rect_px,
+                cell_px,
+                self.camera.zoom,
+                is_hovered,
+                edit_target,
+                bindings,
+                &mut error_hotspots,
+            );
+            self.add_metric_hotspots.extend(add_hotspots);
+            self.container_menu_hotspots.extend(menu_hotspots);
+            self.drag_metric_hotspots.extend(drag_hotspots);
+            self.container_header_hotspots.extend(header_hotspots);
             } else {
                 paint_object(
                     painter,
