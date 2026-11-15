@@ -320,8 +320,8 @@ pub fn paint_dashed_rect(painter: &Painter, rect: Rect, zoom: f32, color: egui::
     let mut y = rect.min.y;
     while y < rect.max.y {
         let y2 = (y + dash).min(rect.max.y);
-        painter.line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.max.x, y)], stroke);
-        painter.line_segment([Pos2::new(rect.min.x, y2), Pos2::new(rect.max.x, y2)], stroke);
+        painter.line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.min.x, y2)], stroke);
+        painter.line_segment([Pos2::new(rect.max.x, y), Pos2::new(rect.max.x, y2)], stroke);
         y = y2 + gap;
     }
 }
