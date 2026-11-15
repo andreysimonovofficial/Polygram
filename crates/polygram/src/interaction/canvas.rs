@@ -36,11 +36,14 @@ pub fn handle_canvas_interaction(
         if is_double {
             for (object_id, dir, rect) in &app.canvas.container_header_hotspots {
                 if rect.contains(pos) {
+                    let other = match dir {
+                        Direction::Request => Direction::Output,
+                        Direction::Output => Direction::Request,
+                    };
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
-                    app.dialogs
-                        .container_menu_section_open
-                        .insert(*dir, true);
+                    app.dialogs.container_menu_section_open.insert(other, false);
+                    app.dialogs.container_menu_section_open.insert(*dir, true);
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(
                         "info",
@@ -61,11 +64,14 @@ pub fn handle_canvas_interaction(
         if is_double && !handled_by_container {
             for (object_id, dir, entry, rect) in &app.canvas.drag_metric_hotspots {
                 if rect.contains(pos) {
+                    let other = match dir {
+                        Direction::Request => Direction::Output,
+                        Direction::Output => Direction::Request,
+                    };
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
-                    app.dialogs
-                        .container_menu_section_open
-                        .insert(*dir, true);
+                    app.dialogs.container_menu_section_open.insert(other, false);
+                    app.dialogs.container_menu_section_open.insert(*dir, true);
                     app.dialogs.container_menu_api_expanded = Some(entry.clone());
                     app.drag.state = DragInteractionState::Idle;
                     app.add_event_log(

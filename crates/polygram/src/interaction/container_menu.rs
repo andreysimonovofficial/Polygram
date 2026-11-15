@@ -96,6 +96,10 @@ pub fn handle_container_menu_dialog(
                     ui.label(format!("ЗАПРОС ({})", requests.len()));
                 });
                 if req_header_resp.response.clicked() {
+                    // ВЫХОД сворачивается при открытии/переключении ЗАПРОС.
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Output, false);
                     app.dialogs
                         .container_menu_section_open
                         .insert(Direction::Request, !req_is_open);
@@ -129,6 +133,10 @@ pub fn handle_container_menu_dialog(
                     ui.label(format!("ВЫХОД ({})", outputs.len()));
                 });
                 if out_header_resp.response.clicked() {
+                    // ЗАПРОС сворачивается при открытии/переключении ВЫХОД.
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Request, false);
                     app.dialogs
                         .container_menu_section_open
                         .insert(Direction::Output, !out_is_open);
