@@ -308,14 +308,20 @@ impl eframe::App for PolygramApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
 
-        // Автоматический снимок экрана при изменении ревизии состояния.
+        // Автоматический снимок экрана при изменении ревизии состояния (только если режим включён).
         let current_rev = self
             .connection
             .snapshot
             .as_ref()
             .map(|s| s.rev)
             .unwrap_or(0);
-        if current_rev > 0 && current_rev > self.last_screenshot_rev {
+        let auto_screenshot = self
+            .connection
+            .snapshot
+            .as_ref()
+            .map(|s| s.auto_screenshot)
+            .unwrap_or(false);
+        if auto_screenshot && current_rev > 0 && current_rev > self.last_screenshot_rev {
             self.last_screenshot_rev = current_rev;
             self.screenshot_requested = true;
             ctx.request_repaint();
@@ -330,6 +336,7 @@ impl eframe::App for PolygramApp {
                 geometry: Geometry::default(),
                 metric_defs: vec![],
                 camera_fit_requested: false,
+                auto_screenshot: false,
             })
         });
 

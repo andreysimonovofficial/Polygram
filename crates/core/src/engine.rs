@@ -33,6 +33,7 @@ pub struct Engine {
     pub(crate) pending: Vec<EventKind>,
     pub(crate) scratch_changes: Vec<(crate::types::EntryIx, crate::types::StatusCode, crate::types::StatusCode)>,
     pub(crate) camera_fit_requested: bool,
+    pub(crate) auto_screenshot: bool,
 }
 
 const EVENT_LOG_CAPACITY: usize = 200_000;
@@ -68,6 +69,7 @@ impl Engine {
             pending: Vec::new(),
             scratch_changes: Vec::new(),
             camera_fit_requested: false,
+            auto_screenshot: false,
         }
     }
 

@@ -67,6 +67,9 @@ impl PolygramApp {
             }
             Command::AutoLayout => "AutoLayout".to_owned(),
             Command::FitCamera => "FitCamera".to_owned(),
+            Command::AutoScreenshot { enabled } => {
+                format!("AutoScreenshot(enabled={enabled})")
+            }
             Command::RestartServer => "RestartServer".to_owned(),
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),
@@ -174,6 +177,9 @@ impl PolygramApp {
             }
             Command::AutoLayout => "AutoLayout".to_owned(),
             Command::FitCamera => "FitCamera".to_owned(),
+            Command::AutoScreenshot { enabled } => {
+                format!("AutoScreenshot(enabled={enabled})")
+            }
             Command::RestartServer => "RestartServer".to_owned(),
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),

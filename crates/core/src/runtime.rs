@@ -28,6 +28,7 @@ pub struct Published {
     pub geometry: Geometry,
     pub metric_defs: Vec<MetricDefView>,
     pub camera_fit_requested: bool,
+    pub auto_screenshot: bool,
 }
 
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
@@ -81,6 +82,7 @@ fn publish(
         geometry,
         metric_defs,
         camera_fit_requested: engine.camera_fit_requested,
+        auto_screenshot: engine.auto_screenshot,
     });
     *slot.write().expect("замок публикации") = next.clone();
     next
@@ -95,6 +97,7 @@ impl EngineRuntime {
             geometry: engine.geometry(),
             metric_defs: engine.metric_def_views(),
             camera_fit_requested: engine.camera_fit_requested,
+            auto_screenshot: engine.auto_screenshot,
         });
         let published = Arc::new(RwLock::new(first.clone()));
         let slot = published.clone();

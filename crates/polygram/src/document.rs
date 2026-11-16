@@ -301,5 +301,6 @@ pub fn empty_published() -> Arc<polygram_core::Published> {
         geometry: polygram_core::geometry::Geometry::default(),
         metric_defs: vec![],
         camera_fit_requested: false,
+        auto_screenshot: false,
     })
 }

@@ -132,6 +132,17 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
             })
         }
 
+        // AutoScreenshot включает/выключает автоматический снимок экрана при изменении состояния.
+        Command::AutoScreenshot { enabled } => {
+            engine.auto_screenshot = enabled;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
         // Админ-команды не модифицируют ядро, они управляют жизненным циклом API-сервера.
         Command::RestartServer => Ok(Applied { rev: 0, created: None, at: None }),
         Command::ChangePort { .. } => Ok(Applied { rev: 0, created: None, at: None }),

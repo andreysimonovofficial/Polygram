@@ -83,6 +83,12 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                     app.screenshot_requested = true;
                 }
                 ui.separator();
+                let auto_ss = app.connection.snapshot.as_ref().map(|s| s.auto_screenshot).unwrap_or(false);
+                let label = if auto_ss { "Автоскриншот: ВКЛ" } else { "Автоскриншот: ВЫКЛ" };
+                if ui.button(label).clicked() {
+                    app.apply_cmd(Command::AutoScreenshot { enabled: !auto_ss });
+                }
+                ui.separator();
             ui.menu_button("Сетка", |ui| {
                 ui.label("Оформление");
                 ui.menu_button("Цвет сетки", |ui| {
