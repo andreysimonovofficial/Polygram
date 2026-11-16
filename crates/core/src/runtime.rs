@@ -25,9 +25,17 @@ use std::{
 /// Состояние виртуального ввода (мышь + клавиатура), управляемое извне через MCP/API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VirtualInputState {
-    /// Экранная координата X виртуального курсора.
+    /// Целевая координата X виртуального курсора (устанавливается командами).
+    pub target_x: f32,
+    /// Целевая координата Y виртуального курсора (устанавливается командами).
+    pub target_y: f32,
+    /// Контрольная точка X для кривой Безье (если 0,0 — движение линейное).
+    pub curve_control_x: f32,
+    /// Контрольная точка Y для кривой Безье (если 0,0 — движение линейное).
+    pub curve_control_y: f32,
+    /// Текущая отрисовываемая координата X (интерполируется в GUI).
     pub mouse_x: f32,
-    /// Экранная координата Y виртуального курсора.
+    /// Текущая отрисовываемая координата Y (интерполируется в GUI).
     pub mouse_y: f32,
     /// Левая кнопка мыши зажата.
     pub mouse_left_pressed: bool,
@@ -35,16 +43,29 @@ pub struct VirtualInputState {
     pub mouse_right_pressed: bool,
     /// Текст для ввода виртуальной клавиатуры (очищается после подачи).
     pub keyboard_text: String,
+    /// Фигура для рисования курсором: Some(kind, x2, y2) — рисовать от точки нажатия до (x2, y2).
+    pub draw_shape: Option<(u8, f32, f32)>,
+    /// Точки скруглённой кривой для анимации (устанавливается командой VirtualMousePath).
+    pub path_points: Vec<(f32, f32)>,
+    /// Индекс текущей точки на кривой (для анимации в GUI).
+    pub path_index: usize,
 }
 
 impl Default for VirtualInputState {
     fn default() -> Self {
         Self {
+            target_x: 0.0,
+            target_y: 0.0,
+            curve_control_x: 0.0,
+            curve_control_y: 0.0,
             mouse_x: 0.0,
             mouse_y: 0.0,
             mouse_left_pressed: false,
             mouse_right_pressed: false,
             keyboard_text: String::new(),
+            draw_shape: None,
+            path_points: Vec::new(),
+            path_index: 0,
         }
     }
 }

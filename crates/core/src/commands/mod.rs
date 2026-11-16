@@ -145,8 +145,8 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
 
         // Виртуальная мышь: перемещение курсора на экранные координаты.
         Command::VirtualMouseMove { x, y } => {
-            engine.virtual_input.mouse_x = x as f32;
-            engine.virtual_input.mouse_y = y as f32;
+            engine.virtual_input.target_x = x as f32;
+            engine.virtual_input.target_y = y as f32;
             engine.rev += 1;
             Ok(Applied {
                 rev: engine.rev,
@@ -188,6 +188,44 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         // Виртуальная клавиатура: ввод текста.
         Command::VirtualKeyboardType { text } => {
             engine.virtual_input.keyboard_text = text;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальное рисование: установить фигуру для отрисовки от текущей позиции курсора до [x2, y2].
+        // kind: 0 — эллипс, 1 — прямоугольник.
+        Command::VirtualDrawShape { kind, x2, y2 } => {
+            engine.virtual_input.draw_shape = Some((kind, x2 as f32, y2 as f32));
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: кривая Безье — движение к [x, y] через контрольную точку [cx, cy].
+        Command::VirtualMouseCurve { x, y, cx, cy } => {
+            engine.virtual_input.target_x = x as f32;
+            engine.virtual_input.target_y = y as f32;
+            engine.virtual_input.curve_control_x = cx as f32;
+            engine.virtual_input.curve_control_y = cy as f32;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: движение по скруглённой кривой через массив точек [(x,y), ...].
+        Command::VirtualMousePath { points } => {
+            engine.virtual_input.path_points = points.iter().map(|(x, y)| (*x as f32, *y as f32)).collect();
+            engine.virtual_input.path_index = 0;
             engine.rev += 1;
             Ok(Applied {
                 rev: engine.rev,

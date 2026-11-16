@@ -170,6 +170,13 @@ pub enum Command {
     VirtualMouseUp { button: u8 },
     /// Виртуальная клавиатура: ввести текст.
     VirtualKeyboardType { text: String },
+    /// Виртуальное рисование: нарисовать фигуру от точки нажатия мыши до [x2, y2].
+    /// kind: 0 — эллипс, 1 — прямоугольник.
+    VirtualDrawShape { kind: u8, x2: i32, y2: i32 },
+    /// Виртуальная мышь: кривая Безье — движение к [x, y] через контрольную точку [cx, cy].
+    VirtualMouseCurve { x: i32, y: i32, cx: i32, cy: i32 },
+    /// Виртуальная мышь: движение по скруглённой кривой через массив точек [(x,y), ...].
+    VirtualMousePath { points: Vec<(i32, i32)> },
 }
 
 fn default_throughput() -> f64 {

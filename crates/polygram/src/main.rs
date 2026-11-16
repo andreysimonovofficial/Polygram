@@ -273,28 +273,93 @@ impl eframe::App for PolygramApp {
                     &theme,
                 );
             }
-        });
 
-        // Виртуальный курсор мыши (рисуется поверх всего, чтобы агент видел, куда «кликает»).
-        let vi = &self.virtual_input;
-        if vi.mouse_x != 0.0 || vi.mouse_y != 0.0 || vi.mouse_left_pressed || vi.mouse_right_pressed {
-            let cursor_color = if vi.mouse_left_pressed || vi.mouse_right_pressed {
-                egui::Color32::from_rgb(255, 80, 80)
-            } else {
-                egui::Color32::from_rgb(0, 255, 120)
-            };
-            let cursor_pos = egui::Pos2::new(vi.mouse_x, vi.mouse_y);
-            ctx.layer_painter(egui::LayerId::background()).circle_filled(
-                cursor_pos,
-                6.0,
-                cursor_color,
-            );
-            ctx.layer_painter(egui::LayerId::background()).circle_stroke(
-                cursor_pos,
-                8.0,
-                egui::Stroke::new(1.5, egui::Color32::WHITE),
-            );
-        }
+            // Виртуальный курсор мыши — рисуется поверх холста внутри CentralPanel,
+            // чтобы агент видел, куда «кликает» или «тащит».
+            let vi = &self.virtual_input;
+            let pos = self.virtual_cursor_pos;
+            if vi.target_x != 0.0
+                || vi.target_y != 0.0
+                || vi.mouse_left_pressed
+                || vi.mouse_right_pressed
+                || !vi.path_points.is_empty()
+            {
+                let cursor_color = if vi.mouse_left_pressed || vi.mouse_right_pressed {
+                    egui::Color32::from_rgb(255, 60, 60)
+                } else {
+                    egui::Color32::from_rgb(0, 255, 140)
+                };
+                // Рисуем на переднем слое в экранных координатах, чтобы курсор был виден поверх всего.
+                    let screen_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("virtual_shapes")));
+                // Внешнее белое кольцо.
+                screen_painter.circle_stroke(pos, 14.0, egui::Stroke::new(3.0, egui::Color32::WHITE));
+                // Заполненный круг.
+                screen_painter.circle_filled(pos, 10.0, cursor_color);
+                // Перекрестие.
+                screen_painter.line_segment(
+                    [pos + egui::Vec2::new(-16.0, 0.0), pos + egui::Vec2::new(16.0, 0.0)],
+                    egui::Stroke::new(3.0, cursor_color),
+                );
+                screen_painter.line_segment(
+                    [pos + egui::Vec2::new(0.0, -16.0), pos + egui::Vec2::new(0.0, 16.0)],
+                    egui::Stroke::new(3.0, cursor_color),
+                );
+                // Подпись координат.
+                screen_painter.text(
+                    pos + egui::Vec2::new(20.0, -15.0),
+                    egui::Align2::LEFT_TOP,
+                    format!("({}, {})", pos.x as i32, pos.y as i32),
+                    egui::FontId::new(16.0, egui::FontFamily::Proportional),
+                    cursor_color,
+                );
+            }
+
+            // Рисование фигуры курсором (от точки нажатия до цели draw_shape).
+            if let Some((kind, x2, y2)) = &vi.draw_shape {
+                if let Some(start) = self.virtual_draw_start {
+                    let end = egui::Pos2::new(*x2 as f32, *y2 as f32);
+                    let shape_color = egui::Color32::from_rgb(0, 200, 255);
+                    let stroke = egui::Stroke::new(3.0, shape_color);
+                    let rect = egui::Rect::from_two_pos(start, end);
+                let screen_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("virtual_cursor")));
+                    match *kind {
+                        0 => {
+                            // Эллипс — приближаем многоугольником из 32 отрезков.
+                            let center = rect.center();
+                            let radii = rect.size() * 0.5;
+                            let n = 32;
+                            for i in 0..n {
+                                let a1 = (i as f32) / (n as f32) * 6.2831853;
+                                let a2 = ((i + 1) as f32) / (n as f32) * 6.2831853;
+                                let p1 = center + egui::Vec2::new(a1.cos() * radii.x, a1.sin() * radii.y);
+                                let p2 = center + egui::Vec2::new(a2.cos() * radii.x, a2.sin() * radii.y);
+                                screen_painter.line_segment([p1, p2], stroke);
+                            }
+                        }
+                        1 => {
+                            // Прямоугольник — 4 отрезка.
+                            let tl = rect.left_top();
+                            let tr = rect.right_top();
+                            let bl = rect.left_bottom();
+                            let br = rect.right_bottom();
+                            screen_painter.line_segment([tl, tr], stroke);
+                            screen_painter.line_segment([tr, br], stroke);
+                            screen_painter.line_segment([br, bl], stroke);
+                            screen_painter.line_segment([bl, tl], stroke);
+                        }
+                        _ => {}
+                    }
+                    // Подпись типа фигуры.
+                    screen_painter.text(
+                        end + egui::Vec2::new(10.0, -10.0),
+                        egui::Align2::LEFT_TOP,
+                        if *kind == 0 { "эллипс" } else { "прямоугольник" },
+                        egui::FontId::new(14.0, egui::FontFamily::Proportional),
+                        shape_color,
+                    );
+                }
+            }
+        });
 
         // РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ Р·Р°РєСЂС‹С‚РёСЏ СЃ РЅРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё РёР·РјРµРЅРµРЅРёСЏРјРё.
         if self.close_confirmation_pending {

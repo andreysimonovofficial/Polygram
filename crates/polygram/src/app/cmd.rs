@@ -78,6 +78,16 @@ impl PolygramApp {
             Command::VirtualMouseDown { button } => format!("VirtualMouseDown(button={button})"),
             Command::VirtualMouseUp { button } => format!("VirtualMouseUp(button={button})"),
             Command::VirtualKeyboardType { text } => format!("VirtualKeyboardType(text={text:?})"),
+            Command::VirtualDrawShape { kind, x2, y2 } => {
+                format!("VirtualDrawShape(kind={kind}, x2={x2}, y2={y2})")
+            }
+            Command::VirtualMouseCurve { x, y, cx, cy } => {
+                format!("VirtualMouseCurve(x={x}, y={y}, cx={cx}, cy={cy})")
+            }
+            Command::VirtualMousePath { points } => {
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
+                format!("VirtualMousePath[{}]", pts.join(";"))
+            }
         };
 
         self.add_event_log("info", "command", &format!("Отправлена команда: {cmd_label}"), Some(&cmd_str));
@@ -192,6 +202,16 @@ impl PolygramApp {
             Command::VirtualMouseDown { button } => format!("VirtualMouseDown(button={button})"),
             Command::VirtualMouseUp { button } => format!("VirtualMouseUp(button={button})"),
             Command::VirtualKeyboardType { text } => format!("VirtualKeyboardType(text={text:?})"),
+            Command::VirtualDrawShape { kind, x2, y2 } => {
+                format!("VirtualDrawShape(kind={kind}, x2={x2}, y2={y2})")
+            }
+            Command::VirtualMouseCurve { x, y, cx, cy } => {
+                format!("VirtualMouseCurve(x={x}, y={y}, cx={cx}, cy={cy})")
+            }
+            Command::VirtualMousePath { points } => {
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
+                format!("VirtualMousePath[{}]", pts.join(";"))
+            }
         }).collect();
 
         let detail = format!("batch[{}]", labels.join("; "));

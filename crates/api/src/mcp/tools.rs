@@ -149,7 +149,7 @@ pub fn handle_tools_list() -> Value {
             },
             {
                 "name": "execute_command",
-                "description": "Выполнить произвольную команду Polygram в формате JSON. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def, remove_metric_def, rename_metric_def, set_metric_def_unit, add_metric_entry, remove_metric_entry, set_value, set_required, set_max, set_fact, connect, disconnect, auto_layout, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_keyboard_type. Каждая команда имеет поле cmd с именем команды и остальные поля в зависимости от типа. Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}.",
+                "description": "Выполнить произвольную команду Polygram в формате JSON. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def, remove_metric_def, rename_metric_def, set_metric_def_unit, add_metric_entry, remove_metric_entry, set_value, set_required, set_max, set_fact, connect, disconnect, auto_layout, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_keyboard_type, virtual_draw_shape. Каждая команда имеет поле cmd с именем команды и остальные поля в зависимости от типа. Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -233,6 +233,44 @@ pub fn handle_tools_list() -> Value {
                 "name": "virtual_input_state",
                 "description": "Получить текущее состояние виртуального ввода (позиция мыши, зажатые кнопки, буфер клавиатуры).",
                 "inputSchema": { "type": "object", "properties": {} }
+            },
+            {
+                "name": "virtual_draw_shape",
+                "description": "Нарисовать фигуру курсором от текущей позиции мыши до [x2, y2] (мышь должна быть зажата). kind: 0 — эллипс, 1 — прямоугольник.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kind": { "type": "integer", "description": "Тип фигуры: 0 — эллипс, 1 — прямоугольник", "minimum": 0, "maximum": 1 },
+                        "x2": { "type": "integer", "description": "Конечная координата X" },
+                        "y2": { "type": "integer", "description": "Конечная координата Y" }
+                    },
+                    "required": ["kind", "x2", "y2"]
+                }
+            },
+            {
+                "name": "virtual_mouse_curve",
+                "description": "Плавное движение мыши по кривой Безье к [x, y] через контрольную точку [cx, cy].",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "x": { "type": "integer", "description": "Конечная координата X" },
+                        "y": { "type": "integer", "description": "Конечная координата Y" },
+                        "cx": { "type": "integer", "description": "Контрольная точка X кривой Безье" },
+                        "cy": { "type": "integer", "description": "Контрольная точка Y кривой Безье" }
+                    },
+                    "required": ["x", "y", "cx", "cy"]
+                }
+            },
+            {
+                "name": "virtual_mouse_path",
+                "description": "Движение мыши по скруглённой кривой через массив точек [[x,y], ...] с плавной анимацией.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "points": { "type": "array", "description": "Массив точек кривой [[x,y], ...]", "items": { "type": "array", "items": { "type": "integer" } } }
+                    },
+                    "required": ["points"]
+                }
             }
         ]
     })
@@ -241,7 +279,7 @@ pub fn handle_tools_list() -> Value {
 pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n,
-        None => return mcp_tool_error("Не указано имя инструмента. Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_keyboard_type, virtual_input_state."),
+        None => return mcp_tool_error("Не указано имя инструмента. Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_mouse_curve, virtual_mouse_path, virtual_keyboard_type, virtual_input_state, virtual_draw_shape."),
     };
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -259,7 +297,10 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
                 {"cmd": "virtual_mouse_move", "example": "{\"cmd\":\"virtual_mouse_move\",\"x\":100,\"y\":200}", "description": "Переместить виртуальную мышь"},
                 {"cmd": "virtual_mouse_down", "example": "{\"cmd\":\"virtual_mouse_down\",\"button\":0}", "description": "Зажать кнопку виртуальной мыши"},
                 {"cmd": "virtual_mouse_up", "example": "{\"cmd\":\"virtual_mouse_up\",\"button\":0}", "description": "Отпустить кнопку виртуальной мыши"},
-                {"cmd": "virtual_keyboard_type", "example": "{\"cmd\":\"virtual_keyboard_type\",\"text\":\"привет\"}", "description": "Ввести текст виртуальной клавиатурой"}
+                {"cmd": "virtual_keyboard_type", "example": "{\"cmd\":\"virtual_keyboard_type\",\"text\":\"привет\"}", "description": "Ввести текст виртуальной клавиатурой"},
+                {"cmd": "virtual_draw_shape", "example": "{\"cmd\":\"virtual_draw_shape\",\"kind\":0,\"x2\":400,\"y2\":300}", "description": "Нарисовать фигуру курсором"},
+                {"cmd": "virtual_mouse_curve", "example": "{\"cmd\":\"virtual_mouse_curve\",\"x\":500,\"y\":400,\"cx\":300,\"cy\":100}", "description": "Кривая Безье к точке"},
+                {"cmd": "virtual_mouse_path", "example": "{\"cmd\":\"virtual_mouse_path\",\"points\":[[100,100],[200,150],[300,100]]}", "description": "Движение по скруглённой кривой через точки"}
             ]
         })).unwrap()),
         "add_object" => {
@@ -563,6 +604,74 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
             };
             mcp_tool_result(&serde_json::to_string(&state).unwrap())
         }
+        "virtual_draw_shape" => {
+            let kind = match args.get("kind").and_then(|v| v.as_u64()) {
+                Some(v) => v as u8,
+                None => return mcp_tool_error("Для virtual_draw_shape требуется поле kind (0 — эллипс, 1 — прямоугольник)."),
+            };
+            if kind > 1 {
+                return mcp_tool_error("Для virtual_draw_shape kind должен быть 0 (эллипс) или 1 (прямоугольник).");
+            }
+            let x2 = match args.get("x2").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_draw_shape требуется поле x2."),
+            };
+            let y2 = match args.get("y2").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_draw_shape требуется поле y2."),
+            };
+            let cmd = Command::VirtualDrawShape { kind, x2, y2 };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_mouse_curve" => {
+            let x = match args.get("x").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_curve требуется поле x."),
+            };
+            let y = match args.get("y").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_curve требуется поле y."),
+            };
+            let cx = match args.get("cx").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_curve требуется поле cx."),
+            };
+            let cy = match args.get("cy").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_curve требуется поле cy."),
+            };
+            let cmd = Command::VirtualMouseCurve { x, y, cx, cy };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_mouse_path" => {
+            let points = match args.get("points").and_then(|v| v.as_array()) {
+                Some(arr) => {
+                    let mut pts = Vec::new();
+                    for p in arr {
+                        let arr2 = match p.as_array() {
+                            Some(a) => a,
+                            None => return mcp_tool_error("Для virtual_mouse_path каждая точка должна быть массивом [x, y]."),
+                        };
+                        if arr2.len() < 2 {
+                            return mcp_tool_error("Для virtual_mouse_path каждая точка должна содержать минимум 2 элемента [x, y].");
+                        }
+                        let x = match arr2[0].as_i64() {
+                            Some(v) => v as i32,
+                            None => return mcp_tool_error("Для virtual_mouse_path x должен быть целым числом."),
+                        };
+                        let y = match arr2[1].as_i64() {
+                            Some(v) => v as i32,
+                            None => return mcp_tool_error("Для virtual_mouse_path y должен быть целым числом."),
+                        };
+                        pts.push((x, y));
+                    }
+                    pts
+                }
+                None => return mcp_tool_error("Для virtual_mouse_path требуется поле points (массив точек [[x,y], ...])."),
+            };
+            let cmd = Command::VirtualMousePath { points };
+            apply_command(server, cmd, &args)
+        }
         "get_snapshot" => {
             if let Some(base) = &server.http_base {
                 match proxy_get(base, "/api/snapshot") {
@@ -596,7 +705,7 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
                 mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
             }
         }
-        _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_keyboard_type, virtual_input_state.")),
+        _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_mouse_curve, virtual_mouse_path, virtual_keyboard_type, virtual_input_state, virtual_draw_shape.")),
     }
 }
 
