@@ -274,17 +274,14 @@ impl eframe::App for PolygramApp {
                 );
             }
 
-            // Виртуальный курсор мыши — рисуется поверх холста внутри CentralPanel,
-            // чтобы агент видел, куда «кликает» или «тащит».
+            // Виртуальный курсор мыши — рисуется поверх холста, только когда зажата кнопка.
             let vi = &self.virtual_input;
-            // Координаты API — пиксели экрана, egui — логические пиксели. Делим на scale.
-            let scale = ctx.pixels_per_point();
-            let pos = self.virtual_cursor_pos / scale;
-            if vi.target_x != 0.0
-                || vi.target_y != 0.0
+            let pos = self.virtual_cursor_pos;
+            let target = egui::Pos2::new(vi.target_x, vi.target_y);
+            if target.x != 0.0
+                || target.y != 0.0
                 || vi.mouse_left_pressed
                 || vi.mouse_right_pressed
-                || !vi.path_points.is_empty()
             {
                 let cursor_color = if vi.mouse_left_pressed || vi.mouse_right_pressed {
                     egui::Color32::from_rgb(255, 60, 60)

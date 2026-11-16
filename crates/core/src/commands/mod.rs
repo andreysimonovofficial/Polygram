@@ -173,8 +173,16 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         // Виртуальная мышь: отпускание кнопки (0 — левая, 1 — правая).
         Command::VirtualMouseUp { button } => {
             match button {
-                0 => engine.virtual_input.mouse_left_pressed = false,
-                1 => engine.virtual_input.mouse_right_pressed = false,
+                0 => {
+                    engine.virtual_input.mouse_left_pressed = false;
+                    engine.virtual_input.target_x = 0.0;
+                    engine.virtual_input.target_y = 0.0;
+                }
+                1 => {
+                    engine.virtual_input.mouse_right_pressed = false;
+                    engine.virtual_input.target_x = 0.0;
+                    engine.virtual_input.target_y = 0.0;
+                }
                 _ => {}
             }
             engine.rev += 1;
