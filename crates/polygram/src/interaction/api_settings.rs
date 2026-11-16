@@ -35,7 +35,7 @@ pub fn render_entry_api_settings(
 
     let direction_text = match dir {
         Direction::Request => "запись в: необходимое (required)",
-        Direction::Output => "запись в: значение (value)",
+        Direction::Result => "запись в: значение (value)",
     };
 
     // Изменяемые настройки одной записи в области, чтобы заимствование

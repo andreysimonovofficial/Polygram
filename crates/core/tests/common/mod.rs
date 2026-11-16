@@ -56,7 +56,7 @@ pub fn out(
         Scope::Root,
         Command::AddMetricEntry {
             object: object.into(),
-            dir: Direction::Output,
+            dir: Direction::Result,
             id: Some(entry.into()),
             metric_def: metric_def.into(),
             name: String::new(),
@@ -136,7 +136,7 @@ pub fn status(e: &Engine, object: &str, entry: &str) -> StatusCode {
     let v = e.object_view(object).unwrap();
     v.requests
         .iter()
-        .chain(v.outputs.iter())
+        .chain(v.results.iter())
         .find(|m| m.id == entry)
         .unwrap()
         .status
@@ -146,7 +146,7 @@ pub fn value_of(e: &Engine, object: &str, entry: &str) -> f64 {
     let v = e.object_view(object).unwrap();
     v.requests
         .iter()
-        .chain(v.outputs.iter())
+        .chain(v.results.iter())
         .find(|m| m.id == entry)
         .unwrap()
         .supplied

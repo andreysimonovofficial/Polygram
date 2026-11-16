@@ -52,7 +52,7 @@ impl Hierarchy {
             kind,
             parent,
             requests: Vec::new(),
-            outputs: Vec::new(),
+            results: Vec::new(),
             alive: true,
         };
         let ix = if let Some(slot) = self.free_objects.pop() {
@@ -78,13 +78,13 @@ impl Hierarchy {
         }
         self.children[ix.idx()].clear();
         let o = &self.objects[ix.idx()];
-        debug_assert!(o.requests.is_empty() && o.outputs.is_empty());
+        debug_assert!(o.requests.is_empty() && o.results.is_empty());
         self.by_ext_object.remove(&o.ext_id);
         for &e in &o.requests {
             let em = &self.object_metrics[e.idx()];
             self.by_ext_entry.remove(&(ix, em.ext_id.clone()));
         }
-        for &e in &o.outputs {
+        for &e in &o.results {
             let em = &self.object_metrics[e.idx()];
             self.by_ext_entry.remove(&(ix, em.ext_id.clone()));
         }
@@ -93,7 +93,7 @@ impl Hierarchy {
         o.name = String::new();
         o.ext_id = String::new();
         o.requests.clear();
-        o.outputs.clear();
+        o.results.clear();
         self.free_objects.push(ix.0);
         self.live_objects -= 1;
     }
@@ -178,7 +178,7 @@ impl Hierarchy {
     ) -> Result<EntryIx> {
         let count = match dir {
             Direction::Request => self.object(object).requests.len(),
-            Direction::Output => self.object(object).outputs.len(),
+            Direction::Result => self.object(object).results.len(),
         };
         if count >= MAX_METRICS_PER_SIDE {
             return Err(EngineError::TooManyMetrics {
@@ -224,7 +224,7 @@ impl Hierarchy {
         self.first_in.push(NONE);
         match dir {
             Direction::Request => self.objects[object.idx()].requests.push(ix),
-            Direction::Output => self.objects[object.idx()].outputs.push(ix),
+            Direction::Result => self.objects[object.idx()].results.push(ix),
         }
         self.by_ext_entry.insert((object, ext_id), ix);
         self.live_object_metrics += 1;
@@ -240,7 +240,7 @@ impl Hierarchy {
         let o = &mut self.objects[object.idx()];
         let list = match self.object_metrics[e.idx()].direction {
             Direction::Request => &mut o.requests,
-            Direction::Output => &mut o.outputs,
+            Direction::Result => &mut o.results,
         };
         list.retain(|&x| x != e);
         let om = &mut self.object_metrics[e.idx()];
@@ -260,7 +260,7 @@ impl Hierarchy {
     ) -> Result<()> {
         let list = match dir {
             Direction::Request => &mut self.objects[object.idx()].requests,
-            Direction::Output => &mut self.objects[object.idx()].outputs,
+            Direction::Result => &mut self.objects[object.idx()].results,
         };
         if from_ix >= list.len() || to_ix >= list.len() || from_ix == to_ix {
             return Ok(());
@@ -275,9 +275,9 @@ impl Hierarchy {
             &self.object_metrics[from.idx()],
             &self.object_metrics[to.idx()],
         );
-        if fm.direction != Direction::Output || tm.direction != Direction::Request {
+        if fm.direction != Direction::Result || tm.direction != Direction::Request {
             return Err(EngineError::InvalidConnection(
-                "связь идёт только от записи Выхода к записи Запроса".to_owned(),
+                "связь идёт только от записи Результата к записи Запроса".to_owned(),
             ));
         }
         if fm.object == tm.object {

@@ -53,7 +53,7 @@ pub fn build_export_department_json(
 
     let mut used_metric_defs: HashSet<String> = HashSet::new();
     for o in &subtree_objects {
-        for key in ["requests", "outputs"] {
+        for key in ["requests", "results"] {
             if let Some(arr) = o.get(key).and_then(|v| v.as_array()) {
                 for m in arr {
                     if let Some(md) = m.get("metric_def").and_then(|v| v.as_str()) {
@@ -185,7 +185,7 @@ pub fn parse_import_department(content: &str) -> Result<Vec<Command>, String> {
 
     for o in &objects {
         let oid = o.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        for key in ["requests", "outputs"] {
+        for key in ["requests", "results"] {
             if let Some(arr) = o.get(key).and_then(|v| v.as_array()) {
                 for m in arr {
                     let mid = m.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -215,7 +215,7 @@ pub fn parse_import_department(content: &str) -> Result<Vec<Command>, String> {
                     let fact =
                         MetricValue::Number(m.get("fact").and_then(|v| v.as_f64()).unwrap_or(0.0));
                     let dir_enum = if dir == "output" {
-                        Direction::Output
+                        Direction::Result
                     } else {
                         Direction::Request
                     };

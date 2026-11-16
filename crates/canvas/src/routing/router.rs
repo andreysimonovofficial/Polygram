@@ -41,7 +41,7 @@ const TIERS: [(Params, Quality); 3] = [
     ),
 ];
 
-/// Проложить линию от `src` (выход) к `dst` (вход) в обход `obstacles` (все карточки).
+/// Проложить линию от `src` (результат) к `dst` (вход) в обход `obstacles` (все карточки).
 pub fn route(src: &Terminal, dst: &Terminal, obstacles: &[Rect]) -> Route {
     for (par, quality) in TIERS {
         if let Some(c) = solve(src, dst, obstacles, par) {
@@ -158,7 +158,7 @@ fn window(src: &Terminal, dst: &Terminal, par: Params, margin: i32) -> Win {
 }
 
 /// Последнее средство: пути нет вообще (карточка зажата со всех сторон).
-/// Простая ортогональная ломаная «выход справа → вход слева» без обхода препятствий.
+/// Простая ортогональная ломаная «результат справа → вход слева» без обхода препятствий.
 fn fallback(src: &Terminal, dst: &Terminal) -> Route {
     let (psx, psy) = src.port_u(Side::Right);
     let (ptx, pty) = dst.port_u(Side::Left);

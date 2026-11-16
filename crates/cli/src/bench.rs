@@ -87,7 +87,7 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
             ));
             cmds.push(metric(
                 &id,
-                Direction::Output,
+                Direction::Result,
                 &format!("o{k}"),
                 "tovary",
                 MetricValue::Number(rng.below(100) as f64),
@@ -122,7 +122,7 @@ fn build_commands(n: usize, rng: &mut Rng) -> Vec<Command> {
 
 pub fn bench(n: usize) -> i32 {
     println!(
-        "Замер ядра Polygram: {n} объектов, по 2 входа и 2 выхода, ~{} связей\n",
+        "Замер ядра Polygram: {n} объектов, по 2 входа и 2 результата, ~{} связей\n",
         n * 2
     );
     let mut rng = Rng(0x00C0FFEE);

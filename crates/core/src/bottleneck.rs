@@ -1,6 +1,6 @@
 //! Определитель узких мест (правило v0).
-//!
-//! Узкое место — выход в дефиците: потребителям нужно больше, чем он производит.
+//! 
+//! Узкое место — результат в дефиците: потребителям нужно больше, чем он производит.
 //! Важность = недостача (спрос − значение); при равенстве — больше потребителей, затем меньший индекс.
 
 use crate::{hierarchy::Hierarchy, types::*, values::Values};
@@ -18,11 +18,11 @@ pub fn find(h: &Hierarchy, v: &Values, limit: usize) -> Vec<Bottleneck> {
     let mut found: Vec<Bottleneck> = h
         .live_object_metrics()
         .filter(|&e| {
-            h.object_metric(e).direction == Direction::Output
+            h.object_metric(e).direction == Direction::Result
                 && v.status[e.idx()] == StatusCode::Expected
         })
         .map(|e| {
-            // Недостача = сумма требуемого целями − значение выхода.
+            // Недостача = сумма требуемого целями − значение результата.
             let mut demand: f64 = 0.0;
             for edge in h.out_entries(e) {
                 let to = h.edge(edge).to;

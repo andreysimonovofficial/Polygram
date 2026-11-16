@@ -33,7 +33,7 @@ pub(crate) fn engine() -> Engine {
             },
         )
         .unwrap();
-        for (dir, prefix) in [(Direction::Output, "o"), (Direction::Request, "r")] {
+        for (dir, prefix) in [(Direction::Result, "o"), (Direction::Request, "r")] {
             for k in 0..2 {
                 e.apply(
                     Scope::Root,
@@ -43,7 +43,7 @@ pub(crate) fn engine() -> Engine {
                         id: Some(format!("{prefix}{k}")),
                         metric_def: "m".into(),
                         name: String::new(),
-                        value: if dir == Direction::Output {
+                        value: if dir == Direction::Result {
                             MetricValue::Number(5.0)
                         } else {
                             MetricValue::Null
@@ -147,7 +147,7 @@ fn department_frame_is_not_an_obstacle() {
     frame.kind = NodeKind::Department;
     frame.id = "dept".into();
     frame.requests.clear();
-    frame.outputs.clear();
+    frame.results.clear();
     frame.rect = polygram_core::Rect::new(-5, -5, 2000, 2000);
     g.objects.push(frame);
     layer.sync(&g, 16.0);

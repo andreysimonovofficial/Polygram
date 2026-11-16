@@ -119,7 +119,7 @@ fn department_feed_includes_metric_and_status_events() {
         Scope::Root,
         Command::AddMetricEntry {
             object: "p1".into(),
-            dir: Direction::Output,
+            dir: Direction::Result,
             id: Some("o1".into()),
             metric_def: "tovary".into(),
             name: String::new(),

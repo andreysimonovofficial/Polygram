@@ -15,7 +15,7 @@ pub fn port_in_cells(
     object_rect: &CoreRect,
     entries: &[EntryGeom],
     target_ix: EntryIx,
-    is_output: bool,
+    is_result: bool,
     exit_right: bool,
     cell_size: f32,
     kind: NodeKind,
@@ -24,7 +24,7 @@ pub fn port_in_cells(
         object_rect,
         entries,
         target_ix,
-        is_output,
+        is_result,
         exit_right,
         cell_size,
         Vec2::ZERO,
@@ -39,12 +39,12 @@ pub fn port_in_cells(
 
 /// Вычислить экранную позицию точки сцепления строки показателя.
 /// Для Process используется фиксированная CSS-геометрия 256×256px.
-/// `is_output` определяет контейнер (запрос — выше, выход — ниже), `exit_right` — сторону X.
+/// `is_result` определяет контейнер (запрос — выше, результат — ниже), `exit_right` — сторону X.
 pub fn visual_port_screen(
     object_rect: &CoreRect,
     entries: &[EntryGeom],
     target_ix: EntryIx,
-    is_output: bool,
+    is_result: bool,
     exit_right: bool,
     cell_px: f32,
     camera_offset: Vec2,
@@ -65,10 +65,10 @@ pub fn visual_port_screen(
             return None;
         }
 
-        let container_top = if is_output { 144.0 } else { 32.0 };
+        let container_top = if is_result { 144.0 } else { 32.0 };
         let y = oy + (container_top + row_offsets[k] + 8.0) * camera_zoom; // +8 = центр строки 16px
 
-        // Порт на символе ▶ (источник связи): Request — справа (x=232), Output — слева (x=8)
+        // Порт на символе ▶ (источник связи): Request — справа (x=232), Результат — слева (x=8)
         let x = if exit_right {
             // Правая точка сцепления совпадает с правым треугольником строки:
             // row_x + row_w - 4.0 * zoom = ox + 8 + 240 - 4 = ox + 244.
@@ -83,7 +83,7 @@ pub fn visual_port_screen(
     }
 
     // Существующая логика для остальных типов объектов.
-    let y = metric_row_center_y(object_rect, k, is_output, cell_px, camera_offset, camera_zoom);
+    let y = metric_row_center_y(object_rect, k, is_result, cell_px, camera_offset, camera_zoom);
     let x = metric_port_screen_x(object_rect, exit_right, cell_px, camera_offset, camera_zoom);
     Some(Pos2::new(x, y))
 }
@@ -92,7 +92,7 @@ pub fn visual_port_screen(
 pub fn metric_row_center_y(
     object_rect: &CoreRect,
     k: usize,
-    is_output: bool,
+    is_result: bool,
     cell_px: f32,
     camera_offset: Vec2,
     camera_zoom: f32,
@@ -110,7 +110,7 @@ pub fn metric_row_center_y(
     let split_h = container_h - gap;
     let container_h_px = split_h * 0.5;
 
-    let container_top = if is_output {
+    let container_top = if is_result {
         container_rect_top + container_h_px + gap
     } else {
         container_rect_top

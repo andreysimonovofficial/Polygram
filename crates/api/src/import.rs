@@ -127,7 +127,7 @@ impl ApiService {
                 .expect("объект из топологической сортировки");
             for (dir, list) in [
                 (Direction::Request, &o.requests),
-                (Direction::Output, &o.outputs),
+                (Direction::Result, &o.results),
             ] {
                 for m in list {
                     cmds.push(Command::AddMetricEntry {

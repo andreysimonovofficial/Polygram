@@ -17,11 +17,11 @@ pub fn handle_add_metric_dialog(
 
     let label = match dir {
         polygram_core::types::Direction::Request => "ЗАПРОС",
-        polygram_core::types::Direction::Output => "ВЫХОД",
+        polygram_core::types::Direction::Result => "РЕЗУЛЬТАТ",
     };
     let value_label = match dir {
         polygram_core::types::Direction::Request => "Необходимое (required):",
-        polygram_core::types::Direction::Output => "Значение (value):",
+        polygram_core::types::Direction::Result => "Значение (value):",
     };
 
     let mut done = false;
@@ -189,7 +189,7 @@ pub fn handle_add_metric_dialog(
         let unit = app.dialogs.add_metric_unit.trim().to_owned();
         let (entry_value, entry_required) = match dir {
             polygram_core::types::Direction::Request => (MetricValue::Null, value.clone()),
-            polygram_core::types::Direction::Output => (value.clone(), MetricValue::Null),
+            polygram_core::types::Direction::Result => (value.clone(), MetricValue::Null),
         };
 
         let reuse_existing = existing_md

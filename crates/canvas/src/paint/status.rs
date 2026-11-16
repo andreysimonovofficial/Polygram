@@ -54,7 +54,7 @@ pub fn department_status(
     while let Some(cur) = stack.pop() {
         match cur.kind {
             NodeKind::Process => {
-                for e in cur.requests.iter().chain(cur.outputs.iter()) {
+                for e in cur.requests.iter().chain(cur.results.iter()) {
                     let r = status_rank(dynamic.status[e.ix as usize]);
                     if r > worst {
                         worst = r;
@@ -90,7 +90,7 @@ mod tests {
             kind: NodeKind::Department,
             rect: Rect::new(0, 0, 10, 10),
             requests: vec![],
-            outputs: vec![],
+            results: vec![],
             parent: None,
         }
     }
@@ -112,7 +112,7 @@ mod tests {
                     unit: "".into(),
                 })
                 .collect(),
-            outputs: vec![],
+            results: vec![],
             parent: Some(parent.into()),
         }
     }
@@ -168,7 +168,7 @@ mod tests {
                 kind: NodeKind::Department,
                 rect: Rect::new(0, 0, 5, 5),
                 requests: vec![],
-                outputs: vec![],
+                results: vec![],
                 parent: Some("d".into()),
             },
             process("p1", "sub", &[0]),

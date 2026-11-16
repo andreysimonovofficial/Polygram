@@ -101,8 +101,8 @@ fn main() {
                kind: NodeKind,
                at: [i32; 2],
                parent: Option<&str>,
-               requests: Vec<DocObjectMetric>,
-               outputs: Vec<DocObjectMetric>| {
+                requests: Vec<DocObjectMetric>,
+                results: Vec<DocObjectMetric>| {
         objects.push(DocObject {
             id: id.to_owned(),
             name: name.to_owned(),
@@ -110,7 +110,7 @@ fn main() {
             at,
             parent: parent.map(|s| s.to_owned()),
             requests,
-            outputs,
+            results,
         });
     };
 
@@ -119,13 +119,13 @@ fn main() {
     let dmet = |v: f64, r: f64| {
         (
             vec![entry("i1", "dem", Direction::Request, nul(), num(r))],
-            vec![entry("o1", "num", Direction::Output, num(v), num(0.0))],
+            vec![entry("o1", "num",             Direction::Result, num(v), num(0.0))],
         )
     };
     let pmet = |v: f64, r: f64| {
         (
             vec![entry("i1", "dem", Direction::Request, nul(), num(r))],
-            vec![entry("o1", "num", Direction::Output, num(v), num(0.0))],
+            vec![entry("o1", "num",             Direction::Result, num(v), num(0.0))],
         )
     };
 
@@ -293,7 +293,7 @@ fn main() {
         let from_out = objects
             .get_mut(proc_index[&format!("proc{:03}", i)])
             .unwrap()
-            .outputs
+            .results
             .iter_mut()
             .find(|e| e.id == "o1")
             .unwrap();

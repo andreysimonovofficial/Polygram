@@ -77,7 +77,7 @@ impl crate::engine::Engine {
             at: [r.x, r.y],
             size: [r.w, r.h],
             requests: o.requests.iter().map(|&e| self.metric_view(e)).collect(),
-            outputs: o.outputs.iter().map(|&e| self.metric_view(e)).collect(),
+            results: o.results.iter().map(|&e| self.metric_view(e)).collect(),
         })
     }
 
@@ -119,8 +119,8 @@ impl crate::engine::Engine {
                             }
                         })
                         .collect();
-                    let outputs: Vec<crate::geometry::EntryGeom> = d
-                        .outputs
+                    let results: Vec<crate::geometry::EntryGeom> = d
+                        .results
                         .iter()
                         .map(|&e| {
                             let i = e.idx();
@@ -142,7 +142,7 @@ impl crate::engine::Engine {
                     kind: d.kind,
                     rect: self.layout.rect_of(o),
                     requests,
-                    outputs,
+                    results,
                     parent: d.parent.map(|p| self.hier.object(p).ext_id.clone()),
                 }
             })

@@ -15,7 +15,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
-/// Где в геометрии лежит показатель: объект, номер строки, это выход?
+/// Где в геометрии лежит показатель: объект, номер строки, это результат?
 #[derive(Clone, Copy)]
 struct EntryPos {
     object: usize,
@@ -73,7 +73,7 @@ impl EdgeLayer {
         self.entries.clear();
         self.cards.clear();
         for (oi, o) in geometry.objects.iter().enumerate() {
-            for (row, e) in o.outputs.iter().enumerate() {
+            for (row, e) in o.results.iter().enumerate() {
                 self.entries.insert(
                     e.ix,
                     EntryPos {
@@ -176,16 +176,16 @@ impl EdgeLayer {
 pub(crate) fn terminal(
     o: &ObjectGeom,
     entry: EntryIx,
-    is_output: bool,
+    is_result: bool,
     cell_size: f32,
 ) -> Option<Terminal> {
-    let entries = if is_output { &o.outputs } else { &o.requests };
+    let entries = if is_result { &o.results } else { &o.requests };
     let port = |side: Side| {
         port_in_cells(
             &o.rect,
             entries,
             entry,
-            is_output,
+            is_result,
             side == Side::Right,
             cell_size,
             o.kind,
@@ -214,7 +214,7 @@ fn fingerprint(geometry: &Geometry, cell_size: f32) -> u64 {
             e.ix.hash(&mut h);
         }
         0xA5u8.hash(&mut h);
-        for e in &o.outputs {
+        for e in &o.results {
             e.ix.hash(&mut h);
         }
     }

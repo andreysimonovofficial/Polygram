@@ -387,13 +387,13 @@ pub fn compute_metric_drop(ctx: &MetricDropContext) -> Vec<Command> {
     };
 
     let target_dir = match source_dir {
-        Direction::Request => Direction::Output,
-        Direction::Output => Direction::Request,
+        Direction::Request => Direction::Result,
+        Direction::Result => Direction::Request,
     };
 
     let entries = match target_dir {
         Direction::Request => &target.requests,
-        Direction::Output => &target.outputs,
+        Direction::Result => &target.results,
     };
 
     let already_has = entries.iter().any(|e| e.name == *entry_name);
@@ -414,7 +414,7 @@ pub fn compute_metric_drop(ctx: &MetricDropContext) -> Vec<Command> {
     }
 
     let (from_object, from_entry, to_object, to_entry) = match source_dir {
-        Direction::Output => (
+        Direction::Result => (
             source_object.clone(),
             entry_name.clone(),
             target_id.clone(),

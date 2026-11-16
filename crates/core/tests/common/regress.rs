@@ -282,7 +282,7 @@ fn check_expectations(
             let entry = ov
                 .requests
                 .iter()
-                .chain(ov.outputs.iter())
+                .chain(ov.results.iter())
                 .find(|m| m.id == se.entry);
             match entry {
                 Some(m) => {
@@ -411,7 +411,7 @@ fn check_values<F>(
             let entry = ov
                 .requests
                 .iter()
-                .chain(ov.outputs.iter())
+                .chain(ov.results.iter())
                 .find(|m| m.id == ve.entry);
             match entry {
                 Some(m) => {

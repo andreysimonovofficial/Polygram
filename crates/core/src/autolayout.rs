@@ -118,7 +118,7 @@ impl Layout {
             let mut y = 0i32;
             for &v in col.iter() {
                 let o = h.object(ObjectIx(v));
-                let (w, hh) = footprint_for(o.kind, o.requests.len(), o.outputs.len());
+                let (w, hh) = footprint_for(o.kind, o.requests.len(), o.results.len());
                 placed_rect[v as usize] = Rect::new(col_x, y, w as i32, hh as i32);
                 center_y[v as usize] = y as f64 + hh as f64 / 2.0;
                 y += hh as i32 + GAP_ROWS;

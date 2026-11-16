@@ -19,7 +19,7 @@ pub struct ObjectGeom {
     pub kind: NodeKind,
     pub rect: Rect,
     pub requests: Vec<EntryGeom>,
-    pub outputs: Vec<EntryGeom>,
+    pub results: Vec<EntryGeom>,
     /// Идентификатор родительского отдела, если объект вложен в отдел.
     pub parent: Option<String>,
 }

@@ -109,20 +109,20 @@ pub fn context_menu(
                         );
                         *close_menu = true;
                     }
-                    if ui.button("Добавить показатель в выход").clicked() {
+                    if ui.button("Добавить показатель в результат").clicked() {
                         let n_out = published
                             .geometry
                             .objects
                             .iter()
                             .find(|n| n.id == *object_id)
-                            .map(|n| n.outputs.len())
+                            .map(|n| n.results.len())
                             .unwrap_or(0);
                         let cmd = Command::AddMetricEntry {
                             object: object_id.clone(),
-                            dir: Direction::Output,
+                            dir: Direction::Result,
                             id: None,
                             metric_def: "по умолчанию".into(),
-                            name: format!("out{}", n_out + 1),
+                            name: format!("result{}", n_out + 1),
                             value: MetricValue::Null,
                             required: MetricValue::Null,
                             max: None,
@@ -132,7 +132,7 @@ pub fn context_menu(
                         app.add_event_log(
                             "info",
                             "command",
-                            &format!("Добавлен показатель «out{}» в объект «{object_id}» (выход)", n_out + 1),
+                            &format!("Добавлен показатель «result{}» в объект «{object_id}» (результат)", n_out + 1),
                             None,
                         );
                         *close_menu = true;

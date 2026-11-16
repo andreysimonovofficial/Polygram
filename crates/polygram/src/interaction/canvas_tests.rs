@@ -22,7 +22,7 @@ fn make_app() -> PolygramApp {
             kind: NodeKind::Process,
             rect: CoreRect::new(10, 10, 16, 16),
             requests: vec![],
-            outputs: vec![],
+            results: vec![],
             parent: None,
         }],
         edges: vec![],

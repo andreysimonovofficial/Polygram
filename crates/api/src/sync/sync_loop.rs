@@ -196,7 +196,7 @@ fn apply_binding_result(
                     entry: entry_id_cmd.clone(),
                     required: value.clone(),
                 },
-                Direction::Output => polygram_core::Command::SetValue {
+                Direction::Result => polygram_core::Command::SetValue {
                     object: object_id_cmd.clone(),
                     entry: entry_id_cmd.clone(),
                     value: value.clone(),

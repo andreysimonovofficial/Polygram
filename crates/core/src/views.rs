@@ -36,7 +36,7 @@ pub struct ObjectView {
     pub at: [i32; 2],
     pub size: [i32; 2],
     pub requests: Vec<MetricView>,
-    pub outputs: Vec<MetricView>,
+    pub results: Vec<MetricView>,
 }
 
 /// Глобальный показатель для вывода.

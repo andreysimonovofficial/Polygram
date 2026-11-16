@@ -26,7 +26,7 @@ const SCENARIO_BASIC_FLOW: &str = r#"
 {"apply":{"cmd":"connect","from_object":"p","from_entry":"o1","to_object":"b","to_entry":"r1","throughput":100}}
 // Дефицит: 50 < 60+40 → p.o1 и a.r1 в Ожидается, b.r1 получает 40 → Ok.
 {"expect":{"statuses":[{"object":"p","entry":"o1","code":"expected"},{"object":"a","entry":"r1","code":"expected"},{"object":"b","entry":"r1","code":"ok"}],"no_overlaps":true}}
-// Увеличиваем выход до 100 → спрос покрыт, все Ok.
+// Увеличиваем результат до 100 → спрос покрыт, все Ok.
 {"apply":{"cmd":"set_value","object":"p","entry":"o1","value":{"kind":"Number","value":100}}}
 {"expect":{"statuses":[{"object":"p","entry":"o1","code":"ok"},{"object":"a","entry":"r1","code":"ok"},{"object":"b","entry":"r1","code":"ok"}],"supplied":[{"object":"a","entry":"r1","value":{"kind":"Number","value":60}},{"object":"b","entry":"r1","value":{"kind":"Number","value":40}}]}}
 "#;
@@ -63,7 +63,7 @@ const SCENARIO_CYCLE: &str = r#"
 {"expect":{"error":"object_not_found","parents":[{"object":"child","parent":"dept"}]}}
 "#;
 
-/// 5. Узкие места ранжируются по недостаче (спрос − значение выхода).
+/// 5. Узкие места ранжируются по недостаче (спрос − значение результата).
 const SCENARIO_BOTTLENECK: &str = r#"
 {"apply":{"cmd":"add_metric_def","id":"товары","name":"Товары","kind":"number","unit":"ед."}}
 {"apply":{"cmd":"add_object","id":"p","name":"P","kind":"process","at":[0,0]}}

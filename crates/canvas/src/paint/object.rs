@@ -11,7 +11,7 @@ use crate::status_dot_color;
 use crate::status_label_ru;
 
 /// Высокопроизводительный процедурный рендер объекта "Процесс" по фиксированной CSS-геометрии.
-/// Карточка 256×256: заголовок (Имя + #ID + ◆) → контейнер Запрос (y:32) → контейнер Выход (y:144).
+/// Карточка 256×256: заголовок (Имя + #ID + ◆) → контейнер Запрос (y:32) → контейнер Результат (y:144).
 /// Каждый контейнер 248×108: шапка (LABEL (N) СТАТУС + ◆) + 4 строки показателя на фиксированных y (28, 48, 68, 88).
 /// Возвращает (горячие зоны добавления показателя, горячие зоны меню контейнеров, горячие зоны перетаскивания показателей).
 pub fn paint_process(
@@ -67,7 +67,7 @@ pub fn paint_process(
         // Сначала проверяем строки показателя (самое конкретное)
         for (dir, entries) in [
             (Direction::Request, &object.requests as &[EntryGeom]),
-            (Direction::Output, &object.outputs as &[EntryGeom]),
+            (Direction::Result, &object.results as &[EntryGeom]),
         ] {
             let container_top = if dir == Direction::Request {
                 oy + 32.0 * zoom
@@ -80,7 +80,7 @@ pub fn paint_process(
                 let row_x = container_x + 4.0 * zoom;
                 // Прямоугольник для hit-testing строки расширен вниз до следующей строки
                 // (или до низа контейнера для последней), чтобы при движении мыши по
-                // промежуткам между строками не вспыхивал контейнер Запрос/Выход.
+                // промежуткам между строками не вспыхивал контейнер Запрос/Результат.
                 let hit_bottom = if i + 1 < visible {
                     container_top + row_offsets[i + 1] * zoom
                 } else {
@@ -103,14 +103,14 @@ pub fn paint_process(
                 Pos2::new(container_x, oy + 32.0 * zoom),
                 Vec2::new(container_w, container_h),
             );
-            let out_rect = Rect::from_min_size(
+            let result_rect = Rect::from_min_size(
                 Pos2::new(container_x, oy + 144.0 * zoom),
                 Vec2::new(container_w, container_h),
             );
             if req_rect.contains(pos) {
                 container_hovered_dir = Some(Direction::Request);
-            } else if out_rect.contains(pos) {
-                container_hovered_dir = Some(Direction::Output);
+            } else if result_rect.contains(pos) {
+                container_hovered_dir = Some(Direction::Result);
             }
         }
     }
@@ -179,17 +179,17 @@ pub fn paint_process(
         &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
     );
 
-    // === Контейнер: ВЫХОД (top: 144) ===
-    let out_rect = Rect::from_min_size(
+    // === Контейнер: РЕЗУЛЬТАТ (top: 144) ===
+    let result_rect = Rect::from_min_size(
         Pos2::new(container_x, oy + 144.0 * zoom),
         Vec2::new(container_w, container_h),
     );
-    let out_hovered = container_hovered_dir == Some(Direction::Output);
+    let result_hovered = container_hovered_dir == Some(Direction::Result);
     paint_metric_container(
         painter, object, dynamic, theme, zoom,
-        out_hovered,
+        result_hovered,
         mouse_pos,
-        Direction::Output, &object.outputs, out_rect,
+        Direction::Result, &object.results, result_rect,
         container_header_h, row_w, row_h, container_x, &row_offsets,
         bindings, error_hotspots,
         &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
@@ -198,7 +198,7 @@ pub fn paint_process(
     (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots)
 }
 
-/// Рисование одного контейнера показателей (Запрос или Выход): рамка, шапка, строки.
+/// Рисование одного контейнера показателей (Запрос или Результат): рамка, шапка, строки.
 fn paint_metric_container(
     painter: &Painter,
     object: &ObjectGeom,
@@ -246,7 +246,7 @@ fn paint_metric_container(
     let dot_color = status_dot_color(status, dir, theme);
     let label = match dir {
         Direction::Request => "ЗАПРОС",
-        Direction::Output => "ВЫХОД",
+        Direction::Result => "РЕЗУЛЬТАТ",
     };
     let status_text = status_label_ru(status, dir);
     let problem_count = entries
@@ -295,7 +295,7 @@ fn paint_metric_container(
 
     let (left_sym, right_sym) = match dir {
         Direction::Request => ("▶", "◀"),
-        Direction::Output => ("◀", "▶"),
+        Direction::Result => ("◀", "▶"),
     };
     let symbol_font = egui::FontId::new((8.0 * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
 
@@ -353,7 +353,7 @@ fn paint_metric_container(
         };
         let displayed_value = match dir {
             Direction::Request => dynamic.required[entry.ix as usize].clone(),
-            Direction::Output => entry.value.clone(),
+            Direction::Result => entry.value.clone(),
         };
         let value_text = format!("{:.0}{}", displayed_value, unit);
         painter.text(

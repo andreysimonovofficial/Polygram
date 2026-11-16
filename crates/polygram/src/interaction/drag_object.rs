@@ -36,7 +36,7 @@ pub fn handle_drag(
                     .and_then(|o| {
                         let entries = match dir {
                             Direction::Request => &o.requests,
-                            Direction::Output => &o.outputs,
+                            Direction::Result => &o.results,
                         };
                         entries.iter().enumerate().find(|(_, e)| e.name == *metric_name)
                             .map(|(i, e)| (e.clone(), i))
@@ -377,7 +377,7 @@ pub fn handle_drag(
             };
         let metric_name = entry.name.clone();
         if let Some(pos) = canvas_response.interact_pointer_pos() {
-            // Реордер строки внутри того же контейнера (ЗАПРОС/ВЫХОД одного объекта).
+            // Реордер строки внутри того же контейнера (ЗАПРОС/РЕЗУЛЬТАТ одного объекта).
             let hovered_name = app.canvas.drag_metric_hotspots.iter()
                 .find(|(oid, d, name, rect)| {
                     *oid == source_object && *d == source_dir && rect.contains(pos)
@@ -387,7 +387,7 @@ pub fn handle_drag(
                 if let Some(obj) = geometry.objects.iter().find(|o| o.id == source_object) {
                     let entries = match source_dir {
                         Direction::Request => &obj.requests,
-                        Direction::Output => &obj.outputs,
+                        Direction::Result => &obj.results,
                     };
                     if let Some(to_ix) = entries.iter().position(|e| e.name == hovered_name) {
                         if to_ix != from_ix {

@@ -18,7 +18,7 @@ pub fn handle_add_metric_entry(
         let o = engine.hier.object(oix);
         (
             o.requests.len() + usize::from(dir == Direction::Request),
-            o.outputs.len() + usize::from(dir == Direction::Output),
+            o.results.len() + usize::from(dir == Direction::Result),
         )
     };
     let plan = if n_req.max(n_out) <= crate::types::MAX_METRICS_PER_SIDE {
@@ -53,7 +53,7 @@ pub fn handle_remove_metric_entry(
 ) -> Result<Applied> {
     let (oix, e) = engine.find_entry(object, entry)?;
     let edges: Vec<crate::types::EdgeIx> = match engine.hier.object_metric(e).direction {
-        Direction::Output => engine.hier.out_entries(e).collect(),
+        Direction::Result => engine.hier.out_entries(e).collect(),
         Direction::Request => engine.hier.in_entries(e).collect(),
     };
     for edge in edges {
@@ -66,7 +66,7 @@ pub fn handle_remove_metric_entry(
         .push(crate::event::EventKind::MetricRemoved { metric: e.0 });
     let (n_req, n_out) = {
         let o = engine.hier.object(oix);
-        (o.requests.len(), o.outputs.len())
+        (o.requests.len(), o.results.len())
     };
     let plan = engine.plan_refit(oix, n_req, n_out).unwrap_or(None);
     engine.apply_refit(oix, plan);
@@ -185,9 +185,9 @@ pub fn handle_set_in_process(
     let dir = om.direction;
     engine.hier.object_metrics[e.idx()].in_process = in_process;
     engine.vals.mark_metric(&engine.hier, e);
-    // Флаг влияет на статус самого выхода и на статусы зависимых запросов через пересчёт входов.
+    // Флаг влияет на статус самого результата и на статусы зависимых запросов через пересчёт входов.
     match dir {
-        Direction::Output => {
+        Direction::Result => {
             for edge in engine.hier.out_entries(e) {
                 let to = engine.hier.edge(edge).to;
                 engine.vals.mark_in(to);

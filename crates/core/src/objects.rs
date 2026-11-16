@@ -8,6 +8,6 @@ pub struct ObjectData {
     pub kind: NodeKind,
     pub parent: Option<ObjectIx>,
     pub requests: Vec<EntryIx>,
-    pub outputs: Vec<EntryIx>,
+    pub results: Vec<EntryIx>,
     pub alive: bool,
 }

@@ -55,7 +55,7 @@ pub fn paint_edge(
         return;
     }
 
-    let from_status = dynamic.status[ends.from.outputs[ends.from_row].ix as usize];
+    let from_status = dynamic.status[ends.from.results[ends.from_row].ix as usize];
     let to_status = dynamic.status[ends.to.requests[ends.to_row].ix as usize];
     let color = line_color(from_status, to_status, theme);
 
@@ -67,7 +67,7 @@ pub fn paint_edge(
     // Концы линии — точки сцепления выбранных сторон на текущем зуме.
     let src_port = visual_port_screen(
         &from_obj.rect,
-        &from_obj.outputs,
+        &from_obj.results,
         EntryIx(edge.from),
         true,
         route.src == Side::Right,
@@ -110,11 +110,11 @@ pub fn paint_edge(
     }
 }
 
-/// Цвет линии по статусу: сначала проблема выхода источника, потом входа приёмника.
+/// Цвет линии по статусу: сначала проблема результата источника, потом входа приёмника.
 /// Избыток не окрашивает линию — только зелёный (тips и текст остаются жёлтыми через status_dot_color).
 fn line_color(from: StatusCode, to: StatusCode, theme: &crate::theme::Theme) -> egui::Color32 {
     if matches!(from, StatusCode::InProgress | StatusCode::Expected) {
-        status_dot_color(from, Direction::Output, theme)
+        status_dot_color(from, Direction::Result, theme)
     } else if matches!(to, StatusCode::Expected) {
         status_dot_color(to, Direction::Request, theme)
     } else {
@@ -288,7 +288,7 @@ mod tests {
                 let ends = layer.ends(&g, edge).unwrap();
                 let want_src = visual_port_screen(
                     &ends.from.rect,
-                    &ends.from.outputs,
+                    &ends.from.results,
                     EntryIx(edge.from),
                     true,
                     route.src == Side::Right,

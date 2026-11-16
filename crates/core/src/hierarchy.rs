@@ -134,7 +134,7 @@ impl Hierarchy {
     pub fn degree(&self, e: EntryIx) -> usize {
         let meta = &self.object_metrics[e.idx()];
         match meta.direction {
-            Direction::Output => self.out_entries(e).count(),
+            Direction::Result => self.out_entries(e).count(),
             Direction::Request => self.in_entries(e).count(),
         }
     }
@@ -142,7 +142,7 @@ impl Hierarchy {
     pub fn has_edges(&self, e: EntryIx) -> bool {
         let meta = &self.object_metrics[e.idx()];
         match meta.direction {
-            Direction::Output => self.first_out[e.idx()] != NONE,
+            Direction::Result => self.first_out[e.idx()] != NONE,
             Direction::Request => self.first_in[e.idx()] != NONE,
         }
     }
@@ -153,7 +153,7 @@ impl Hierarchy {
         let o = &self.objects[meta.object.idx()];
         let list = match meta.direction {
             Direction::Request => &o.requests,
-            Direction::Output => &o.outputs,
+            Direction::Result => &o.results,
         };
         list.iter().position(|&x| x == e).unwrap_or(0)
     }
@@ -194,7 +194,7 @@ impl Hierarchy {
     pub fn edges_of_object(&self, object: ObjectIx) -> Vec<EdgeIx> {
         let o = self.object(object);
         let mut out = Vec::new();
-        for &e in &o.outputs {
+        for &e in &o.results {
             out.extend(self.out_entries(e));
         }
         for &e in &o.requests {

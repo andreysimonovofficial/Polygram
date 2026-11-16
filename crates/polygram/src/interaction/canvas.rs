@@ -59,8 +59,8 @@ pub fn handle_canvas_interaction(
             for (object_id, dir, rect) in &app.canvas.container_header_hotspots {
                 if rect.contains(pos) {
                     let other = match dir {
-                        Direction::Request => Direction::Output,
-                        Direction::Output => Direction::Request,
+                        Direction::Request => Direction::Result,
+                        Direction::Result => Direction::Request,
                     };
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
@@ -90,8 +90,8 @@ pub fn handle_canvas_interaction(
             for (object_id, dir, entry, rect) in &app.canvas.drag_metric_hotspots {
                 if rect.contains(pos) {
                     let other = match dir {
-                        Direction::Request => Direction::Output,
-                        Direction::Output => Direction::Request,
+                        Direction::Request => Direction::Result,
+                        Direction::Result => Direction::Request,
                     };
                     app.dialogs.container_menu_target = Some(object_id.clone());
                     app.dialogs.container_menu_active_section = Some(*dir);
@@ -397,12 +397,12 @@ pub fn handle_canvas_interaction(
                         .find(|o| o.id == *object_id)
                         .map(|o| o.requests.len())
                         .unwrap_or(0),
-                    Direction::Output => published
+                    Direction::Result => published
                         .geometry
                         .objects
                         .iter()
                         .find(|o| o.id == *object_id)
-                        .map(|o| o.outputs.len())
+                        .map(|o| o.results.len())
                         .unwrap_or(0),
                 };
                 if n >= MAX_UI_METRICS_PER_SIDE {
@@ -411,7 +411,7 @@ pub fn handle_canvas_interaction(
                 app.dialogs.add_metric_target = Some((object_id.clone(), *dir));
                 app.dialogs.add_metric_name = match dir {
                     Direction::Request => format!("request{}", n + 1),
-                    Direction::Output => format!("out{}", n + 1),
+                    Direction::Result => format!("result{}", n + 1),
                 };
                 let existing_kind = published
                     .metric_defs

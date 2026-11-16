@@ -228,7 +228,7 @@ impl ConnectionState {
             if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == object) {
                 let entries = match dir {
                     Direction::Request => &mut obj.requests,
-                    Direction::Output => &mut obj.outputs,
+                    Direction::Result => &mut obj.results,
                 };
                 if from_ix < entries.len() && to_ix < entries.len() && from_ix != to_ix {
                     let entry = entries.remove(from_ix);

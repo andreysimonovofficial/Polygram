@@ -52,7 +52,7 @@ pub struct DocObject {
     #[serde(default)]
     pub requests: Vec<DocObjectMetric>,
     #[serde(default)]
-    pub outputs: Vec<DocObjectMetric>,
+    pub results: Vec<DocObjectMetric>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -142,8 +142,8 @@ impl Engine {
                         }
                     })
                     .collect();
-                let outputs: Vec<DocObjectMetric> = d
-                    .outputs
+                let results: Vec<DocObjectMetric> = d
+                    .results
                     .iter()
                     .map(|&e| {
                         let om = h.object_metric(e);
@@ -167,7 +167,7 @@ impl Engine {
                     at: [r.x, r.y],
                     parent: d.parent.map(|p| h.object(p).ext_id.clone()),
                     requests,
-                    outputs,
+                    results,
                 }
             })
             .collect();
@@ -227,7 +227,7 @@ impl Engine {
             });
             for (dir, list) in [
                 (Direction::Request, &o.requests),
-                (Direction::Output, &o.outputs),
+                (Direction::Result, &o.results),
             ] {
                 for m in list {
                     cmds.push(Command::AddMetricEntry {

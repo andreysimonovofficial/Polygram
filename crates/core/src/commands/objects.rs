@@ -98,7 +98,7 @@ pub fn handle_remove_object(engine: &mut Engine, object: &str) -> Result<Applied
     }
     let entries: Vec<crate::types::EntryIx> = {
         let o = engine.hier.object(ix);
-        o.requests.iter().chain(o.outputs.iter()).copied().collect()
+        o.requests.iter().chain(o.results.iter()).copied().collect()
     };
     for e in entries {
         engine.vals.reset_metric(e);

@@ -8,8 +8,8 @@ fn random_metric(e: &Engine, id: &str, rng: &mut Rng, dir: Option<Direction>) ->
     let v = e.object_view(id)?;
     let list: Vec<&MetricView> = match dir {
         Some(Direction::Request) => v.requests.iter().collect(),
-        Some(Direction::Output) => v.outputs.iter().collect(),
-        None => v.requests.iter().chain(v.outputs.iter()).collect(),
+        Some(Direction::Result) => v.results.iter().collect(),
+        None => v.requests.iter().chain(v.results.iter()).collect(),
     };
     if list.is_empty() {
         None
@@ -39,7 +39,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
             let a = ids[rng.below(ids.len())].clone();
             let b = ids[rng.below(ids.len())].clone();
             let cmd = match rng.below(12) {
-                0 | 1 | 2 => random_metric(&e, &a, &mut rng, Some(Direction::Output)).map(|m| {
+                0 | 1 | 2 => random_metric(&e, &a, &mut rng, Some(Direction::Result)).map(|m| {
                     Command::SetValue {
                         object: a.clone(),
                         entry: m,
@@ -63,7 +63,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     },
                 }),
                 5 | 6 | 7 => {
-                    let m1 = random_metric(&e, &a, &mut rng, Some(Direction::Output));
+                    let m1 = random_metric(&e, &a, &mut rng, Some(Direction::Result));
                     let m2 = random_metric(&e, &b, &mut rng, Some(Direction::Request));
                     match (m1, m2) {
                         (Some(m1), Some(m2)) => Some(Command::Connect {
@@ -77,7 +77,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     }
                 }
                 8 => {
-                    let m1 = random_metric(&e, &a, &mut rng, Some(Direction::Output));
+                    let m1 = random_metric(&e, &a, &mut rng, Some(Direction::Result));
                     let m2 = random_metric(&e, &b, &mut rng, Some(Direction::Request));
                     match (m1, m2) {
                         (Some(m1), Some(m2)) => Some(Command::Disconnect {
@@ -98,7 +98,7 @@ fn incremental_equals_full_recompute_under_random_operations() {
                     dir: if rng.below(2) == 0 {
                         Direction::Request
                     } else {
-                        Direction::Output
+                        Direction::Result
                     },
                     id: None,
                     metric_def: "tovary".into(),

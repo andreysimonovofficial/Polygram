@@ -16,7 +16,7 @@ pub struct MetricBinding {
 }
 
 /// Рисовать одну строку показателя: точка сцепления слева и справа, имя, значение справа.
-/// Для запроса показывается required, для выхода — value.
+/// Для запроса показывается required, для результата — value.
 /// binding — опциональная API-привязка этой строки (иконка + время последнего опроса внутри строки).
 /// error_hotspots — накопление rect иконок ошибок + текст ошибки для копирования по клику.
 pub fn paint_metric_row(
@@ -43,12 +43,12 @@ pub fn paint_metric_row(
     );
 
     // Символы сцепления слева и справа внутри тела строки.
-    // Запрос: слева ▶, справа ◀. Выход: слева ◀, справа ▶.
+    // Запрос: слева ▶, справа ◀. Результат: слева ◀, справа ▶.
     let dot_color = status_dot_color(status, dir, theme);
     let symbol_font = egui::FontId::new((theme.text_size * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
     let (left_sym, right_sym) = match dir {
         Direction::Request => ("▶", "◀"),
-        Direction::Output => ("◀", "▶"),
+        Direction::Result => ("◀", "▶"),
     };
     painter.text(
         Pos2::new(rect.min.x + SYMBOL_X_PAD * zoom, cy),
@@ -113,7 +113,7 @@ pub fn paint_metric_row(
         }
     }
 
-    // Значение (справа): для запроса — required, для выхода — value.
+    // Значение (справа): для запроса — required, для результата — value.
     let unit = if entry.unit.is_empty() {
         String::new()
     } else {
@@ -121,7 +121,7 @@ pub fn paint_metric_row(
     };
     let displayed_value = match dir {
         Direction::Request => dynamic.required[entry.ix as usize].clone(),
-        Direction::Output => entry.value.clone(),
+        Direction::Result => entry.value.clone(),
     };
     let value_text = format!("{:.0}{}", displayed_value, unit);
     painter.text(

@@ -75,7 +75,7 @@ fn output_limit_is_sum_of_target_limits() {
     connect(&mut e, "p", "o1", "b", "r1");
     assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
     let v = e.object_view("p").unwrap();
-    assert_eq!(v.outputs[0].max, Some(MetricValue::Number(1000.0)));
+    assert_eq!(v.results[0].max, Some(MetricValue::Number(1000.0)));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn own_limit_applies_when_a_target_has_no_limit() {
     connect(&mut e, "p", "o1", "b", "r1");
     assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
     assert_eq!(
-        e.object_view("p").unwrap().outputs[0].max,
+        e.object_view("p").unwrap().results[0].max,
         Some(MetricValue::Number(80.0))
     );
 }
@@ -193,7 +193,7 @@ fn metric_limit_per_side() {
         Scope::Root,
         Command::AddMetricEntry {
             object: "x".into(),
-            dir: Direction::Output,
+            dir: Direction::Result,
             id: None,
             metric_def: "tovary".into(),
             name: "лишний".into(),

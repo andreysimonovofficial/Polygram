@@ -14,7 +14,7 @@ fn obj(id: &str, x: i32, y: i32, w: i32, h: i32, kind: NodeKind) -> ObjectGeom {
         kind,
         rect: Rect::new(x, y, w, h),
         requests: vec![],
-        outputs: vec![],
+        results: vec![],
         parent: None,
     }
 }
@@ -174,7 +174,7 @@ fn reorder_metric_entry_moves_within_outputs() {
             Scope::Root,
             polygram_core::Command::AddMetricEntry {
                 object: "a".into(),
-                dir: Direction::Output,
+                dir: Direction::Result,
                 id: Some(name.into()),
                 metric_def: "md1".into(),
                 name: String::new(),
@@ -189,14 +189,14 @@ fn reorder_metric_entry_moves_within_outputs() {
 
     let geom = e.geometry();
     let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
-    assert_eq!(obj.outputs.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["o1", "o2", "o3"]);
+    assert_eq!(obj.results.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["o1", "o2", "o3"]);
 
     // Перемещаем o1 (индекс 0) на позицию 2
     e.apply(
         Scope::Root,
         polygram_core::Command::ReorderMetricEntry {
             object: "a".into(),
-            dir: Direction::Output,
+                dir: Direction::Result,
             from_ix: 0,
             to_ix: 2,
         },
@@ -206,7 +206,7 @@ fn reorder_metric_entry_moves_within_outputs() {
     let geom = e.geometry();
     let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
     assert_eq!(
-        obj.outputs.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+        obj.results.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
         vec!["o2", "o3", "o1"]
     );
 }

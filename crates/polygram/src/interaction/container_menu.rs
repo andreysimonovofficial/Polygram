@@ -1,5 +1,5 @@
-//! Экран редактирования списка показателей объекта (запросы и выходы) — полноэкранный вид.
-//! Два раскрывающихся раздела: ЗАПРОС и ВЫХОД с показаниями каждого.
+//! Экран редактирования списка показателей объекта (запросы и результаты) — полноэкранный вид.
+//! Два раскрывающихся раздела: ЗАПРОС и РЕЗУЛЬТАТ с показаниями каждого.
 
 use crate::app::{PolygramApp, dialogs::EntryApiBinding};
 use crate::interaction::api_settings::render_entry_api_settings;
@@ -33,12 +33,12 @@ pub fn handle_container_menu_dialog(
     };
 
     let requests: Vec<&polygram_core::geometry::EntryGeom> = obj.requests.iter().collect();
-    let outputs: Vec<&polygram_core::geometry::EntryGeom> = obj.outputs.iter().collect();
+    let results: Vec<&polygram_core::geometry::EntryGeom> = obj.results.iter().collect();
 
     // Загрузить существующие API-привязки для всех записей обоих направлений.
     if app.dialogs.container_menu_api_settings.is_empty() {
         let bindings = app.get_bindings();
-        for entry in requests.iter().chain(outputs.iter()) {
+        for entry in requests.iter().chain(results.iter()) {
             let binding_id = format!("{}:{}", object_id, entry.name);
             for b in &bindings {
                 if b.get("id").and_then(|v| v.as_str()) == Some(&binding_id) {
@@ -67,7 +67,7 @@ pub fn handle_container_menu_dialog(
     app.dialogs
         .ensure_container_menu_edits(&requests, Direction::Request, published);
     app.dialogs
-        .ensure_container_menu_edits(&outputs, Direction::Output, published);
+        .ensure_container_menu_edits(&results, Direction::Result, published);
 
     // Переключаемся на полноэкранный вид показателей.
     app.show_metrics_screen = true;
@@ -88,7 +88,7 @@ fn render_metric_section(
 ) {
     let field_label = match dir {
         Direction::Request => "необходимое (required):",
-        Direction::Output => "значение (value):",
+        Direction::Result => "значение (value):",
     };
 
     for entry in entries.iter() {
@@ -107,7 +107,7 @@ fn render_metric_section(
                             "{:.0}",
                             published.dynamic.required[entry.ix as usize]
                         ),
-                        Direction::Output => format!("{:.0}", entry.value),
+                        Direction::Result => format!("{:.0}", entry.value),
                     },
                     entry.unit.clone(),
                 ));
@@ -201,7 +201,7 @@ pub fn render_metrics_screen(
     };
 
     let requests: Vec<&polygram_core::geometry::EntryGeom> = obj.requests.iter().collect();
-    let outputs: Vec<&polygram_core::geometry::EntryGeom> = obj.outputs.iter().collect();
+    let results: Vec<&polygram_core::geometry::EntryGeom> = obj.results.iter().collect();
 
     // Заголовок с кнопкой возврата.
     ui.horizontal(|ui| {
@@ -210,7 +210,7 @@ pub fn render_metrics_screen(
         }
         ui.label(format!("Показатели — объект «{object_id}»"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(format!("({} запросов, {} выходов)", requests.len(), outputs.len()));
+            ui.label(format!("({} запросов, {} результатов)", requests.len(), results.len()));
         });
     });
     ui.separator();
@@ -219,7 +219,7 @@ pub fn render_metrics_screen(
     app.dialogs
         .ensure_container_menu_edits(&requests, Direction::Request, published);
     app.dialogs
-        .ensure_container_menu_edits(&outputs, Direction::Output, published);
+        .ensure_container_menu_edits(&results, Direction::Result, published);
 
     let mut delete_entry: Option<(String, Direction)> = None;
 
@@ -239,7 +239,7 @@ pub fn render_metrics_screen(
         if req_header_resp.response.clicked() {
             app.dialogs
                 .container_menu_section_open
-                .insert(Direction::Output, false);
+                .insert(Direction::Result, false);
             app.dialogs
                 .container_menu_section_open
                 .insert(Direction::Request, !req_is_open);
@@ -260,27 +260,27 @@ pub fn render_metrics_screen(
 
         ui.separator();
 
-        // Раздел: ВЫХОД
-        let out_is_open = app
+        // Раздел: РЕЗУЛЬТАТ
+        let result_is_open = app
             .dialogs
             .container_menu_section_open
-            .get(&Direction::Output)
+            .get(&Direction::Result)
             .copied()
             .unwrap_or(false);
-        let out_arrow = if out_is_open { "▼" } else { "▶" };
-        let out_header_resp = ui.horizontal(|ui| {
-            ui.label(out_arrow);
-            ui.label(format!("ВЫХОД ({})", outputs.len()));
+        let result_arrow = if result_is_open { "▼" } else { "▶" };
+        let result_header_resp = ui.horizontal(|ui| {
+            ui.label(result_arrow);
+            ui.label(format!("РЕЗУЛЬТАТ ({})", results.len()));
         });
-        if out_header_resp.response.clicked() {
+        if result_header_resp.response.clicked() {
             app.dialogs
                 .container_menu_section_open
                 .insert(Direction::Request, false);
             app.dialogs
                 .container_menu_section_open
-                .insert(Direction::Output, !out_is_open);
+                .insert(Direction::Result, !result_is_open);
         }
-        if out_is_open {
+        if result_is_open {
             render_metric_section(
                 ui,
                 app,
@@ -288,8 +288,8 @@ pub fn render_metrics_screen(
                 published,
                 theme,
                 &object_id,
-                Direction::Output,
-                &outputs,
+                Direction::Result,
+                &results,
                 &mut delete_entry,
             );
         }
@@ -306,7 +306,7 @@ pub fn render_metrics_screen(
                         entry: entry_name.clone(),
                         required: MetricValue::Number(value),
                     }),
-                    Direction::Output => app.apply_cmd(polygram_core::Command::SetValue {
+                    Direction::Result => app.apply_cmd(polygram_core::Command::SetValue {
                         object: object_id.clone(),
                         entry: entry_name.clone(),
                         value: MetricValue::Number(value),

@@ -124,12 +124,12 @@ impl DialogState {
                 .find(|o| o.id == *object_id)
                 .map(|o| o.requests.len())
                 .unwrap_or(0),
-            Direction::Output => published
+            Direction::Result => published
                 .geometry
                 .objects
                 .iter()
                 .find(|o| o.id == *object_id)
-                .map(|o| o.outputs.len())
+                .map(|o| o.results.len())
                 .unwrap_or(0),
         };
         n < MAX_UI_METRICS_PER_SIDE
@@ -139,7 +139,7 @@ impl DialogState {
         self.add_metric_target = Some((object_id, dir));
         self.add_metric_name = match dir {
             Direction::Request => format!("request{}", n + 1),
-            Direction::Output => format!("out{}", n + 1),
+            Direction::Result => format!("result{}", n + 1),
         };
         self.add_metric_kind = MetricKind::Number;
         self.add_metric_value = "0".to_owned();
@@ -172,7 +172,7 @@ impl DialogState {
                         "{:.0}",
                         published.dynamic.required[entry.ix as usize]
                     ),
-                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
+                    polygram_core::types::Direction::Result => format!("{:.0}", entry.value),
                 };
                 self.container_menu_edits.push((
                     entry.name.clone(),
@@ -199,7 +199,7 @@ impl DialogState {
                         "{:.0}",
                         published.dynamic.required[entry.ix as usize]
                     ),
-                    polygram_core::types::Direction::Output => format!("{:.0}", entry.value),
+                    polygram_core::types::Direction::Result => format!("{:.0}", entry.value),
                 };
                 self.container_menu_edits.push((
                     entry.name.clone(),

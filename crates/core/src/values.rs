@@ -9,7 +9,7 @@ use chrono::Utc;
 pub struct Values {
     /// Значение записи (per-object).
     pub value: Vec<MetricValue>,
-    /// Поставлено источниками (per-object, для запросов — сумма подключённых выходов).
+    /// Поставлено источниками (per-object, для запросов — сумма подключённых результатов).
     pub supplied: Vec<MetricValue>,
     /// Необходимое значение (per-object, для запросов).
     pub required: Vec<MetricValue>,
@@ -78,13 +78,13 @@ impl Values {
     pub fn mark_metric(&mut self, h: &Hierarchy, e: EntryIx) {
         let meta = h.object_metric(e);
         match meta.direction {
-            Direction::Output => self.mark_out(e),
+            Direction::Result => self.mark_out(e),
             Direction::Request => self.mark_in(e),
         }
     }
 
     pub fn mark_sources_of(&mut self, h: &Hierarchy, request_entry: EntryIx) {
-        // Для запроса: помечаем все источники (выходы, подключённые к этому запросу)
+        // Для запроса: помечаем все источники (результаты, подключённые к этому запросу)
         for edge in h.in_entries(request_entry) {
             let from = h.edge(edge).from;
             self.mark_out(from);
@@ -98,10 +98,10 @@ impl Values {
         changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>,
     ) {
         changes.clear();
-        // Сначала выходы (источники), потом запросы (цели).
+        // Сначала результаты (источники), потом запросы (цели).
         for e in h.live_object_metrics() {
             let meta = h.object_metric(e);
-            if meta.direction == Direction::Output {
+            if meta.direction == Direction::Result {
                 self.recompute_exit(h, e, changes);
             }
         }
@@ -116,7 +116,7 @@ impl Values {
     /// Инкрементальный пересчёт помеченных записей.
     pub fn settle(&mut self, h: &Hierarchy, changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>) {
         changes.clear();
-        // Выходы сначала.
+        // Результаты сначала.
         let out_list: Vec<EntryIx> = self.out_list.drain(..).collect();
         for &e in &out_list {
             if self.dirty_out[e.idx()] {
@@ -146,13 +146,13 @@ impl Values {
         changes: &mut Vec<(EntryIx, StatusCode, StatusCode)>,
     ) {
         let meta = h.object_metric(e);
-        debug_assert_eq!(meta.direction, Direction::Output);
+        debug_assert_eq!(meta.direction, Direction::Result);
         let i = e.idx();
         let kind = self.metric_kind(h, e);
 
         let new_status = match kind {
             MetricKind::Number | MetricKind::Time | MetricKind::Percentage | MetricKind::Money | MetricKind::Duration => {
-                let exit_value = match self.value[i] {
+                let result_value = match self.value[i] {
                     MetricValue::Number(v) => v,
                     MetricValue::Percentage(v) => v,
                     MetricValue::Money(v) => v as f64,
@@ -180,14 +180,14 @@ impl Values {
 
                 if !h.has_edges(e) {
                     StatusCode::Surplus
-                } else if sum_requests > exit_value + EPS {
-                    // Сумма запросов целей превышает выход.
+                } else if sum_requests > result_value + EPS {
+                    // Сумма запросов целей превышает результат.
                     if h.object_metric(e).in_process {
                         StatusCode::InProgress
                     } else {
                         StatusCode::Expected
                     }
-                } else if (sum_requests - exit_value).abs() <= EPS {
+                } else if (sum_requests - result_value).abs() <= EPS {
                     StatusCode::Ok
                 } else {
                     StatusCode::Surplus
@@ -249,12 +249,12 @@ impl Values {
                     _ => 0.0,
                 };
 
-                // Сумма выходов источников (взвешенная пропускной способностью).
+                // Сумма результатов источников (взвешенная пропускной способностью).
                 let mut sum_supply: f64 = 0.0;
                 for edge in h.in_entries(e) {
                     let from = h.edge(edge).from;
                     let src_meta = h.object_metric(from);
-                    if src_meta.direction == Direction::Output {
+                    if src_meta.direction == Direction::Result {
                         let t = h.edge(edge).throughput;
                         let val = match self.value[from.idx()] {
                             MetricValue::Number(v) => v,

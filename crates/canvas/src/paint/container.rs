@@ -1,4 +1,4 @@
-//! Рисование заголовка контейнера показателей: «ЗАПРОС (N) / ВЫХОД (N) СТАТУС (N)»
+//! Рисование заголовка контейнера показателей: «ЗАПРОС (N) / РЕЗУЛЬТАТ (N) СТАТУС (N)»
 //! с точкой статуса и кнопкой ≡.
 
 use egui::{Pos2, Rect, Stroke, Vec2};
@@ -25,7 +25,7 @@ pub fn paint_container_header(
 ) -> Option<Rect> {
     let label = match dir {
         Direction::Request => "ЗАПРОС",
-        Direction::Output => "ВЫХОД",
+        Direction::Result => "РЕЗУЛЬТАТ",
     };
     let status = worst_status(entries, dynamic);
     let status_text = status_label_ru(status, dir);

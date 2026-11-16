@@ -29,7 +29,7 @@ fn main() {
             at,
             parent: None,
             requests: Vec::new(),
-            outputs: Vec::new(),
+            results: Vec::new(),
         });
     }
 
