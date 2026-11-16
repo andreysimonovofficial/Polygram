@@ -109,6 +109,12 @@ impl PolygramApp {
 
         self.virtual_cursor_pos = pos;
 
+        // Автоскриншот при движении курсора — чтобы видеть каждое положение.
+        let cursor_moved = (pos.x - prev.mouse_x).abs() > 1.0 || (pos.y - prev.mouse_y).abs() > 1.0;
+        if cursor_visible && cursor_moved {
+            self.screenshot_requested = true;
+        }
+
         // Запоминаем точку начала рисования при нажатии кнопки.
         if vi.mouse_left_pressed && !prev.mouse_left_pressed {
             self.virtual_draw_start = Some(pos);
