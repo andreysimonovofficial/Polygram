@@ -307,6 +307,13 @@ pub fn handle_drag(
                                 from_ix,
                                 to_ix,
                             ));
+                            // Клиентское предсказание: сразу применяем к текущему снимку.
+                            app.connection.apply_reorder_locally(
+                                &source_object,
+                                source_dir,
+                                from_ix,
+                                to_ix,
+                            );
                             app.apply_cmd(Command::ReorderMetricEntry {
                                 object: source_object.clone(),
                                 dir: source_dir,
