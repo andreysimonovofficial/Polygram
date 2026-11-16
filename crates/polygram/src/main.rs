@@ -277,7 +277,9 @@ impl eframe::App for PolygramApp {
             // Виртуальный курсор мыши — рисуется поверх холста внутри CentralPanel,
             // чтобы агент видел, куда «кликает» или «тащит».
             let vi = &self.virtual_input;
-            let pos = self.virtual_cursor_pos;
+            // Координаты API — пиксели экрана, egui — логические пиксели. Делим на scale.
+            let scale = ctx.pixels_per_point();
+            let pos = self.virtual_cursor_pos / scale;
             if vi.target_x != 0.0
                 || vi.target_y != 0.0
                 || vi.mouse_left_pressed
@@ -289,27 +291,30 @@ impl eframe::App for PolygramApp {
                 } else {
                     egui::Color32::from_rgb(0, 255, 140)
                 };
-                // Рисуем на переднем слое в экранных координатах, чтобы курсор был виден поверх всего.
-                    let screen_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("virtual_shapes")));
+                // Пульсация для лучшей видимости.
+                let pulse = (ctx.input(|i| i.time) as f32 * 8.0).sin().abs() * 3.0 + 1.0;
+                let r = 14.0 + pulse;
+                // Рисуем на переднем слое в логических координатах egui.
+                let screen_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("virtual_shapes")));
                 // Внешнее белое кольцо.
-                screen_painter.circle_stroke(pos, 14.0, egui::Stroke::new(3.0, egui::Color32::WHITE));
+                screen_painter.circle_stroke(pos, r + 4.0, egui::Stroke::new(3.0, egui::Color32::WHITE));
                 // Заполненный круг.
-                screen_painter.circle_filled(pos, 10.0, cursor_color);
+                screen_painter.circle_filled(pos, r, cursor_color);
                 // Перекрестие.
                 screen_painter.line_segment(
-                    [pos + egui::Vec2::new(-16.0, 0.0), pos + egui::Vec2::new(16.0, 0.0)],
+                    [pos + egui::Vec2::new(-20.0, 0.0), pos + egui::Vec2::new(20.0, 0.0)],
                     egui::Stroke::new(3.0, cursor_color),
                 );
                 screen_painter.line_segment(
-                    [pos + egui::Vec2::new(0.0, -16.0), pos + egui::Vec2::new(0.0, 16.0)],
+                    [pos + egui::Vec2::new(0.0, -20.0), pos + egui::Vec2::new(0.0, 20.0)],
                     egui::Stroke::new(3.0, cursor_color),
                 );
                 // Подпись координат.
                 screen_painter.text(
-                    pos + egui::Vec2::new(20.0, -15.0),
+                    pos + egui::Vec2::new(25.0, -20.0),
                     egui::Align2::LEFT_TOP,
                     format!("({}, {})", pos.x as i32, pos.y as i32),
-                    egui::FontId::new(16.0, egui::FontFamily::Proportional),
+                    egui::FontId::new(18.0, egui::FontFamily::Proportional),
                     cursor_color,
                 );
             }

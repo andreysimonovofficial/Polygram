@@ -57,9 +57,13 @@ impl PolygramApp {
         if published.rev != self.last_processed_rev {
             self.last_processed_rev = published.rev;
             if !vi.path_points.is_empty() {
+                // Новый путь — начинаем анимацию с начала.
                 self.virtual_path_t = 0.0;
                 self.last_path_points = vi.path_points.clone();
                 next.path_index = 0;
+            } else if target.x != 0.0 || target.y != 0.0 {
+                // Простое перемещение — курсор появляется сразу в целевой точке.
+                self.virtual_cursor_pos = target;
             }
         }
 
@@ -108,6 +112,9 @@ impl PolygramApp {
                 next.target_y = 0.0;
                 next.path_points.clear();
                 next.path_index = 0;
+                // Один раз перерисовать экран, чтобы курсор исчез.
+                eprintln!("VIRTUAL_CURSOR: path complete, requesting repaint to hide cursor");
+                ctx.request_repaint();
             }
         } else {
             // Обычное плавное движение к target_x/target_y.
@@ -220,7 +227,10 @@ impl PolygramApp {
             || vi.draw_shape.is_some()
             || !vi.path_points.is_empty()
         {
+            eprintln!("VIRTUAL_CURSOR: visible (target={:?}, pressed=({},{}), path={})", target, vi.mouse_left_pressed, vi.mouse_right_pressed, vi.path_points.len());
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        } else {
+            eprintln!("VIRTUAL_CURSOR: hidden (target={:?}, pressed=({},{}), path={})", target, vi.mouse_left_pressed, vi.mouse_right_pressed, vi.path_points.len());
         }
     }
 }
