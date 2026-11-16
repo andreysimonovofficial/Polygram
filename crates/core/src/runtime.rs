@@ -112,7 +112,7 @@ fn publish(
         metric_defs,
         camera_fit_requested: engine.camera_fit_requested,
         auto_screenshot: engine.auto_screenshot,
-        virtual_input: prev.virtual_input.clone(),
+        virtual_input: engine.virtual_input.clone(),
     });
     *slot.write().expect("замок публикации") = next.clone();
     next
