@@ -5,7 +5,7 @@ use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 use std::collections::HashMap;
 
-use crate::paint::constants::{MAX_VISIBLE_METRICS, SYMBOL_X_PAD, TEXT_X_PAD};
+use crate::paint::constants::{MAX_VISIBLE_METRICS, TEXT_X_PAD};
 use crate::paint::status::worst_status;
 use crate::status_dot_color;
 use crate::status_label_ru;
@@ -330,7 +330,7 @@ fn paint_metric_container(
         );
         // Символ сцепления справа с отступом от правого края строки
         painter.text(
-            Pos2::new(row_x + row_w - SYMBOL_X_PAD * zoom, cy_row),
+            Pos2::new(row_x + row_w - 4.0 * zoom, cy_row),
             egui::Align2::RIGHT_CENTER,
             right_sym,
             symbol_font.clone(),
