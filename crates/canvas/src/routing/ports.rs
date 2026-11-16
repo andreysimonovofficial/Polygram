@@ -70,9 +70,13 @@ pub fn visual_port_screen(
 
         // Порт на символе ▶ (источник связи): Request — справа (x=232), Output — слева (x=8)
         let x = if exit_right {
-            ox + 232.0 * camera_zoom
+            // Правая точка сцепления совпадает с правым треугольником строки:
+            // row_x + row_w - 4.0 * zoom = ox + 8 + 240 - 4 = ox + 244.
+            ox + 244.0 * camera_zoom
         } else {
-            ox + 8.0 * camera_zoom
+            // Левая точка сцепления совпадает с левым треугольником строки:
+            // cx + 8.0 * zoom = ox + 4 + 8 = ox + 12.
+            ox + 12.0 * camera_zoom
         };
 
         return Some(Pos2::new(x, y));
