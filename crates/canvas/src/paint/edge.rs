@@ -111,10 +111,11 @@ pub fn paint_edge(
 }
 
 /// Цвет линии по статусу: сначала проблема выхода источника, потом входа приёмника.
+/// Избыток не окрашивает линию — только зелёный (тips и текст остаются жёлтыми через status_dot_color).
 fn line_color(from: StatusCode, to: StatusCode, theme: &crate::theme::Theme) -> egui::Color32 {
-    if from != StatusCode::Ok {
+    if matches!(from, StatusCode::InProgress | StatusCode::Expected) {
         status_dot_color(from, Direction::Output, theme)
-    } else if to != StatusCode::Ok {
+    } else if matches!(to, StatusCode::Expected) {
         status_dot_color(to, Direction::Request, theme)
     } else {
         theme.status_ok
