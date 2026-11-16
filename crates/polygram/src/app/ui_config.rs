@@ -46,6 +46,12 @@ pub struct ThemeConfig {
     pub status_deficit: [u8; 4],
     pub status_surplus: [u8; 4],
 
+    // Заливка фона отдела по его агрегированному статусу.
+    pub status_fill_ok: [u8; 4],
+    pub status_fill_surplus: [u8; 4],
+    pub status_fill_inprogress: [u8; 4],
+    pub status_fill_expected: [u8; 4],
+
     // --- Текст ---
     pub text: [u8; 4],
     pub text_muted: [u8; 4],
@@ -138,6 +144,11 @@ impl ThemeConfig {
             status_deficit: color_array::to_array(theme.status_deficit),
             status_surplus: color_array::to_array(theme.status_surplus),
 
+            status_fill_ok: color_array::to_array(theme.status_fill_ok),
+            status_fill_surplus: color_array::to_array(theme.status_fill_surplus),
+            status_fill_inprogress: color_array::to_array(theme.status_fill_inprogress),
+            status_fill_expected: color_array::to_array(theme.status_fill_expected),
+
             text: color_array::to_array(theme.text),
             text_muted: color_array::to_array(theme.text_muted),
 
@@ -211,6 +222,11 @@ impl ThemeConfig {
             status_warning: color_array::from_array(self.status_warning),
             status_deficit: color_array::from_array(self.status_deficit),
             status_surplus: color_array::from_array(self.status_surplus),
+
+            status_fill_ok: color_array::from_array(self.status_fill_ok),
+            status_fill_surplus: color_array::from_array(self.status_fill_surplus),
+            status_fill_inprogress: color_array::from_array(self.status_fill_inprogress),
+            status_fill_expected: color_array::from_array(self.status_fill_expected),
 
             text: color_array::from_array(self.text),
             text_muted: color_array::from_array(self.text_muted),

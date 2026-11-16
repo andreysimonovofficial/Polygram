@@ -1,4 +1,5 @@
 use egui::Color32;
+use polygram_core::types::StatusCode;
 
 /// Единая тёмная тема приложения Polygram.
 /// Источник истины для всех цветов и геометрии: холст (canvas) и оболочка (polygram shell).
@@ -22,6 +23,13 @@ pub struct Theme {
     pub status_warning: Color32,
     pub status_deficit: Color32,
     pub status_surplus: Color32,
+
+    // ========== Заливка фона отдела по его агрегированному статусу ==========
+    // Цвета темнее цвета линий связей (line: 120,120,135), чтобы линии оставались различимы.
+    pub status_fill_ok: Color32,
+    pub status_fill_surplus: Color32,
+    pub status_fill_inprogress: Color32,
+    pub status_fill_expected: Color32,
 
     // ========== Текст (общие) ==========
     pub text: Color32,
@@ -119,6 +127,12 @@ impl Default for Theme {
             status_deficit: Color32::from_rgb(244, 67, 54),
             status_surplus: Color32::from_rgb(3, 169, 244),
 
+            // Заливка фона отдела (темнее линий 120,120,135)
+            status_fill_ok: Color32::from_rgb(15, 80, 25),
+            status_fill_surplus: Color32::from_rgb(90, 70, 0),
+            status_fill_inprogress: Color32::from_rgb(100, 45, 0),
+            status_fill_expected: Color32::from_rgb(90, 15, 15),
+
             // Текст
             text: Color32::from_rgb(230, 230, 235),
             text_muted: Color32::from_rgb(150, 150, 160),
@@ -207,11 +221,21 @@ impl Theme {
     pub fn line_rounding(&self, zoom: f32) -> f32 {
         self.line_corner_radius * zoom
     }
+
+    /// Заливка фона отдела по агрегированному статусу.
+    pub fn status_fill_color(&self, status: StatusCode) -> Color32 {
+        match status {
+            StatusCode::Ok => self.status_fill_ok,
+            StatusCode::Surplus => self.status_fill_surplus,
+            StatusCode::InProgress => self.status_fill_inprogress,
+            StatusCode::Expected => self.status_fill_expected,
+        }
+    }
 }
 
 /// Вспомогательные преобразования цвета <-> [u8; 4] для серийного хранения.
 pub mod color_array {
-    use egui::Color32;
+use egui::Color32;
 
     pub fn to_array(c: Color32) -> [u8; 4] {
         [c.r(), c.g(), c.b(), c.a()]

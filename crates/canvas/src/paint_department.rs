@@ -1,8 +1,9 @@
 use crate::theme::Theme;
 use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use polygram_core::ObjectGeom;
+use polygram_core::types::StatusCode;
 
-/// Нарисовать рамку отдела: внешняя граница + шапка с названием.
+/// Нарисовать рамку отдела: заливка фона по агрегированному статусу + внешняя граница + шапка с названием.
 pub fn paint_department_frame(
     painter: &Painter,
     object: &ObjectGeom,
@@ -10,9 +11,13 @@ pub fn paint_department_frame(
     cell_px: f32,
     zoom: f32,
     theme: &Theme,
+    status: StatusCode,
 ) {
-    // Контур отдела (аура) — только обводка, без заливки, чтобы отдел не выглядел
-    // как материальный объект. Он следует за дочерними процессами.
+    // Заливка фона отдела цветом его агрегированного статуса.
+    // Цвета темнее линий связей, чтобы линии оставались различимыми.
+    painter.rect_filled(rect_px, theme.object_corner_radius * zoom, theme.status_fill_color(status));
+
+    // Контур отдела (аура) — только обводка поверх заливки.
     painter.rect_stroke(rect_px, theme.object_corner_radius * zoom, Stroke::new(theme.object_border_width * zoom, theme.card_border), egui::StrokeKind::Middle);
 
     // Шапка отдела — только текст, без заливки фона.

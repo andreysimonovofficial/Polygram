@@ -17,6 +17,8 @@ pub use paint_department::paint_department_frame;
 pub use paint_object::paint_object;
 pub use theme::Theme;
 
+use crate::paint::status::department_status;
+
 /// Режим отрисовки сетки на холсте.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum GridMode {
@@ -164,6 +166,15 @@ impl Canvas {
             }
         }
 
+        // Агрегированные статусы отделов по вложенным процессам (прямым и через вложенные отделы).
+        let mut dept_statuses: HashMap<&str, StatusCode> = HashMap::new();
+        for object in &geometry.objects {
+            if object.kind == NodeKind::Department {
+                let status = department_status(&geometry.objects, dynamic, object);
+                dept_statuses.insert(object.id.as_str(), status);
+            }
+        }
+
         // Отделы — рамки-контейнеры (под дочерними карточками)
         for object in &geometry.objects {
             if object.kind != NodeKind::Department {
@@ -178,6 +189,7 @@ impl Canvas {
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
+            let status = dept_statuses[object.id.as_str()];
             paint_department_frame(
                 painter,
                 object,
@@ -185,6 +197,7 @@ impl Canvas {
                 cell_px,
                 self.camera.zoom,
                 &self.theme,
+                status,
             );
         }
 
