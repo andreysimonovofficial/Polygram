@@ -3,7 +3,8 @@ use polygram_canvas::Theme;
 
 pub fn frontend_log_panel(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
     egui::Panel::right("frontend_log")
-        .exact_size(340.0)
+        .default_size(340.0)
+        .min_size(96.0)
         .resizable(true)
         .show(ui, |ui| {
             ui.heading("Лог событий фронтенда");
