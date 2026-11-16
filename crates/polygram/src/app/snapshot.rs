@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_core::{geometry::Geometry, Published};
+use polygram_core::{geometry::Geometry, types::Direction, Published};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +23,28 @@ impl PolygramApp {
             let new_rev = new_snapshot.rev;
             if new_rev != self.connection.last_rev {
                 self.connection.last_rev = new_rev;
-                self.connection.snapshot = Some(new_snapshot);
+                // Если есть неподтверждённый реордер, наложим его на снимок от сервера,
+                // чтобы локальные изменения не scomparли при обновлении снимка.
+                let snapshot = if let Some((ref object, dir, from_ix, to_ix)) = self.drag.pending_reorder {
+                    let mut geometry = new_snapshot.geometry.clone();
+                    if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == *object) {
+                        let entries = match dir {
+                            Direction::Request => &mut obj.requests,
+                            Direction::Output => &mut obj.outputs,
+                        };
+                        if from_ix < entries.len() && to_ix < entries.len() && from_ix != to_ix {
+                            let entry = entries.remove(from_ix);
+                            entries.insert(to_ix, entry);
+                        }
+                    }
+                    Arc::new(polygram_core::Published {
+                        geometry,
+                        ..new_snapshot.as_ref().clone()
+                    })
+                } else {
+                    new_snapshot
+                };
+                self.connection.snapshot = Some(snapshot);
                 self.connection.api_connected = true;
                 self.connection.api_error = None;
                 self.last_status = format!("Ревизия {}", self.connection.last_rev);
@@ -34,6 +55,10 @@ impl PolygramApp {
                         self.drag.pending_move = None;
                         self.drag.pending_move_age = 0;
                     }
+                }
+                // Сбрасываем pending_reorder, когда сервер подтвердил новую ревизию.
+                if self.drag.pending_reorder.is_some() {
+                    self.drag.pending_reorder = None;
                 }
             }
         }

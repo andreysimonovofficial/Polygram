@@ -58,6 +58,8 @@ pub struct DragState {
     pub drag_ghost: Option<(i32, i32)>,
     /// Отдел, над которым нависает перетаскиваемый объект.
     pub drag_over: Option<String>,
+    /// Ожидающий подтверждения сервером реордер показателя (объект, направление, from_ix, to_ix).
+    pub pending_reorder: Option<(String, Direction, usize, usize)>,
 }
 
 impl DragState {
@@ -69,6 +71,7 @@ impl DragState {
             pending_move_age: 0,
             drag_ghost: None,
             drag_over: None,
+            pending_reorder: None,
         }
     }
 
@@ -311,6 +314,7 @@ impl DragState {
         self.state = DragInteractionState::Idle;
         self.drag_ghost = None;
         self.drag_over = None;
+        self.pending_reorder = None;
     }
 
     pub fn update_prediction(&mut self, object_id: &str, target: (i32, i32)) {

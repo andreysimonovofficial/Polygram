@@ -300,13 +300,13 @@ pub fn handle_drag(
                     };
                     if let Some(to_ix) = entries.iter().position(|e| e.name == hovered_name) {
                         if to_ix != from_ix {
-                            // Клиентское предсказание: сразу меняем порядок локально.
-                            app.connection.apply_reorder_locally(
-                                &source_object,
+                            // Запомнить реордер как pending, чтобы применить к снимкам от сервера.
+                            app.drag.pending_reorder = Some((
+                                source_object.clone(),
                                 source_dir,
                                 from_ix,
                                 to_ix,
-                            );
+                            ));
                             app.apply_cmd(Command::ReorderMetricEntry {
                                 object: source_object.clone(),
                                 dir: source_dir,
