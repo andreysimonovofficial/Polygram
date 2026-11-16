@@ -41,6 +41,8 @@ impl PolygramApp {
             show_cursor_coords: self.show_cursor_coords,
             theme: ThemeConfig::from_theme(&self.canvas.theme),
             last_opened_file: self.last_opened_file.clone(),
+            camera_offset: [self.canvas.camera.offset.x, self.canvas.camera.offset.y],
+            camera_zoom: self.canvas.camera.zoom,
         };
         ui_config.save();
     }

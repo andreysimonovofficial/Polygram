@@ -1,7 +1,7 @@
 use egui::{Pos2, Vec2};
 
 /// Состояние камеры.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Camera {
     pub offset: Vec2,
     pub zoom: f32,

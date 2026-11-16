@@ -1,3 +1,4 @@
+use egui::Vec2;
 use polygram_canvas::{Canvas, GridMode};
 use egui::Color32;
 use polygram_core::Published;
@@ -84,6 +85,8 @@ pub struct PolygramApp {
     pub screenshot_requested: bool,
     /// Результат последнего снимка экрана (записывается из колбэка egui).
     pub screenshot_result: Arc<Mutex<Option<Result<PathBuf, String>>>>,
+    /// Запрос на вписывание всех объектов в область просмотра камеры (устанавливается из меню "Вид").
+    pub fit_camera_requested: bool,
 }
 
 impl PolygramApp {
@@ -101,6 +104,9 @@ impl PolygramApp {
         // Применяем сохранённую тему оформления.
         canvas.theme = ui_config.theme.into_theme();
         canvas.theme.grid_color = Color32::from_rgb(grid_color[0], grid_color[1], grid_color[2]);
+        // Восстанавливаем последнюю позицию камеры.
+        canvas.camera.offset = Vec2::new(ui_config.camera_offset[0], ui_config.camera_offset[1]);
+        canvas.camera.zoom = ui_config.camera_zoom;
         Self {
             canvas,
             connection: ConnectionState::new(api_client, api_base, snapshot_rx),
@@ -137,6 +143,7 @@ impl PolygramApp {
             close_confirmation_pending: false,
             screenshot_requested: false,
             screenshot_result: Arc::new(Mutex::new(None)),
+            fit_camera_requested: false,
         }
     }
 }

@@ -75,6 +75,9 @@ pub fn top_menu(app: &mut PolygramApp, ui: &mut egui::Ui, theme: &Theme) {
                     app.canvas.camera = Camera::new();
                     
                 }
+                if ui.button("Вписать").clicked() {
+                    app.fit_camera_requested = true;
+                }
                 ui.separator();
                 if ui.button("Снимок экрана").clicked() {
                     app.screenshot_requested = true;

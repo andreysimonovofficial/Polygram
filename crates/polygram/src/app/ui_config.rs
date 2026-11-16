@@ -295,6 +295,11 @@ pub struct UiConfig {
     pub theme: ThemeConfig,
     /// Последний открытый файл проекта.
     pub last_opened_file: Option<String>,
+    /// Последняя позиция камеры холста (смещение в клетках и зум).
+    #[serde(default = "default_camera_offset")]
+    pub camera_offset: [f32; 2],
+    #[serde(default = "default_camera_zoom")]
+    pub camera_zoom: f32,
 }
 
 impl Default for UiConfig {
@@ -310,6 +315,8 @@ impl Default for UiConfig {
             show_cursor_coords: false,
             theme: ThemeConfig::default(),
             last_opened_file: None,
+            camera_offset: default_camera_offset(),
+            camera_zoom: default_camera_zoom(),
         }
     }
 }
@@ -317,6 +324,16 @@ impl Default for UiConfig {
 /// Цвет сетки по умолчанию (R49 G49 B58).
 fn default_grid_color() -> [u8; 3] {
     [49, 49, 58]
+}
+
+/// Смещение камеры по умолчанию.
+fn default_camera_offset() -> [f32; 2] {
+    [0.0, 0.0]
+}
+
+/// Зум камеры по умолчанию.
+fn default_camera_zoom() -> f32 {
+    1.0
 }
 
 impl UiConfig {

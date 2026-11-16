@@ -29,6 +29,15 @@ pub fn handle_canvas_interaction(
     // объекта попадал в тот же объект, даже если позиция ещё не подтверждена сервером.
     let geometry = app.geometry_with_predictions(published);
 
+    // Вписать все объекты в область просмотра камеры (по запросу из меню "Вид").
+    if app.fit_camera_requested {
+        app.fit_camera_requested = false;
+        let viewport = ui.clip_rect();
+        crate::interaction::camera::fit_camera_to_objects(&mut app.canvas.camera, &geometry, viewport, app.canvas.cell_size);
+        app.ui_config_save();
+        app.add_event_log("info", "ui", "Камера подобрана под все объекты на холсте", None);
+    }
+
     // Двойной клик по заголовку контейнера показателей — открыть окно показателей с развёрнутым разделом.
     let mut handled_by_container = false;
     if let Some(pos) = canvas_response.interact_pointer_pos() {
@@ -111,7 +120,12 @@ pub fn handle_canvas_interaction(
     }
 
     if canvas_response.hovered() {
+        let old_camera = app.canvas.camera.clone();
         super::camera::handle_camera(ctx, &canvas_response, &mut app.canvas.camera, app.canvas.cell_size, ui);
+        // Сохраняем положение камеры при каждом изменении, чтобы восстановить при перезапуске.
+        if app.canvas.camera != old_camera {
+            app.ui_config_save();
+        }
 
         super::selection::handle_click_selection(&canvas_response, app, &geometry, ctx);
         super::drag_object::handle_drag(app, ctx, ui, &canvas_response, &geometry);

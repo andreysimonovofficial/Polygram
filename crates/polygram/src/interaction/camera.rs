@@ -1,11 +1,14 @@
-use egui::{Pos2, PointerButton, Response};
+use egui::{Pos2, Rect};
+use polygram_canvas::Camera;
+use polygram_core::{Geometry};
+use polygram_core::types::NodeKind;
 
 /// Обработка камеры холста: зум колёсиком к курсору и панорамирование
 /// правой/средней кнопкой мыши.
 pub fn handle_camera(
     ctx: &egui::Context,
-    canvas_response: &Response,
-    camera: &mut polygram_canvas::Camera,
+    canvas_response: &egui::Response,
+    camera: &mut Camera,
     cell_size: f32,
     ui: &egui::Ui,
 ) {
@@ -33,12 +36,56 @@ pub fn handle_camera(
         }
     }
     // Панорамирование правой или средней кнопкой.
-    if canvas_response.dragged_by(PointerButton::Secondary)
-        || canvas_response.dragged_by(PointerButton::Middle)
+    if canvas_response.dragged_by(egui::PointerButton::Secondary)
+        || canvas_response.dragged_by(egui::PointerButton::Middle)
     {
         camera.offset += ui.input(|i| i.pointer.delta());
         camera.offset.x = (camera.offset.x / cell_size).round() * cell_size;
         camera.offset.y = (camera.offset.y / cell_size).round() * cell_size;
         ctx.request_repaint();
     }
+}
+
+/// Подобрать зум и смещение так, чтобы все объекты geometry вписались в viewport
+/// с небольшим отступом по краям.
+pub fn fit_camera_to_objects(
+    camera: &mut Camera,
+    geometry: &Geometry,
+    viewport: Rect,
+    cell_size: f32,
+) {
+    if geometry.objects.is_empty() {
+        return;
+    }
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+    for object in &geometry.objects {
+        // Процесс всегда 16×16 клеток независимо от хранимого rect.
+        let (w, h) = if object.kind == NodeKind::Process { (16, 16) } else { (object.rect.w, object.rect.h) };
+        min_x = min_x.min(object.rect.x);
+        min_y = min_y.min(object.rect.y);
+        max_x = max_x.max(object.rect.x + w);
+        max_y = max_y.max(object.rect.y + h);
+    }
+    let min_x = min_x as f32;
+    let min_y = min_y as f32;
+    let max_x = max_x as f32;
+    let max_y = max_y as f32;
+    let box_w = (max_x - min_x).max(1.0);
+    let box_h = (max_y - min_y).max(1.0);
+    let center_x = (min_x + max_x) / 2.0;
+    let center_y = (min_y + max_y) / 2.0;
+
+    const PADDING: f32 = 0.06;
+    let available_w = viewport.width();
+    let available_h = viewport.height();
+    let zoom_w = available_w / (box_w * cell_size * (1.0 + 2.0 * PADDING));
+    let zoom_h = available_h / (box_h * cell_size * (1.0 + 2.0 * PADDING));
+    let mut zoom = zoom_w.min(zoom_h).clamp(0.1, 10.0);
+
+    camera.zoom = zoom;
+    camera.offset.x = viewport.center().x / zoom - center_x * cell_size;
+    camera.offset.y = viewport.center().y / zoom - center_y * cell_size;
 }
