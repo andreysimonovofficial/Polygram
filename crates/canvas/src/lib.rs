@@ -286,8 +286,8 @@ impl Canvas {
 }
 
 /// Цвет точки статуса и линии связи с учётом направления (Запрос / Выход).
-/// Запрос: Удовлетворён(Ok) = Зелёный, Ожидание(Deficit) = Красный.
-/// Выход: Обеспечен(Ok) = Зелёный, Избыток(Surplus) = Жёлтый, Ожидание(Deficit) = Красный,
+/// Запрос: Удовлетворён(Ok) = Зелёный, Ожидается(Deficit) = Красный.
+/// Выход: Обеспечен(Ok) = Зелёный, Избыток(Surplus) = Жёлтый,
 /// В процессе(Warning) = Синий.
 pub fn status_dot_color(status: StatusCode, dir: Direction, theme: &Theme) -> Color32 {
     match dir {
@@ -311,15 +311,15 @@ pub fn status_label_ru(status: StatusCode, dir: Direction) -> &'static str {
     match dir {
         Direction::Request => match status {
             StatusCode::Ok => "УДОВЛЕТВОРЁН",
-            StatusCode::Deficit => "ОЖИДАНИЕ",
-            StatusCode::Unconnected => "НЕ ПОДКЛЮЧЕНО",
+            StatusCode::Deficit => "ОЖИДАЕТСЯ",
+            StatusCode::Unconnected => "ОЖИДАЕТСЯ",
             _ => "НОРМА",
         },
         Direction::Output => match status {
             StatusCode::Ok => "ОБЕСПЕЧЕН",
             StatusCode::Surplus => "ИЗБЫТОК",
             StatusCode::Deficit => "В ПРОЦЕССЕ",
-            StatusCode::Unconnected => "НЕ ПОДКЛЮЧЕНО",
+            StatusCode::Unconnected => "ИЗБЫТОК",
             _ => "НОРМА",
         },
     }
