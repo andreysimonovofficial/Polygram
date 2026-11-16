@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::process::Command;
 
 /// Описание коннектора из файла connectors/{id}.json.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConnectorFile {
     pub id: String,
     pub name: String,
@@ -15,6 +15,18 @@ pub struct ConnectorFile {
     pub config: serde_json::Value,
     #[serde(default)]
     pub cache: serde_json::Value,
+}
+
+impl Default for ConnectorFile {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            placeholder: String::new(),
+            config: serde_json::Value::Null,
+            cache: serde_json::Value::Null,
+        }
+    }
 }
 
 /// Статус подключения коннектора.
