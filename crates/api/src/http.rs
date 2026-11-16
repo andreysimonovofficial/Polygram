@@ -54,6 +54,7 @@ pub fn router(api: Arc<ApiService>) -> Router {
     Router::new()
         .route("/api/snapshot", get(get_snapshot))
         .route("/api/stats", get(get_stats))
+        .route("/api/virtual-input", get(get_virtual_input))
         .route("/api/objects", get(get_objects).post(post_object))
         .route("/api/objects/:id", get(get_object))
         .route("/api/commands", post(post_command))
@@ -89,6 +90,12 @@ async fn get_stats(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value
         Some(s) => Json(serde_json::to_value(&s).unwrap_or_default()),
         None => Json(json!({"edges": 0, "metric_defs": 0, "object_metrics": 0, "objects": 0, "rev": 0})),
     }
+}
+
+/// GET /api/virtual-input — текущее состояние виртуального ввода (мышь + клавиатура).
+async fn get_virtual_input(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {
+    let vi = api.virtual_input();
+    Json(serde_json::to_value(&vi).unwrap_or_default())
 }
 
 async fn get_objects(State(api): State<Arc<ApiService>>) -> Json<serde_json::Value> {

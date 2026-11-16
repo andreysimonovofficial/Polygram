@@ -12,6 +12,7 @@ pub fn status_bar(app: &PolygramApp, ui: &mut egui::Ui) {
             metric_defs: vec![],
             camera_fit_requested: false,
             auto_screenshot: false,
+            virtual_input: polygram_core::VirtualInputState::default(),
         })
     });
     let g = &published.geometry;

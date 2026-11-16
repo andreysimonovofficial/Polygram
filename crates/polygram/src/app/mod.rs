@@ -37,6 +37,78 @@ use ui_config::UiConfig;
 
 pub use state::CommandLogEntry;
 
+/// Инъекция виртуального ввода (мышь + клавиатура) в egui через синтетические события.
+/// Вызывается из PolygramApp::logic() после poll_snapshot().
+impl PolygramApp {
+    pub fn inject_virtual_input(&mut self, ctx: &egui::Context) {
+        let Some(published) = &self.connection.snapshot else {
+            return;
+        };
+        let vi = &published.virtual_input;
+        let prev = &self.virtual_input;
+
+        let pos = egui::Pos2::new(vi.mouse_x, vi.mouse_y);
+
+        let mut events: Vec<egui::Event> = Vec::new();
+
+        // Перемещение курсора.
+        if (vi.mouse_x - prev.mouse_x).abs() > 0.001 || (vi.mouse_y - prev.mouse_y).abs() > 0.001 {
+            events.push(egui::Event::PointerMoved(pos));
+        }
+
+        // Левая кнопка мыши.
+        if vi.mouse_left_pressed && !prev.mouse_left_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            });
+        } else if !vi.mouse_left_pressed && prev.mouse_left_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            });
+        }
+
+        // Правая кнопка мыши.
+        if vi.mouse_right_pressed && !prev.mouse_right_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Secondary,
+                pressed: true,
+                modifiers: Default::default(),
+            });
+        } else if !vi.mouse_right_pressed && prev.mouse_right_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Secondary,
+                pressed: false,
+                modifiers: Default::default(),
+            });
+        }
+
+        // Текст виртуальной клавиатуры — отправляем при изменении непустого текста.
+        if !vi.keyboard_text.is_empty() && vi.keyboard_text != prev.keyboard_text {
+            events.push(egui::Event::Text(vi.keyboard_text.clone()));
+        }
+
+        if !events.is_empty() {
+            ctx.input_mut(|input| {
+                input.events.extend(events);
+            });
+        }
+
+        // Сохраняем обработанное состояние, чтобы не присылать те же события повторно.
+        if *vi != *prev {
+            self.virtual_input = vi.clone();
+            ctx.request_repaint();
+        }
+    }
+}
+
 pub struct PolygramApp {
     pub canvas: Canvas,
     pub connection: ConnectionState,
@@ -92,6 +164,8 @@ pub struct PolygramApp {
     pub last_screenshot_rev: u64,
     /// Момент последнего автоматического скриншота (ограничение частоты).
     pub last_screenshot_time: std::time::Instant,
+    /// Последнее обработанное состояние виртуального ввода (для детекта изменений и инъекции egui-событий).
+    pub virtual_input: polygram_core::VirtualInputState,
 }
 
 impl PolygramApp {
@@ -151,6 +225,7 @@ impl PolygramApp {
             fit_camera_requested: false,
             last_screenshot_rev: 0,
             last_screenshot_time: std::time::Instant::now(),
+            virtual_input: polygram_core::VirtualInputState::default(),
         }
     }
 }

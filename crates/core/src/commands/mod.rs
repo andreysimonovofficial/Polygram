@@ -143,6 +143,59 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
             })
         }
 
+        // Виртуальная мышь: перемещение курсора на экранные координаты.
+        Command::VirtualMouseMove { x, y } => {
+            engine.virtual_input.mouse_x = x as f32;
+            engine.virtual_input.mouse_y = y as f32;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: нажатие кнопки (0 — левая, 1 — правая).
+        Command::VirtualMouseDown { button } => {
+            match button {
+                0 => engine.virtual_input.mouse_left_pressed = true,
+                1 => engine.virtual_input.mouse_right_pressed = true,
+                _ => {}
+            }
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: отпускание кнопки (0 — левая, 1 — правая).
+        Command::VirtualMouseUp { button } => {
+            match button {
+                0 => engine.virtual_input.mouse_left_pressed = false,
+                1 => engine.virtual_input.mouse_right_pressed = false,
+                _ => {}
+            }
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная клавиатура: ввод текста.
+        Command::VirtualKeyboardType { text } => {
+            engine.virtual_input.keyboard_text = text;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
         // Админ-команды не модифицируют ядро, они управляют жизненным циклом API-сервера.
         Command::RestartServer => Ok(Applied { rev: 0, created: None, at: None }),
         Command::ChangePort { .. } => Ok(Applied { rev: 0, created: None, at: None }),

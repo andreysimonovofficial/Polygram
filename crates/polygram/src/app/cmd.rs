@@ -74,6 +74,10 @@ impl PolygramApp {
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),
             Command::ReloadConfig => "ReloadConfig".to_owned(),
+            Command::VirtualMouseMove { x, y } => format!("VirtualMouseMove(x={x}, y={y})"),
+            Command::VirtualMouseDown { button } => format!("VirtualMouseDown(button={button})"),
+            Command::VirtualMouseUp { button } => format!("VirtualMouseUp(button={button})"),
+            Command::VirtualKeyboardType { text } => format!("VirtualKeyboardType(text={text:?})"),
         };
 
         self.add_event_log("info", "command", &format!("Отправлена команда: {cmd_label}"), Some(&cmd_str));
@@ -184,6 +188,10 @@ impl PolygramApp {
             Command::ChangePort { port } => format!("ChangePort(port={port})"),
             Command::Shutdown => "Shutdown".to_owned(),
             Command::ReloadConfig => "ReloadConfig".to_owned(),
+            Command::VirtualMouseMove { x, y } => format!("VirtualMouseMove(x={x}, y={y})"),
+            Command::VirtualMouseDown { button } => format!("VirtualMouseDown(button={button})"),
+            Command::VirtualMouseUp { button } => format!("VirtualMouseUp(button={button})"),
+            Command::VirtualKeyboardType { text } => format!("VirtualKeyboardType(text={text:?})"),
         }).collect();
 
         let detail = format!("batch[{}]", labels.join("; "));

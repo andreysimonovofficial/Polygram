@@ -149,7 +149,7 @@ pub fn handle_tools_list() -> Value {
             },
             {
                 "name": "execute_command",
-                "description": "Выполнить произвольную команду Polygram в формате JSON. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def, remove_metric_def, rename_metric_def, set_metric_def_unit, add_metric_entry, remove_metric_entry, set_value, set_required, set_max, set_fact, connect, disconnect, auto_layout. Каждая команда имеет поле cmd с именем команды и остальные поля в зависимости от типа. Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}.",
+                "description": "Выполнить произвольную команду Polygram в формате JSON. Доступные команды: add_object, rename_object, remove_object, move_object, add_metric_def, remove_metric_def, rename_metric_def, set_metric_def_unit, add_metric_entry, remove_metric_entry, set_value, set_required, set_max, set_fact, connect, disconnect, auto_layout, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_keyboard_type. Каждая команда имеет поле cmd с именем команды и остальные поля в зависимости от типа. Пример add_object: {\"cmd\":\"add_object\",\"name\":\"Claude\",\"kind\":\"process\"}.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -157,6 +157,82 @@ pub fn handle_tools_list() -> Value {
                     },
                     "required": ["command"]
                 }
+            },
+            {
+                "name": "virtual_mouse_move",
+                "description": "Переместить виртуальную мышь на экранные координаты [x, y] внутри приложения.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "x": { "type": "integer", "description": "Координата X курсора" },
+                        "y": { "type": "integer", "description": "Координата Y курсора" }
+                    },
+                    "required": ["x", "y"]
+                }
+            },
+            {
+                "name": "virtual_mouse_down",
+                "description": "Зажать кнопку виртуальной мыши (0 — левая, 1 — правая).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "button": { "type": "integer", "description": "Кнопка: 0 — левая, 1 — правая", "minimum": 0, "maximum": 1 }
+                    },
+                    "required": ["button"]
+                }
+            },
+            {
+                "name": "virtual_mouse_up",
+                "description": "Отпустить кнопку виртуальной мыши (0 — левая, 1 — правая).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "button": { "type": "integer", "description": "Кнопка: 0 — левая, 1 — правая", "minimum": 0, "maximum": 1 }
+                    },
+                    "required": ["button"]
+                }
+            },
+            {
+                "name": "virtual_mouse_click",
+                "description": "Клик виртуальной мышью (нажать и отпустить) в текущей позиции курсора.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "button": { "type": "integer", "description": "Кнопка: 0 — левая, 1 — правая", "minimum": 0, "maximum": 1 }
+                    },
+                    "required": ["button"]
+                }
+            },
+            {
+                "name": "virtual_mouse_drag",
+                "description": "Перетащить: зажать мышь в точке [x1, y1], переместить в [x2, y2] и отпустить.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "x1": { "type": "integer", "description": "Начальная координата X" },
+                        "y1": { "type": "integer", "description": "Начальная координата Y" },
+                        "x2": { "type": "integer", "description": "Конечная координата X" },
+                        "y2": { "type": "integer", "description": "Конечная координата Y" },
+                        "button": { "type": "integer", "description": "Кнопка: 0 — левая, 1 — правая", "minimum": 0, "maximum": 1 }
+                    },
+                    "required": ["x1", "y1", "x2", "y2"]
+                }
+            },
+            {
+                "name": "virtual_keyboard_type",
+                "description": "Ввести текст виртуальной клавиатурой (в активное поле ввода приложения).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "Текст для ввода" }
+                    },
+                    "required": ["text"]
+                }
+            },
+            {
+                "name": "virtual_input_state",
+                "description": "Получить текущее состояние виртуального ввода (позиция мыши, зажатые кнопки, буфер клавиатуры).",
+                "inputSchema": { "type": "object", "properties": {} }
             }
         ]
     })
@@ -165,7 +241,7 @@ pub fn handle_tools_list() -> Value {
 pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n,
-        None => return mcp_tool_error("Не указано имя инструмента. Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command."),
+        None => return mcp_tool_error("Не указано имя инструмента. Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_keyboard_type, virtual_input_state."),
     };
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -179,7 +255,11 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
                 {"cmd": "add_metric_def", "example": "{\"cmd\":\"add_metric_def\",\"name\":\"Прибыль\",\"kind\":\"number\",\"unit\":\"$\"}", "description": "Создать показатель"},
                 {"cmd": "get_snapshot", "example": "{\"cmd\":\"get_snapshot\"}", "description": "Снимок состояния графа"},
                 {"cmd": "get_objects", "example": "{\"cmd\":\"get_objects\"}", "description": "Список объектов"},
-                {"cmd": "get_stats", "example": "{\"cmd\":\"get_stats\"}", "description": "Статистика графа"}
+                {"cmd": "get_stats", "example": "{\"cmd\":\"get_stats\"}", "description": "Статистика графа"},
+                {"cmd": "virtual_mouse_move", "example": "{\"cmd\":\"virtual_mouse_move\",\"x\":100,\"y\":200}", "description": "Переместить виртуальную мышь"},
+                {"cmd": "virtual_mouse_down", "example": "{\"cmd\":\"virtual_mouse_down\",\"button\":0}", "description": "Зажать кнопку виртуальной мыши"},
+                {"cmd": "virtual_mouse_up", "example": "{\"cmd\":\"virtual_mouse_up\",\"button\":0}", "description": "Отпустить кнопку виртуальной мыши"},
+                {"cmd": "virtual_keyboard_type", "example": "{\"cmd\":\"virtual_keyboard_type\",\"text\":\"привет\"}", "description": "Ввести текст виртуальной клавиатурой"}
             ]
         })).unwrap()),
         "add_object" => {
@@ -355,6 +435,134 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
                 apply_command(server, cmd, &args)
             }
         }
+        "virtual_mouse_move" => {
+            let x = match args.get("x").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_move требуется поле x (целое число)."),
+            };
+            let y = match args.get("y").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_move требуется поле y (целое число)."),
+            };
+            let cmd = Command::VirtualMouseMove { x, y };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_mouse_down" => {
+            let button = match args.get("button").and_then(|v| v.as_u64()) {
+                Some(v) => v as u8,
+                None => return mcp_tool_error("Для virtual_mouse_down требуется поле button (0 — левая, 1 — правая)."),
+            };
+            if button > 1 {
+                return mcp_tool_error("Для virtual_mouse_down button должен быть 0 (левая) или 1 (правая).");
+            }
+            let cmd = Command::VirtualMouseDown { button };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_mouse_up" => {
+            let button = match args.get("button").and_then(|v| v.as_u64()) {
+                Some(v) => v as u8,
+                None => return mcp_tool_error("Для virtual_mouse_up требуется поле button (0 — левая, 1 — правая)."),
+            };
+            if button > 1 {
+                return mcp_tool_error("Для virtual_mouse_up button должен быть 0 (левая) или 1 (правая).");
+            }
+            let cmd = Command::VirtualMouseUp { button };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_mouse_click" => {
+            let button = match args.get("button").and_then(|v| v.as_u64()) {
+                Some(v) => v as u8,
+                None => return mcp_tool_error("Для virtual_mouse_click требуется поле button (0 — левая, 1 — правая)."),
+            };
+            if button > 1 {
+                return mcp_tool_error("Для virtual_mouse_click button должен быть 0 (левая) или 1 (правая).");
+            }
+            // Нажать, потом отпустить.
+            let down = Command::VirtualMouseDown { button };
+            let up = Command::VirtualMouseUp { button };
+            if let Some(base) = &server.http_base {
+                let down_json = serde_json::to_string(&down).unwrap();
+                let up_json = serde_json::to_string(&up).unwrap();
+                match proxy_post_command(base, &down_json) {
+                    Ok(_) => {}
+                    Err(e) => return mcp_tool_error(&format!("прокси HTTP (down): {e}")),
+                }
+                match proxy_post_command(base, &up_json) {
+                    Ok(body) => mcp_tool_result(&body),
+                    Err(e) => mcp_tool_error(&format!("прокси HTTP (up): {e}")),
+                }
+            } else {
+                apply_command(server, down, &args);
+                apply_command(server, up, &args);
+                mcp_tool_result(&serde_json::to_string(&json!({"ok": true})).unwrap())
+            }
+        }
+        "virtual_mouse_drag" => {
+            let x1 = match args.get("x1").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_drag требуется поле x1."),
+            };
+            let y1 = match args.get("y1").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_drag требуется поле y1."),
+            };
+            let x2 = match args.get("x2").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_drag требуется поле x2."),
+            };
+            let y2 = match args.get("y2").and_then(|v| v.as_i64()) {
+                Some(v) => v as i32,
+                None => return mcp_tool_error("Для virtual_mouse_drag требуется поле y2."),
+            };
+            let button = match args.get("button").and_then(|v| v.as_u64()) {
+                Some(v) => v as u8,
+                None => 0,
+            };
+            if button > 1 {
+                return mcp_tool_error("Для virtual_mouse_drag button должен быть 0 (левая) или 1 (правая).");
+            }
+            let move_to_start = Command::VirtualMouseMove { x: x1, y: y1 };
+            let down = Command::VirtualMouseDown { button };
+            let move_to_end = Command::VirtualMouseMove { x: x2, y: y2 };
+            let up = Command::VirtualMouseUp { button };
+            if let Some(base) = &server.http_base {
+                for cmd_json in [&serde_json::to_string(&move_to_start).unwrap(),
+                                 &serde_json::to_string(&down).unwrap(),
+                                 &serde_json::to_string(&move_to_end).unwrap(),
+                                 &serde_json::to_string(&up).unwrap()] {
+                    match proxy_post_command(base, cmd_json) {
+                        Ok(_) => {}
+                        Err(e) => return mcp_tool_error(&format!("прокси HTTP (drag): {e}")),
+                    }
+                }
+                mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "from": [x1, y1], "to": [x2, y2]})).unwrap())
+            } else {
+                for cmd in [move_to_start, down, move_to_end, up] {
+                    apply_command(server, cmd, &args);
+                }
+                mcp_tool_result(&serde_json::to_string(&json!({"ok": true, "from": [x1, y1], "to": [x2, y2]})).unwrap())
+            }
+        }
+        "virtual_keyboard_type" => {
+            let text = match args.get("text").and_then(|v| v.as_str()) {
+                Some(t) => t.to_owned(),
+                None => return mcp_tool_error("Для virtual_keyboard_type требуется поле text (строка для ввода)."),
+            };
+            let cmd = Command::VirtualKeyboardType { text };
+            apply_command(server, cmd, &args)
+        }
+        "virtual_input_state" => {
+            let state = if let Some(base) = &server.http_base {
+                match proxy_get(base, "/api/virtual-input") {
+                    Ok(v) => v,
+                    Err(e) => return mcp_tool_error(&format!("прокси HTTP: {e}")),
+                }
+            } else {
+                let vi = server.api.virtual_input();
+                serde_json::to_value(&vi).unwrap_or_default()
+            };
+            mcp_tool_result(&serde_json::to_string(&state).unwrap())
+        }
         "get_snapshot" => {
             if let Some(base) = &server.http_base {
                 match proxy_get(base, "/api/snapshot") {
@@ -388,7 +596,7 @@ pub fn handle_tools_call(server: &McpServer, params: Value) -> Value {
                 mcp_tool_result(&serde_json::to_string(&json!({ "stats": stats })).unwrap())
             }
         }
-        _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command.")),
+        _ => mcp_tool_error(&format!("Неизвестный инструмент \"{name}\". Доступные: get_commands, add_object, rename_object, remove_object, move_object, add_metric_def, chat_post, document_open, document_save_as, get_snapshot, get_objects, get_stats, execute_command, virtual_mouse_move, virtual_mouse_down, virtual_mouse_up, virtual_mouse_click, virtual_mouse_drag, virtual_keyboard_type, virtual_input_state.")),
     }
 }
 

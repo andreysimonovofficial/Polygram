@@ -39,7 +39,7 @@ pub use error::{EngineError, Result};
 pub use event::{Event, EventGap, EventKind};
 pub use geometry::{EdgeGeom, EntryGeom, Geometry, ObjectGeom};
 pub use layout::Rect;
-pub use runtime::{EngineHandle, EngineRuntime, Published};
+pub use runtime::{EngineHandle, EngineRuntime, Published, VirtualInputState};
 pub use types::*;
 pub use values::DynamicState;
 pub use views::{MetricDefView, MetricView, ObjectView, Stats};

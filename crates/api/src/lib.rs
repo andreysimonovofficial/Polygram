@@ -17,6 +17,7 @@ pub mod sync;
 
 use polygram_core::{
     runtime::EngineRuntime, Command, Document, EngineError, Event, ObjectView, Stats,
+    VirtualInputState,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -106,6 +107,15 @@ impl ApiService {
 
     pub fn stats(&self) -> Option<Stats> {
         self.inner.runtime.handle().query(|e| e.stats())
+    }
+
+    /// Состояние виртуального ввода (мышь + клавиатура).
+    pub fn virtual_input(&self) -> VirtualInputState {
+        self.inner
+            .runtime
+            .handle()
+            .query(|e| e.virtual_input().clone())
+            .unwrap_or_default()
     }
 
     pub fn objects(&self) -> Vec<ObjectView> {

@@ -302,5 +302,6 @@ pub fn empty_published() -> Arc<polygram_core::Published> {
         metric_defs: vec![],
         camera_fit_requested: false,
         auto_screenshot: false,
+        virtual_input: polygram_core::VirtualInputState::default(),
     })
 }

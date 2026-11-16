@@ -15,11 +15,39 @@ use crate::{
     values::DynamicState,
     views::MetricDefView,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     sync::{mpsc, Arc, RwLock},
     thread,
     time::Duration,
 };
+
+/// Состояние виртуального ввода (мышь + клавиатура), управляемое извне через MCP/API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VirtualInputState {
+    /// Экранная координата X виртуального курсора.
+    pub mouse_x: f32,
+    /// Экранная координата Y виртуального курсора.
+    pub mouse_y: f32,
+    /// Левая кнопка мыши зажата.
+    pub mouse_left_pressed: bool,
+    /// Правая кнопка мыши зажата.
+    pub mouse_right_pressed: bool,
+    /// Текст для ввода виртуальной клавиатуры (очищается после подачи).
+    pub keyboard_text: String,
+}
+
+impl Default for VirtualInputState {
+    fn default() -> Self {
+        Self {
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            mouse_left_pressed: false,
+            mouse_right_pressed: false,
+            keyboard_text: String::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Published {
@@ -29,6 +57,7 @@ pub struct Published {
     pub metric_defs: Vec<MetricDefView>,
     pub camera_fit_requested: bool,
     pub auto_screenshot: bool,
+    pub virtual_input: VirtualInputState,
 }
 
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
@@ -83,6 +112,7 @@ fn publish(
         metric_defs,
         camera_fit_requested: engine.camera_fit_requested,
         auto_screenshot: engine.auto_screenshot,
+        virtual_input: prev.virtual_input.clone(),
     });
     *slot.write().expect("замок публикации") = next.clone();
     next
@@ -98,6 +128,7 @@ impl EngineRuntime {
             metric_defs: engine.metric_def_views(),
             camera_fit_requested: engine.camera_fit_requested,
             auto_screenshot: engine.auto_screenshot,
+            virtual_input: VirtualInputState::default(),
         });
         let published = Arc::new(RwLock::new(first.clone()));
         let slot = published.clone();

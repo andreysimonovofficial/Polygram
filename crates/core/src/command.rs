@@ -161,6 +161,15 @@ pub enum Command {
     ChangePort { port: u16 },
     Shutdown,
     ReloadConfig,
+
+    /// Виртуальная мышь: переместить курсор на экранные координаты [x, y].
+    VirtualMouseMove { x: i32, y: i32 },
+    /// Виртуальная мышь: нажатие кнопки (0 — левая, 1 — правая).
+    VirtualMouseDown { button: u8 },
+    /// Виртуальная мышь: отпускание кнопки (0 — левая, 1 — правая).
+    VirtualMouseUp { button: u8 },
+    /// Виртуальная клавиатура: ввести текст.
+    VirtualKeyboardType { text: String },
 }
 
 fn default_throughput() -> f64 {

@@ -34,6 +34,7 @@ fn make_app() -> PolygramApp {
         metric_defs: vec![],
         camera_fit_requested: false,
         auto_screenshot: false,
+        virtual_input: Default::default(),
     };
     app.connection.snapshot = Some(std::sync::Arc::new(published));
     app

@@ -9,6 +9,7 @@ use crate::{
     event::{EventGap, EventKind},
     hierarchy::Hierarchy,
     layout::Layout,
+    runtime::VirtualInputState,
     types::*,
     values::Values,
 };
@@ -34,6 +35,7 @@ pub struct Engine {
     pub(crate) scratch_changes: Vec<(crate::types::EntryIx, crate::types::StatusCode, crate::types::StatusCode)>,
     pub(crate) camera_fit_requested: bool,
     pub(crate) auto_screenshot: bool,
+    pub(crate) virtual_input: VirtualInputState,
 }
 
 const EVENT_LOG_CAPACITY: usize = 200_000;
@@ -70,6 +72,7 @@ impl Engine {
             scratch_changes: Vec::new(),
             camera_fit_requested: false,
             auto_screenshot: false,
+            virtual_input: VirtualInputState::default(),
         }
     }
 
@@ -94,6 +97,16 @@ impl Engine {
     }
     pub fn layout(&self) -> &Layout {
         &self.layout
+    }
+
+    pub fn camera_fit_requested(&self) -> bool {
+        self.camera_fit_requested
+    }
+    pub fn auto_screenshot(&self) -> bool {
+        self.auto_screenshot
+    }
+    pub fn virtual_input(&self) -> &VirtualInputState {
+        &self.virtual_input
     }
 
     pub fn events_since(

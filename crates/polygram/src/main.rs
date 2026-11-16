@@ -43,6 +43,9 @@ impl eframe::App for PolygramApp {
         // РћРїСЂРѕСЃ СЃРЅРёРјРєР° СЃРѕСЃС‚РѕСЏРЅРёСЏ РёР· API-СЃРµСЂРІРµСЂР°.
         self.poll_snapshot();
 
+        // РҐР°Р±Р»РѕСЏ С‡Р°С‚Р°: виртуальная мышь и клавиатура (управляются через MCP/API).
+        self.inject_virtual_input(ctx);
+
         // РћРїСЂРѕСЃ Р»РµРЅС‚С‹ С‡Р°С‚Р°.
         self.poll_chat();
 
@@ -198,6 +201,7 @@ impl eframe::App for PolygramApp {
                 metric_defs: vec![],
                 camera_fit_requested: false,
                 auto_screenshot: false,
+                virtual_input: polygram_core::VirtualInputState::default(),
             })
         });
 
@@ -270,6 +274,27 @@ impl eframe::App for PolygramApp {
                 );
             }
         });
+
+        // Виртуальный курсор мыши (рисуется поверх всего, чтобы агент видел, куда «кликает»).
+        let vi = &self.virtual_input;
+        if vi.mouse_x != 0.0 || vi.mouse_y != 0.0 || vi.mouse_left_pressed || vi.mouse_right_pressed {
+            let cursor_color = if vi.mouse_left_pressed || vi.mouse_right_pressed {
+                egui::Color32::from_rgb(255, 80, 80)
+            } else {
+                egui::Color32::from_rgb(0, 255, 120)
+            };
+            let cursor_pos = egui::Pos2::new(vi.mouse_x, vi.mouse_y);
+            ctx.layer_painter(egui::LayerId::background()).circle_filled(
+                cursor_pos,
+                6.0,
+                cursor_color,
+            );
+            ctx.layer_painter(egui::LayerId::background()).circle_stroke(
+                cursor_pos,
+                8.0,
+                egui::Stroke::new(1.5, egui::Color32::WHITE),
+            );
+        }
 
         // РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ Р·Р°РєСЂС‹С‚РёСЏ СЃ РЅРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё РёР·РјРµРЅРµРЅРёСЏРјРё.
         if self.close_confirmation_pending {
