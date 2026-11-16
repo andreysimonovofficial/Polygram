@@ -1,4 +1,4 @@
-use polygram_core::Published;
+use polygram_core::{geometry::Geometry, types::Direction, Published};
 use reqwest::blocking::Client;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -218,5 +218,27 @@ impl ConnectionState {
     pub fn restart_mcp_process(&mut self) -> Result<String, String> {
         self.stop_mcp_process();
         self.start_mcp_process()
+    }
+
+    /// Клиентское предсказание реордера показателя: сразу меняет порядок в локальной
+    /// геометрии, чтобы пользователь видел изменение без ожидания ответа сервера.
+    pub fn apply_reorder_locally(&mut self, object: &str, dir: Direction, from_ix: usize, to_ix: usize) {
+        if let Some(snapshot) = self.snapshot.as_mut() {
+            let mut geometry = snapshot.geometry.clone();
+            if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == object) {
+                let entries = match dir {
+                    Direction::Request => &mut obj.requests,
+                    Direction::Output => &mut obj.outputs,
+                };
+                if from_ix < entries.len() && to_ix < entries.len() && from_ix != to_ix {
+                    let entry = entries.remove(from_ix);
+                    entries.insert(to_ix, entry);
+                }
+            }
+            self.snapshot = Some(Arc::new(Published {
+                geometry,
+                ..snapshot.as_ref().clone()
+            }));
+        }
     }
 }
