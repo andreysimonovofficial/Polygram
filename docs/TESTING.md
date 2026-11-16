@@ -1,0 +1,79 @@
+# Автоматизированное регрессионное тестирование Polygram
+
+Цель — перестать проверять изменения вручную: не таскать объекты на холсте мышью и не писать агенту вручную. Весь Polygram управляется командами (`Command`, сериализуются в JSON), а ядро (`polygram-core`) работает без окна egui. Поэтому сценарии прогоняются на «голом» ядре за миллисекунды.
+
+## Как это устроено
+
+- `crates/core/tests/common/regress.rs` — раннер сценариев.
+- `crates/core/tests/regress.rs` — набор регрессионных сценариев.
+- Сценарий — JSONL: каждая непустая строка (не начинающаяся с `//`) — один шаг.
+
+Формат шага:
+```json
+{"apply": { ...Command... }}   // применить команду к ядру
+{"expect": { ... }}             // проверить текущее состояние ядра
+{"apply": {...}, "expect": {...}}  // применить и сразу проверить
+```
+
+`Command` — тот же enum, что используют GUI, MCP, HTTP и CLI (`#[serde(tag = "cmd")]`), например:
+```json
+{"cmd":"add_object","id":"p","name":"Производитель","kind":"process","at":[0,0]}
+{"cmd":"set_value","object":"p","entry":"o1","value":{"kind":"Number","value":100}}
+{"cmd":"connect","from_object":"p","from_entry":"o1","to_object":"a","to_entry":"r1","throughput":100}
+```
+
+`MetricValue` в сценариях передаётся в формате ядра (без `rename_all`):
+```json
+{"kind":"Number","value":50}
+{"kind":"Null"}
+{"kind":"Binary","value":true}
+```
+
+## Проверки (`expect`)
+
+| Поле | Назначение |
+|---|---|
+| `rev` | ожидаемая ревизия ядра |
+| `created` | ожидаемый id созданного объекта |
+| `at` | ожидаемые координаты `[x, y]` после перемещения/создания |
+| `objects` | ожидаемое число объектов |
+| `edges` | ожидаемое число связей |
+| `no_overlaps` | `true` — потребовать отсутствия наложений карточек |
+| `statuses` | `[{object, entry, code}]` — код статуса (`ok`, `surplus`, `in_progress`, `expected`) |
+| `values` | `[{object, entry, value}]` — проверка поля `value` записи |
+| `supplied` | `[{object, entry, value}]` — проверка поля `supplied` (поставлено) |
+| `parents` | `[{object, parent}]` — родительский отдел (`null` — корень) |
+| `bottlenecks` | `[{object, entry, shortfall?, consumers?}]` — узкие места |
+| `error` | ожидаемый код ошибки последней `apply` (например `"duplicate_id"`) |
+| `error_absent` | `true` — последняя `apply` должна succeed |
+
+Пример полного сценария (один файл `crates/core/tests/regress.rs`):
+- создать производителя и двух потребителей, связать через показания, выставить значение, проверить, что статусы пересчитались (`Ok` / `Expected`);
+- переместить объект (`move_object`), проверить координаты и отсутствие наложений;
+- попытка переместить на занятую клетку → `cell_occupied`;
+- дубликат `id` → `duplicate_id`;
+- цикл в иерархии (`set_object_parent`) → `object_not_found`;
+- узкие места ранжируются по недостаче.
+
+## Запуск
+
+```powershell
+# Только регрессионные сценарии:
+cargo test -p polygram-core --test regress
+
+# Все тесты ядра (включая регрессию):
+cargo test -p polygram-core
+```
+
+Регрессия прогонается без открытия окна приложения, без мыши и без ручного ввода агенту.
+
+## Как добавить сценарий
+
+1. Добавьте константу `SCENARIO_<имя>: &str` в `crates/core/tests/regress.rs` в формате JSONL.
+2. Добавьте `#[test] fn scenario_<имя>() { assert_scenario(SCENARIO_<имя>); }`.
+3. Включите константу в тест `all_regression_scenarios`, если хотите, чтобы она бежала в пачке.
+
+## Ограничения
+
+- Каждый шаг — одна строка JSON (многострочные объекты не поддерживаются).
+- Пред-existing сломанные тесты ядра (`flow::commands_parse_from_json`, `layout::move_respects_occupancy_and_ghost_check`, `chat::object_placed_near_when_cell_occupied_inside_department`) не относятся к данной работе и не затрагиваются ею.

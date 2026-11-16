@@ -12,3 +12,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [lib]
 doctest = false
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

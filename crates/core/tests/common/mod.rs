@@ -173,6 +173,8 @@ impl Rng {
     }
 }
 
+pub mod regress;
+
 /// Два разных объекта не должны пересекаться по клеткам.
 pub fn assert_no_overlaps(e: &Engine) {
     let g = e.geometry();
