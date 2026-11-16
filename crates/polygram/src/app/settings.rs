@@ -39,8 +39,6 @@ pub fn render_settings(app: &mut PolygramApp, ui: &mut egui::Ui) -> bool {
                     changed |= color(ui, "Предупреждение", &mut theme.status_warning);
                     changed |= color(ui, "Дефицит", &mut theme.status_deficit);
                     changed |= color(ui, "Избыток", &mut theme.status_surplus);
-                    changed |= color(ui, "Не подключено", &mut theme.status_unconnected);
-                    changed |= color(ui, "Недействителен", &mut theme.status_invalid);
 
                     ui.separator();
                     ui.heading("Текст");

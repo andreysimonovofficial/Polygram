@@ -7,12 +7,8 @@ use polygram_core::{DynamicState, StatusCode};
 pub fn status_rank(s: StatusCode) -> u8 {
     match s {
         StatusCode::Ok => 0,
-        StatusCode::Unknown | StatusCode::Disabled => 1,
-        StatusCode::Unconnected => 2,
-        StatusCode::Warning => 3,
-        StatusCode::Deficit => 4,
-        StatusCode::Surplus => 5,
-        StatusCode::Invalid => 6,
+        StatusCode::Deficit => 1,
+        StatusCode::Surplus => 2,
     }
 }
 
@@ -26,11 +22,8 @@ pub fn worst_status(entries: &[EntryGeom], dynamic: &DynamicState) -> StatusCode
         }
     }
     match worst {
-        4 => StatusCode::Deficit,
-        5 => StatusCode::Surplus,
-        3 => StatusCode::Warning,
-        2 => StatusCode::Unconnected,
-        6 => StatusCode::Invalid,
+        2 => StatusCode::Surplus,
+        1 => StatusCode::Deficit,
         _ => StatusCode::Ok,
     }
 }

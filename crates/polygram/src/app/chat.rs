@@ -125,7 +125,7 @@ pub fn author_color(author: &str, theme: &Theme) -> egui::Color32 {
     match author {
         "user" => theme.status_ok,
         "claude" => theme.accent_secondary,
-        "qwen" => theme.status_invalid,
+        "qwen" => theme.text_muted,
         "gpt" => theme.status_warning,
         "gemini" => theme.accent,
         "http" => theme.text_muted,

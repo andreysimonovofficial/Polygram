@@ -57,8 +57,8 @@ fn unconnected_metrics() {
     object(&mut e, "x");
     out(&mut e, "x", "o1", "tovary", MetricValue::Number(5.0), None);
     req(&mut e, "x", "r1", "tovary", MetricValue::Number(5.0), None);
-    assert_eq!(status(&e, "x", "o1"), StatusCode::Unconnected);
-    assert_eq!(status(&e, "x", "r1"), StatusCode::Unconnected);
+    assert_eq!(status(&e, "x", "o1"), StatusCode::Surplus);
+    assert_eq!(status(&e, "x", "r1"), StatusCode::Deficit);
 }
 
 #[test]

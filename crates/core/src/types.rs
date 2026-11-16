@@ -186,44 +186,29 @@ pub struct ObjectMetric {
     pub alive: bool,
 }
 
-/// Единая «правда» о состоянии показателя (8 кодов, как в MVP/MCP).
+/// Единая «правда» о состоянии показателя (3 кода).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatusCode {
     Ok,
-    Warning,
     Deficit,
     Surplus,
-    Unconnected,
-    Invalid,
-    Disabled,
-    Unknown,
 }
 
 impl StatusCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Ok => "ok",
-            Self::Warning => "warning",
             Self::Deficit => "deficit",
             Self::Surplus => "surplus",
-            Self::Unconnected => "unconnected",
-            Self::Invalid => "invalid",
-            Self::Disabled => "disabled",
-            Self::Unknown => "unknown",
         }
     }
 
     pub fn label_ru(self) -> &'static str {
         match self {
             Self::Ok => "Норма",
-            Self::Warning => "Предупреждение",
             Self::Deficit => "Дефицит",
             Self::Surplus => "Избыток",
-            Self::Unconnected => "Не подключено",
-            Self::Invalid => "Ошибка",
-            Self::Disabled => "Отключено",
-            Self::Unknown => "Неизвестно",
         }
     }
 }

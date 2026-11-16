@@ -22,8 +22,6 @@ pub struct Theme {
     pub status_warning: Color32,
     pub status_deficit: Color32,
     pub status_surplus: Color32,
-    pub status_unconnected: Color32,
-    pub status_invalid: Color32,
 
     // ========== Текст (общие) ==========
     pub text: Color32,
@@ -120,8 +118,6 @@ impl Default for Theme {
             status_warning: Color32::from_rgb(255, 152, 0),
             status_deficit: Color32::from_rgb(244, 67, 54),
             status_surplus: Color32::from_rgb(3, 169, 244),
-            status_unconnected: Color32::from_rgb(100, 100, 110),
-            status_invalid: Color32::from_rgb(158, 158, 158),
 
             // Текст
             text: Color32::from_rgb(230, 230, 235),

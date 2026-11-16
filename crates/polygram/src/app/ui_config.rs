@@ -45,8 +45,6 @@ pub struct ThemeConfig {
     pub status_warning: [u8; 4],
     pub status_deficit: [u8; 4],
     pub status_surplus: [u8; 4],
-    pub status_unconnected: [u8; 4],
-    pub status_invalid: [u8; 4],
 
     // --- Текст ---
     pub text: [u8; 4],
@@ -139,8 +137,6 @@ impl ThemeConfig {
             status_warning: color_array::to_array(theme.status_warning),
             status_deficit: color_array::to_array(theme.status_deficit),
             status_surplus: color_array::to_array(theme.status_surplus),
-            status_unconnected: color_array::to_array(theme.status_unconnected),
-            status_invalid: color_array::to_array(theme.status_invalid),
 
             text: color_array::to_array(theme.text),
             text_muted: color_array::to_array(theme.text_muted),
@@ -215,8 +211,6 @@ impl ThemeConfig {
             status_warning: color_array::from_array(self.status_warning),
             status_deficit: color_array::from_array(self.status_deficit),
             status_surplus: color_array::from_array(self.status_surplus),
-            status_unconnected: color_array::from_array(self.status_unconnected),
-            status_invalid: color_array::from_array(self.status_invalid),
 
             text: color_array::from_array(self.text),
             text_muted: color_array::from_array(self.text_muted),

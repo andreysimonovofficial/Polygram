@@ -42,7 +42,7 @@ impl Values {
             self.required.resize(object_metrics, MetricValue::Null);
             self.max.resize(object_metrics, None);
             self.fact.resize(object_metrics, MetricValue::Null);
-            self.status.resize(object_metrics, StatusCode::Unknown);
+            self.status.resize(object_metrics, StatusCode::Ok);
             self.dirty_out.resize(object_metrics, false);
             self.dirty_in.resize(object_metrics, false);
             for i in old..object_metrics {
@@ -62,7 +62,7 @@ impl Values {
         self.required[i] = MetricValue::Null;
         self.max[i] = None;
         self.fact[i] = MetricValue::Null;
-        self.status[i] = StatusCode::Unknown;
+        self.status[i] = StatusCode::Ok;
     }
 
     pub fn mark_out(&mut self, e: EntryIx) {
@@ -179,7 +179,7 @@ impl Values {
                 }
 
                 if !h.has_edges(e) {
-                    StatusCode::Unconnected
+                    StatusCode::Surplus
                 } else if sum_requests > exit_value + EPS {
                     StatusCode::Deficit
                 } else if (sum_requests - exit_value).abs() <= EPS {
@@ -194,28 +194,26 @@ impl Values {
                     MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
                         if dt < now {
                             StatusCode::Deficit // просрочено
-                        } else if (dt - now).num_seconds() < 86400 {
-                            StatusCode::Warning // до конца дня
                         } else {
                             StatusCode::Ok // в срок
                         }
                     }
-                    _ => StatusCode::Unknown,
+                    _ => StatusCode::Ok,
                 }
             }
             MetricKind::Date => {
                 if self.value[i].is_null() {
-                    StatusCode::Unknown
+                    StatusCode::Ok
                 } else {
                     StatusCode::Ok
                 }
             }
             MetricKind::Binary => match self.value[i] {
                 MetricValue::Binary(true) => StatusCode::Ok,
-                MetricValue::Binary(false) => StatusCode::Invalid,
-                _ => StatusCode::Unknown,
+                MetricValue::Binary(false) => StatusCode::Ok,
+                _ => StatusCode::Ok,
             },
-            _ => StatusCode::Unknown,
+            _ => StatusCode::Ok,
         };
 
         if new_status != self.status[i] {
@@ -266,7 +264,7 @@ impl Values {
                 self.supplied[i] = MetricValue::Number(sum_supply.min(required));
 
                 if !h.has_edges(e) {
-                    StatusCode::Unconnected
+                    StatusCode::Deficit
                 } else if sum_supply >= required - EPS {
                     StatusCode::Ok
                 } else {
@@ -279,23 +277,21 @@ impl Values {
                     MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
                         if dt < now {
                             StatusCode::Deficit
-                        } else if (dt - now).num_seconds() < 86400 {
-                            StatusCode::Warning
                         } else {
                             StatusCode::Ok
                         }
                     }
-                    _ => StatusCode::Unknown,
+                    _ => StatusCode::Ok,
                 }
             }
             MetricKind::Date => {
                 if self.required[i].is_null() {
-                    StatusCode::Unknown
+                    StatusCode::Ok
                 } else {
                     StatusCode::Ok
                 }
             }
-            _ => StatusCode::Unknown,
+            _ => StatusCode::Ok,
         };
 
         if new_status != self.status[i] {
