@@ -307,6 +307,20 @@ impl eframe::App for PolygramApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+
+        // Автоматический снимок экрана при изменении ревизии состояния.
+        let current_rev = self
+            .connection
+            .snapshot
+            .as_ref()
+            .map(|s| s.rev)
+            .unwrap_or(0);
+        if current_rev > 0 && current_rev > self.last_screenshot_rev {
+            self.screenshot_requested = true;
+            self.last_screenshot_rev = 0;
+            ctx.request_repaint();
+        }
+
         let mut close_menu = false;
 
         let published = self.connection.snapshot.clone().unwrap_or_else(|| {
