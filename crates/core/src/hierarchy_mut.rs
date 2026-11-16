@@ -250,6 +250,25 @@ impl Hierarchy {
         self.live_object_metrics -= 1;
     }
 
+    pub fn reorder_object_metric(
+        &mut self,
+        object: ObjectIx,
+        dir: Direction,
+        from_ix: usize,
+        to_ix: usize,
+    ) -> Result<()> {
+        let list = match dir {
+            Direction::Request => &mut self.objects[object.idx()].requests,
+            Direction::Output => &mut self.objects[object.idx()].outputs,
+        };
+        if from_ix >= list.len() || to_ix >= list.len() || from_ix == to_ix {
+            return Ok(());
+        }
+        let entry = list.remove(from_ix);
+        list.insert(to_ix, entry);
+        Ok(())
+    }
+
     pub fn connect(&mut self, from: EntryIx, to: EntryIx, throughput: f64) -> Result<EdgeIx> {
         let (fm, tm) = (
             &self.object_metrics[from.idx()],

@@ -23,6 +23,7 @@ pub enum DragInteractionState {
         source_object: String,
         source_dir: Direction,
         entry: EntryGeom,
+        from_ix: usize,
         start_screen: Pos2,
     },
     /// Выделение рамкой (selection box).
@@ -40,6 +41,7 @@ pub enum DragInteractionState {
         source_object: String,
         source_dir: Direction,
         entry: EntryGeom,
+        from_ix: usize,
     },
 }
 
@@ -132,7 +134,17 @@ impl DragState {
                 source_object,
                 source_dir,
                 entry,
+                ..
             } => Some((source_object.clone(), *source_dir, entry.clone())),
+            _ => None,
+        }
+    }
+
+    /// Индекс перетаскиваемого показателя в контейнере (позиция в Vec).
+    pub fn drag_metric_from_ix(&self) -> Option<usize> {
+        match &self.state {
+            DragInteractionState::DraggingMetric { from_ix, .. }
+            | DragInteractionState::DroppingMetric { from_ix, .. } => Some(*from_ix),
             _ => None,
         }
     }
@@ -189,12 +201,14 @@ impl DragState {
         source_object: String,
         source_dir: Direction,
         entry: EntryGeom,
+        from_ix: usize,
         start_screen: Pos2,
     ) {
         self.state = DragInteractionState::DraggingMetric {
             source_object,
             source_dir,
             entry,
+            from_ix,
             start_screen,
         };
     }
@@ -256,6 +270,7 @@ impl DragState {
             source_object,
             source_dir,
             entry,
+            from_ix,
             ..
         } = std::mem::replace(&mut self.state, DragInteractionState::Idle)
         {
@@ -263,24 +278,27 @@ impl DragState {
                 source_object,
                 source_dir,
                 entry,
+                from_ix,
             };
         }
     }
 
-    /// Завершить перетаскивание показателя: вернуть (объект, направление, запись).
-    pub fn end_drag_metric(&mut self) -> Option<(String, Direction, EntryGeom)> {
+    /// Завершить перетаскивание показателя: вернуть (объект, направление, запись, начальный индекс).
+    pub fn end_drag_metric(&mut self) -> Option<(String, Direction, EntryGeom, usize)> {
         match std::mem::replace(&mut self.state, DragInteractionState::Idle) {
             DragInteractionState::DroppingMetric {
                 source_object,
                 source_dir,
                 entry,
-            } => Some((source_object, source_dir, entry)),
+                from_ix,
+            } => Some((source_object, source_dir, entry, from_ix)),
             DragInteractionState::DraggingMetric {
                 source_object,
                 source_dir,
                 entry,
+                from_ix,
                 ..
-            } => Some((source_object, source_dir, entry)),
+            } => Some((source_object, source_dir, entry, from_ix)),
             other => {
                 self.state = other;
                 None

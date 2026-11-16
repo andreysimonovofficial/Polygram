@@ -31,19 +31,23 @@ pub fn handle_drag(
                 .iter()
                 .find(|(_, _, _, rect)| rect.contains(pos));
             if let Some((object_id, dir, metric_name, _)) = metric_drag {
-                let entry = geometry.objects.iter()
+                let found = geometry.objects.iter()
                     .find(|o| o.id == *object_id)
-                    .and_then(|o| match dir {
-                        Direction::Request => o.requests.iter().find(|e| e.name == *metric_name),
-                        Direction::Output => o.outputs.iter().find(|e| e.name == *metric_name),
-                    })
-                    .cloned();
-                if let Some(entry) = entry {
+                    .and_then(|o| {
+                        let entries = match dir {
+                            Direction::Request => &o.requests,
+                            Direction::Output => &o.outputs,
+                        };
+                        entries.iter().enumerate().find(|(_, e)| e.name == *metric_name)
+                            .map(|(i, e)| (e.clone(), i))
+                    });
+                if let Some((entry, from_ix)) = found {
                     let entry_name = entry.name.clone();
                     app.drag.start_drag_metric(
                         object_id.clone(),
                         *dir,
                         entry,
+                        from_ix,
                         pos,
                     );
                     app.add_event_log(
@@ -275,13 +279,48 @@ pub fn handle_drag(
         && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
     {
         app.drag.begin_drop_metric();
-        let (source_object, source_dir, entry) =
+        let (source_object, source_dir, entry, from_ix) =
             match app.drag.end_drag_metric() {
                 Some(v) => v,
                 None => return,
             };
         let metric_name = entry.name.clone();
         if let Some(pos) = canvas_response.interact_pointer_pos() {
+            // Реордер строки внутри того же контейнера (ЗАПРОС/ВЫХОД одного объекта).
+            let hovered_name = app.canvas.drag_metric_hotspots.iter()
+                .find(|(oid, d, name, rect)| {
+                    *oid == source_object && *d == source_dir && rect.contains(pos)
+                })
+                .map(|(_, _, name, _)| name.clone());
+            if let Some(hovered_name) = hovered_name {
+                if let Some(obj) = geometry.objects.iter().find(|o| o.id == source_object) {
+                    let entries = match source_dir {
+                        Direction::Request => &obj.requests,
+                        Direction::Output => &obj.outputs,
+                    };
+                    if let Some(to_ix) = entries.iter().position(|e| e.name == hovered_name) {
+                        if to_ix != from_ix {
+                            app.apply_cmd(Command::ReorderMetricEntry {
+                                object: source_object.clone(),
+                                dir: source_dir,
+                                from_ix,
+                                to_ix,
+                            });
+                            app.add_event_log(
+                                "info",
+                                "drag",
+                                &format!(
+                                    "Показатель «{metric_name}» перемещён с позиции {from_ix} на {to_ix} в объекте «{source_object}» ({source_dir:?})"
+                                ),
+                                None,
+                            );
+                            app.drag.state = DragInteractionState::Idle;
+                            return;
+                        }
+                    }
+                }
+            }
+            // Соединение показателя с объектом-целью (существующая логика).
             if let Some(target_id) = app
                 .canvas
                 .object_at(&geometry, pos)

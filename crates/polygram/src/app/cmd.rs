@@ -35,6 +35,9 @@ impl PolygramApp {
             Command::RemoveMetricEntry { object, entry } => {
                 format!("RemoveMetricEntry(object={object}, entry={entry})")
             }
+            Command::ReorderMetricEntry { object, dir, from_ix, to_ix } => {
+                format!("ReorderMetricEntry(object={object}, dir={dir:?}, from={from_ix}, to={to_ix})")
+            }
             Command::SetValue { object, entry, value } => {
                 format!("SetValue(object={object}, entry={entry}, value={value:?})")
             }
@@ -128,6 +131,9 @@ impl PolygramApp {
             }
             Command::RemoveMetricEntry { object, entry } => {
                 format!("RemoveMetricEntry(object={object}, entry={entry})")
+            }
+            Command::ReorderMetricEntry { object, dir, from_ix, to_ix } => {
+                format!("ReorderMetricEntry(object={object}, dir={dir:?}, from={from_ix}, to={to_ix})")
             }
             Command::SetValue { object, entry, value } => {
                 format!("SetValue(object={object}, entry={entry}, value={value:?})")

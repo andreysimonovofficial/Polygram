@@ -13,8 +13,8 @@ pub use edges::{handle_connect, handle_disconnect};
 pub use layout::handle_move_object;
 pub use metric_defs::{handle_add_metric_def, handle_remove_metric_def, handle_rename_metric_def, handle_set_metric_def_unit};
 pub use metric_entries::{
-    handle_add_metric_entry, handle_remove_metric_entry, handle_set_fact, handle_set_max,
-    handle_set_required, handle_set_value,
+    handle_add_metric_entry, handle_remove_metric_entry, handle_reorder_metric_entry,
+    handle_set_fact, handle_set_max, handle_set_required, handle_set_value,
 };
 pub use objects::{handle_add_object, handle_remove_object, handle_rename_object, handle_set_object_parent};
 
@@ -72,6 +72,12 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
         Command::RemoveMetricEntry { object, entry } => {
             handle_remove_metric_entry(engine, &object, &entry)
         }
+        Command::ReorderMetricEntry {
+            object,
+            dir,
+            from_ix,
+            to_ix,
+        } => handle_reorder_metric_entry(engine, &object, dir, from_ix, to_ix),
         Command::SetValue {
             object,
             entry,

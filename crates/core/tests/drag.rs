@@ -69,6 +69,211 @@ fn drop_on_department_with_ghost_reparents_and_moves() {
 }
 
 #[test]
+fn reorder_metric_entry_moves_within_requests() {
+    use polygram_core::types::{Direction, MetricKind, MetricValue};
+    use polygram_core::{Engine, Scope};
+
+    let mut e = Engine::new();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddObject {
+            id: Some("a".into()),
+            name: "a".into(),
+            kind: polygram_core::types::NodeKind::Process,
+            at: None,
+            parent: None,
+            author: None,
+        },
+    )
+    .unwrap();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddMetricDef {
+            id: Some("md1".into()),
+            name: "md1".into(),
+            kind: MetricKind::Number,
+            unit: "ед.".into(),
+            api: None,
+        },
+    )
+    .unwrap();
+    // Добавляем три запроса: r1, r2, r3
+    for name in ["r1", "r2", "r3"] {
+        e.apply(
+            Scope::Root,
+            polygram_core::Command::AddMetricEntry {
+                object: "a".into(),
+                dir: Direction::Request,
+                id: Some(name.into()),
+                metric_def: "md1".into(),
+                name: String::new(),
+                value: MetricValue::Null,
+                required: MetricValue::Null,
+                max: None,
+                fact: MetricValue::Null,
+            },
+        )
+        .unwrap();
+    }
+
+    let geom = e.geometry();
+    let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
+    assert_eq!(obj.requests.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["r1", "r2", "r3"]);
+
+    // Перемещаем r3 (индекс 2) на позицию 0
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::ReorderMetricEntry {
+            object: "a".into(),
+            dir: Direction::Request,
+            from_ix: 2,
+            to_ix: 0,
+        },
+    )
+    .unwrap();
+
+    let geom = e.geometry();
+    let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
+    assert_eq!(
+        obj.requests.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+        vec!["r3", "r1", "r2"]
+    );
+}
+
+#[test]
+fn reorder_metric_entry_moves_within_outputs() {
+    use polygram_core::types::{Direction, MetricKind, MetricValue};
+    use polygram_core::{Engine, Scope};
+
+    let mut e = Engine::new();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddObject {
+            id: Some("a".into()),
+            name: "a".into(),
+            kind: polygram_core::types::NodeKind::Process,
+            at: None,
+            parent: None,
+            author: None,
+        },
+    )
+    .unwrap();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddMetricDef {
+            id: Some("md1".into()),
+            name: "md1".into(),
+            kind: MetricKind::Number,
+            unit: "ед.".into(),
+            api: None,
+        },
+    )
+    .unwrap();
+    for name in ["o1", "o2", "o3"] {
+        e.apply(
+            Scope::Root,
+            polygram_core::Command::AddMetricEntry {
+                object: "a".into(),
+                dir: Direction::Output,
+                id: Some(name.into()),
+                metric_def: "md1".into(),
+                name: String::new(),
+                value: MetricValue::Null,
+                required: MetricValue::Null,
+                max: None,
+                fact: MetricValue::Null,
+            },
+        )
+        .unwrap();
+    }
+
+    let geom = e.geometry();
+    let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
+    assert_eq!(obj.outputs.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["o1", "o2", "o3"]);
+
+    // Перемещаем o1 (индекс 0) на позицию 2
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::ReorderMetricEntry {
+            object: "a".into(),
+            dir: Direction::Output,
+            from_ix: 0,
+            to_ix: 2,
+        },
+    )
+    .unwrap();
+
+    let geom = e.geometry();
+    let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
+    assert_eq!(
+        obj.outputs.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+        vec!["o2", "o3", "o1"]
+    );
+}
+
+#[test]
+fn reorder_metric_entry_same_index_noop() {
+    use polygram_core::types::{Direction, MetricKind, MetricValue};
+    use polygram_core::{Engine, Scope};
+
+    let mut e = Engine::new();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddObject {
+            id: Some("a".into()),
+            name: "a".into(),
+            kind: polygram_core::types::NodeKind::Process,
+            at: None,
+            parent: None,
+            author: None,
+        },
+    )
+    .unwrap();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddMetricDef {
+            id: Some("md1".into()),
+            name: "md1".into(),
+            kind: MetricKind::Number,
+            unit: "ед.".into(),
+            api: None,
+        },
+    )
+    .unwrap();
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::AddMetricEntry {
+            object: "a".into(),
+            dir: Direction::Request,
+            id: Some("r1".into()),
+            metric_def: "md1".into(),
+            name: String::new(),
+            value: MetricValue::Null,
+            required: MetricValue::Null,
+            max: None,
+            fact: MetricValue::Null,
+        },
+    )
+    .unwrap();
+
+    // Перемещение на ту же позицию — нетоп
+    e.apply(
+        Scope::Root,
+        polygram_core::Command::ReorderMetricEntry {
+            object: "a".into(),
+            dir: Direction::Request,
+            from_ix: 0,
+            to_ix: 0,
+        },
+    )
+    .unwrap();
+
+    let geom = e.geometry();
+    let obj = geom.objects.iter().find(|o| o.id == "a").unwrap();
+    assert_eq!(obj.requests.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["r1"]);
+}
+
+#[test]
 fn preview_over_empty_space_returns_cursor_cell() {
     let geometry = geometry_with(vec![
         obj("a", 0, 0, 2, 2, NodeKind::Process),

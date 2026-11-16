@@ -241,6 +241,25 @@ pub fn handle_canvas_interaction(
                         }
                     }
                 }
+
+                // Подсветить целевую строку при реордере внутри того же контейнера.
+                if app.drag.drag_metric_from_ix().is_some() {
+                    if let Some((oid, d, _name, row_rect)) = app.canvas.drag_metric_hotspots
+                        .iter()
+                        .find(|(oid, d, _name, rect)| {
+                            *oid == *source_object && *d == *source_dir && rect.contains(cur)
+                        })
+                    {
+                        if *oid == *source_object && *d == *source_dir {
+                            painter.rect_stroke(
+                                row_rect.expand(2.0),
+                                2.0,
+                                Stroke::new(2.0_f32 * app.canvas.camera.zoom, theme.accent),
+                                egui::StrokeKind::Middle,
+                            );
+                        }
+                    }
+                }
             }
         }
     }

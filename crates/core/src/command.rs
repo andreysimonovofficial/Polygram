@@ -94,6 +94,13 @@ pub enum Command {
         object: String,
         entry: String,
     },
+    /// Переместить запись показателя внутри контейнера объекта (из индекса from_ix в индекс to_ix).
+    ReorderMetricEntry {
+        object: String,
+        dir: Direction,
+        from_ix: usize,
+        to_ix: usize,
+    },
     SetValue {
         object: String,
         entry: String,

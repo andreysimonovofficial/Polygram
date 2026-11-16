@@ -154,3 +154,19 @@ pub fn handle_set_fact(
         .push(crate::event::EventKind::MetricChanged { metric: e.0 });
     Ok(Applied::default())
 }
+
+pub fn handle_reorder_metric_entry(
+    engine: &mut Engine,
+    object: &str,
+    dir: Direction,
+    from_ix: usize,
+    to_ix: usize,
+) -> Result<Applied> {
+    let oix = engine.find_object(object)?;
+    engine.hier.reorder_object_metric(oix, dir, from_ix, to_ix)?;
+    engine.sync_sizes();
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: 0 });
+    Ok(Applied::default())
+}
