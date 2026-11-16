@@ -182,10 +182,21 @@ pub fn handle_drag(
         } else {
             None
         };
+        // Дети перетаскиваемого отдела едут вместе с ним, поэтому их rect
+        // тоже не считается занятым местом при перемещении родителя.
+        let dragged_children: std::collections::HashSet<&str> = geometry
+            .objects
+            .iter()
+            .filter(|o| o.parent.as_deref() == Some(&object_id))
+            .map(|o| o.id.as_str())
+            .collect();
         let target_overlaps = dragged_size.is_some_and(|(w, h)| {
             let pr = CoreRect::new(drop_cell.0, drop_cell.1, w, h);
             geometry.objects.iter().any(|o| {
                 if o.id == object_id {
+                    return false;
+                }
+                if dragged_children.contains(o.id.as_str()) {
                     return false;
                 }
                 if exclude_overlap.map_or(false, |d| o.id == d) {
@@ -195,22 +206,77 @@ pub fn handle_drag(
             })
         });
 
-        if drop_in_dept {
-            let dept_id = drag_over.expect("drop_in_dept requires drag_over");
-            // Если процесс уже состоит в этом отделе — это перемещение
+            if drop_in_dept {
+            let dept_id = drag_over.clone().expect("drop_in_dept requires drag_over");
+            // Если объект уже состоит в этом отделе — это перемещение
             // внутри отдела, а не добавление в отдел. Модальное окно не показываем.
             let already_in_dept = geometry.objects.iter().any(|o| {
                 o.id == object_id && o.parent.as_deref() == Some(&dept_id)
             });
+            let object_kind = geometry
+                .objects
+                .iter()
+                .find(|o| o.id == object_id)
+                .map(|o| o.kind)
+                .unwrap_or(NodeKind::Process);
             if already_in_dept {
                 let pos_changed = (drop_cell.0, drop_cell.1) != (start_x, start_y);
-                if pos_changed && !target_overlaps {
+                // При перемещении внутри отдела исключаем всех детей целевого отдела
+                // из проверки наложения — отдел растянется под детей через
+                // fit_departments_to_children, поэтому дети могут перестраиваться
+                // внутри него без конфликтов.
+                let target_overlaps_in_dept = dragged_size.is_some_and(|(w, h)| {
+                    let pr = CoreRect::new(drop_cell.0, drop_cell.1, w, h);
+                    geometry.objects.iter().any(|o| {
+                        if o.id == object_id {
+                            return false;
+                        }
+                        if dragged_children.contains(o.id.as_str()) {
+                            return false;
+                        }
+                        if exclude_overlap.map_or(false, |d| o.id == d) {
+                            return false;
+                        }
+                        if o.parent.as_deref() == Some(&dept_id) {
+                            return false;
+                        }
+                        o.rect.overlaps(&pr)
+                    })
+                });
+                if pos_changed && !target_overlaps_in_dept {
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
-                    app.apply_cmd(Command::MoveObject {
+                    let dx = drop_cell.0 - start_x;
+                    let dy = drop_cell.1 - start_y;
+                    let mut cmds: Vec<Command> = vec![Command::MoveObject {
                         object: object_id.clone(),
                         at: [drop_cell.0, drop_cell.1],
-                    });
+                    }];
+                    // Отдел перевозит всех потомков с собой: без этого после
+                    // подтверждения сервером fit_departments_to_children вернёт
+                    // отдел обратно к детям на старых позициях ("прыжок назад").
+                    if geometry.objects.iter().any(|o| o.id == object_id && o.kind == NodeKind::Department) {
+                        if let Some(pub_geom) = app.connection.snapshot.as_ref().map(|s| &s.geometry) {
+                            let mut queue: Vec<String> = pub_geom.objects.iter()
+                                .filter(|o| o.parent.as_deref() == Some(&object_id))
+                                .map(|o| o.id.clone())
+                                .collect();
+                            while let Some(child_id) = queue.pop() {
+                                if let Some(child) = pub_geom.objects.iter().find(|o| o.id == child_id) {
+                                    cmds.push(Command::MoveObject {
+                                        object: child_id.clone(),
+                                        at: [child.rect.x + dx, child.rect.y + dy],
+                                    });
+                                    if child.kind == NodeKind::Department {
+                                        queue.extend(pub_geom.objects.iter()
+                                            .filter(|o| o.parent.as_deref() == Some(&child_id))
+                                            .map(|o| o.id.clone()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    app.apply_batch(cmds);
                     app.add_event_log(
                         "info",
                         "drag",
@@ -236,6 +302,7 @@ pub fn handle_drag(
                     dept_id,
                     drop_cell,
                     (start_x, start_y),
+                    object_kind,
                 ));
             }
         } else {
@@ -245,10 +312,34 @@ pub fn handle_drag(
                 if pos_changed {
                     app.drag.pending_move =
                         Some((object_id.clone(), app.connection.last_rev));
-                    app.apply_cmd(Command::MoveObject {
+                    let dx = drop_cell.0 - start_x;
+                    let dy = drop_cell.1 - start_y;
+                    let mut cmds: Vec<Command> = vec![Command::MoveObject {
                         object: object_id.clone(),
                         at: [drop_cell.0, drop_cell.1],
-                    });
+                    }];
+                    if geometry.objects.iter().any(|o| o.id == object_id && o.kind == NodeKind::Department) {
+                        if let Some(pub_geom) = app.connection.snapshot.as_ref().map(|s| &s.geometry) {
+                            let mut queue: Vec<String> = pub_geom.objects.iter()
+                                .filter(|o| o.parent.as_deref() == Some(&object_id))
+                                .map(|o| o.id.clone())
+                                .collect();
+                            while let Some(child_id) = queue.pop() {
+                                if let Some(child) = pub_geom.objects.iter().find(|o| o.id == child_id) {
+                                    cmds.push(Command::MoveObject {
+                                        object: child_id.clone(),
+                                        at: [child.rect.x + dx, child.rect.y + dy],
+                                    });
+                                    if child.kind == NodeKind::Department {
+                                        queue.extend(pub_geom.objects.iter()
+                                            .filter(|o| o.parent.as_deref() == Some(&child_id))
+                                            .map(|o| o.id.clone()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    app.apply_batch(cmds);
                     app.add_event_log(
                         "info",
                         "drag",

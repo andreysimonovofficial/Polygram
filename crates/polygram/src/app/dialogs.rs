@@ -1,4 +1,4 @@
-use polygram_core::{Direction, MetricKind};
+use polygram_core::{Direction, MetricKind, NodeKind};
 use polygram_core::types::MAX_UI_METRICS_PER_SIDE;
 use chrono::{NaiveDate, NaiveTime};
 use std::collections::HashMap;
@@ -38,10 +38,13 @@ pub struct DialogState {
     pub container_menu_api_expanded: Option<String>,
     /// Объекты, ожидающие подтверждения удаления ("Удалить?").
     pub delete_confirm: Option<Vec<String>>,
-    /// Ожидает подтверждения переноса процесса в отдел при дропе
-    /// ("Добавить процесс в отдел?"): (id объекта, id отдела,
-    /// целевая клетка, стартовая клетка).
-    pub reparent_confirm: Option<(String, String, (i32, i32), (i32, i32))>,
+    /// Ожидает подтверждения переноса объекта в отдел при дропе
+    /// ("Добавить процесс в отдел?" / "Сделать отдел подотделом?"):
+    /// (id объекта, id отдела, целевая клетка, стартовая клетка, вид объекта).
+    pub reparent_confirm: Option<(String, String, (i32, i32), (i32, i32), NodeKind)>,
+    /// Создание подотдела: id родительского отдела + буфер имени.
+    pub create_subdepartment_target: Option<String>,
+    pub create_subdepartment_name: String,
 }
 
 impl DialogState {
@@ -69,6 +72,8 @@ impl DialogState {
             container_menu_api_expanded: None,
             delete_confirm: None,
             reparent_confirm: None,
+            create_subdepartment_target: None,
+            create_subdepartment_name: String::new(),
         }
     }
 }

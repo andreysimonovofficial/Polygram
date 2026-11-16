@@ -444,7 +444,9 @@ impl eframe::App for PolygramApp {
 
         interaction::handle_delete_confirm(self, &ctx);
 
-        interaction::handle_reparent_confirm(self, &ctx);
+        interaction::handle_reparent_confirm(self, &ctx, &published);
+
+        interaction::handle_create_subdepartment(self, &ctx);
 
         interaction::inline_rename_editor(self, &ctx, &published);
 

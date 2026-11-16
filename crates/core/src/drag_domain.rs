@@ -113,21 +113,27 @@ pub fn object_at_cell<'a>(geometry: &'a Geometry, cx: i32, cy: i32, exclude_id: 
             return Some(&object.id);
         }
     }
-    // Затем департаменты.
-    for object in &geometry.objects {
-        if object.kind != NodeKind::Department {
-            continue;
-        }
-        if object.id == exclude_id {
-            continue;
-        }
-        if object.rect.x <= cx && cx < object.rect.x + object.rect.w
-            && object.rect.y <= cy && cy < object.rect.y + object.rect.h
-        {
-            return Some(&object.id);
-        }
+    // Затем самый вложенный департамент (чтобы подотдел возвращался, а не родительский).
+    innermost_dept_at(geometry, cx, cy, exclude_id)
+}
+
+/// Найти самый вложенный отдел, содержащий клетку (cx, cy).
+/// Если нескольких отделов содержат клетку, возвращается тот с наименьшим rect (самый глубокий в иерархии).
+fn innermost_dept_at<'a>(geometry: &'a Geometry, cx: i32, cy: i32, exclude_id: &str) -> Option<&'a str> {
+    let mut containing: Vec<&crate::geometry::ObjectGeom> = geometry
+        .objects
+        .iter()
+        .filter(|o| o.kind == NodeKind::Department && o.id != exclude_id)
+        .filter(|o| {
+            o.rect.x <= cx && cx < o.rect.x + o.rect.w
+                && o.rect.y <= cy && cy < o.rect.y + o.rect.h
+        })
+        .collect();
+    if containing.is_empty() {
+        return None;
     }
-    None
+    containing.sort_by_key(|o| o.rect.w * o.rect.h);
+    containing.first().map(|o| o.id.as_str())
 }
 
 /// Проверить, свободен ли rect (без учёта exclude_id) — нет пересечений с другими объектами.

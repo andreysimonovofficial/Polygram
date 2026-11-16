@@ -191,6 +191,11 @@ pub fn context_menu(
                             );
                             *close_menu = true;
                         }
+                        if ui.button("Создать подотдел").clicked() {
+                            app.dialogs.create_subdepartment_target = Some(object_id.clone());
+                            app.dialogs.create_subdepartment_name = String::new();
+                            *close_menu = true;
+                        }
                         // Переместить выделенные объекты в этот отдел.
                         if !app.selected_objects.is_empty()
                             && !app.selected_objects.iter().any(|s| s == object_id)

@@ -20,7 +20,8 @@ fn rect_to_screen(
     egui::Rect::from_min_size(min, size)
 }
 
-/// Итерация по всем объектам (сначала обычные, потом отделы) с остановкой на первом совпадении.
+/// Итерация по всем объектам (сначала обычные, потом отделы).
+/// Для отделов возвращает самый вложенный (с наименьшей площадью rect).
 fn find_object_with<'a, F>(
     geometry: &'a Geometry,
     camera_offset: egui::Vec2,
@@ -40,16 +41,21 @@ where
             return Some(&object.id);
         }
     }
+    // Для отделов возвращаем самый вложенный (наименьший по площади).
+    let mut best_dept: Option<(&'a str, f32)> = None;
     for object in &geometry.objects {
         if object.kind != NodeKind::Department {
             continue;
         }
         let rect_px = rect_to_screen(object, cell_size, camera_offset, camera_zoom);
         if pred(object, rect_px) {
-            return Some(&object.id);
+            let area = rect_px.area();
+            if best_dept.map_or(true, |(_, a)| area < a) {
+                best_dept = Some((&object.id, area));
+            }
         }
     }
-    None
+    best_dept.map(|(id, _)| id)
 }
 
 /// Определить объект под заданной экранной позицией.
@@ -119,13 +125,18 @@ fn world_to_screen(p: Pos2, cell_size: f32, offset: egui::Vec2, zoom: f32) -> Po
 }
 
 /// Возвращает объект, чей rect содержит клетку (cx, cy), исключая exclude_id.
+/// Для департаментов возвращает самый вложенный (с наименьшим rect).
 pub fn object_at_cell<'a>(
     geometry: &'a Geometry,
     cx: i32,
     cy: i32,
     exclude_id: &str,
 ) -> Option<&'a str> {
+    // Сначала не-департаменты.
     for object in &geometry.objects {
+        if object.kind == NodeKind::Department {
+            continue;
+        }
         if object.id == exclude_id {
             continue;
         }
@@ -137,7 +148,27 @@ pub fn object_at_cell<'a>(
             return Some(&object.id);
         }
     }
-    None
+    // Затем самый вложенный департамент.
+    innermost_dept_at(geometry, cx, cy, exclude_id)
+}
+
+/// Найти самый вложенный отдел, содержащий клетку (cx, cy).
+fn innermost_dept_at<'a>(geometry: &'a Geometry, cx: i32, cy: i32, exclude_id: &str) -> Option<&'a str> {
+    use polygram_core::types::NodeKind;
+    let mut containing: Vec<&polygram_core::geometry::ObjectGeom> = geometry
+        .objects
+        .iter()
+        .filter(|o| o.kind == NodeKind::Department && o.id != exclude_id)
+        .filter(|o| {
+            o.rect.x <= cx && cx < o.rect.x + o.rect.w
+                && o.rect.y <= cy && cy < o.rect.y + o.rect.h
+        })
+        .collect();
+    if containing.is_empty() {
+        return None;
+    }
+    containing.sort_by_key(|o| o.rect.w * o.rect.h);
+    containing.first().map(|o| o.id.as_str())
 }
 
 /// Свободна ли клетка (cx, cy) (нет объектов, кроме exclude_id).
