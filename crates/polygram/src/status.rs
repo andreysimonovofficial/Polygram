@@ -10,6 +10,7 @@ pub fn status_bar(app: &PolygramApp, ui: &mut egui::Ui) {
             dynamic: polygram_core::values::DynamicState::default(),
             geometry: polygram_core::geometry::Geometry::default(),
             metric_defs: vec![],
+            camera_fit_requested: false,
         })
     });
     let g = &published.geometry;

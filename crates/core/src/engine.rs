@@ -32,6 +32,7 @@ pub struct Engine {
     pub(crate) geo_rev: u64,
     pub(crate) pending: Vec<EventKind>,
     pub(crate) scratch_changes: Vec<(crate::types::EntryIx, crate::types::StatusCode, crate::types::StatusCode)>,
+    pub(crate) camera_fit_requested: bool,
 }
 
 const EVENT_LOG_CAPACITY: usize = 200_000;
@@ -66,6 +67,7 @@ impl Engine {
             geo_rev: 0,
             pending: Vec::new(),
             scratch_changes: Vec::new(),
+            camera_fit_requested: false,
         }
     }
 

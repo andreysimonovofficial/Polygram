@@ -316,8 +316,8 @@ impl eframe::App for PolygramApp {
             .map(|s| s.rev)
             .unwrap_or(0);
         if current_rev > 0 && current_rev > self.last_screenshot_rev {
+            self.last_screenshot_rev = current_rev;
             self.screenshot_requested = true;
-            self.last_screenshot_rev = 0;
             ctx.request_repaint();
         }
 
@@ -329,8 +329,21 @@ impl eframe::App for PolygramApp {
                 dynamic: DynamicState::default(),
                 geometry: Geometry::default(),
                 metric_defs: vec![],
+                camera_fit_requested: false,
             })
         });
+
+        // Применить "Вписать" камеру, если ядро запросило вписывание объектов в область просмотра.
+        if published.camera_fit_requested {
+            let viewport = ui.available_rect_before_wrap();
+            crate::interaction::camera::fit_camera_to_objects(
+                &mut self.canvas.camera,
+                &published.geometry,
+                viewport,
+                self.canvas.cell_size,
+            );
+            ctx.request_repaint();
+        }
 
         let theme = self.canvas.theme;
 

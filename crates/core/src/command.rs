@@ -150,6 +150,9 @@ pub enum Command {
 
     AutoLayout,
 
+    /// Вписать все объекты в область просмотра камеры (команда "Вписать" из меню Вид).
+    FitCamera,
+
     /// Управление сервером — единые для GUI, MCP и HTTP.
     RestartServer,
     ChangePort { port: u16 },

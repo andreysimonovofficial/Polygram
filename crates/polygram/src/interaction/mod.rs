@@ -4,7 +4,7 @@
 
 mod add_metric;
 mod api_settings;
-mod camera;
+pub mod camera;
 mod canvas;
 mod context_menu;
 mod create_subdepartment;

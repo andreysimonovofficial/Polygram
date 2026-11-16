@@ -27,6 +27,7 @@ pub struct Published {
     pub dynamic: DynamicState,
     pub geometry: Geometry,
     pub metric_defs: Vec<MetricDefView>,
+    pub camera_fit_requested: bool,
 }
 
 type BatchResult = std::result::Result<Vec<Applied>, (usize, EngineError)>;
@@ -79,6 +80,7 @@ fn publish(
         dynamic: engine.dynamic_state(),
         geometry,
         metric_defs,
+        camera_fit_requested: engine.camera_fit_requested,
     });
     *slot.write().expect("замок публикации") = next.clone();
     next
@@ -92,6 +94,7 @@ impl EngineRuntime {
             dynamic: engine.dynamic_state(),
             geometry: engine.geometry(),
             metric_defs: engine.metric_def_views(),
+            camera_fit_requested: engine.camera_fit_requested,
         });
         let published = Arc::new(RwLock::new(first.clone()));
         let slot = published.clone();
@@ -142,6 +145,7 @@ impl EngineRuntime {
                     }
                     if engine.rev() != last.rev {
                         last = publish(&engine, &slot, &last);
+                        engine.camera_fit_requested = false;
                     }
                     for r in replies {
                         r();

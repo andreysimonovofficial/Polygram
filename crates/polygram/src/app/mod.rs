@@ -87,8 +87,10 @@ pub struct PolygramApp {
     pub screenshot_result: Arc<Mutex<Option<Result<PathBuf, String>>>>,
     /// Запрос на вписывание всех объектов в область просмотра камеры (устанавливается из меню "Вид").
     pub fit_camera_requested: bool,
-    /// Последняя ревизия, для которой был сделан скриншот (для автоматических скриншотов при изменении состояния).
+    /// Последняя ревизия, для которой был сделан скриншот.
     pub last_screenshot_rev: u64,
+    /// Момент последнего автоматического скриншота (ограничение частоты).
+    pub last_screenshot_time: std::time::Instant,
 }
 
 impl PolygramApp {
@@ -147,6 +149,7 @@ impl PolygramApp {
             screenshot_result: Arc::new(Mutex::new(None)),
             fit_camera_requested: false,
             last_screenshot_rev: 0,
+            last_screenshot_time: std::time::Instant::now(),
         }
     }
 }

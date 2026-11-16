@@ -300,5 +300,6 @@ pub fn empty_published() -> Arc<polygram_core::Published> {
         dynamic: polygram_core::values::DynamicState::default(),
         geometry: polygram_core::geometry::Geometry::default(),
         metric_defs: vec![],
+        camera_fit_requested: false,
     })
 }
