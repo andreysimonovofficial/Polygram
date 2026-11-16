@@ -1,6 +1,7 @@
 use crate::app::PolygramApp;
 use crate::app::ui_config::ThemeConfig;
 use chrono::Local;
+use std::fmt;
 
 pub struct CommandLogEntry {
     pub cmd: String,
@@ -13,6 +14,18 @@ pub struct EventLogEntry {
     pub category: String,
     pub message: String,
     pub detail: Option<String>,
+}
+
+impl fmt::Debug for EventLogEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EventLogEntry")
+            .field("time", &self.time)
+            .field("level", &self.level)
+            .field("category", &self.category)
+            .field("message", &self.message)
+            .field("detail", &self.detail)
+            .finish()
+    }
 }
 
 impl PolygramApp {
