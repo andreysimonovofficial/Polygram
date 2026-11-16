@@ -62,7 +62,7 @@ impl crate::engine::Engine {
             fact: v.fact[i].clone(),
             connected: self.hier.has_edges(e),
             status: v.status[i],
-            status_text: v.status[i].label_ru(),
+            status_text: v.status[i].label_ru(om.direction),
         }
     }
 

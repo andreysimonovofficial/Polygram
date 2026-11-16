@@ -14,7 +14,7 @@ pub use layout::handle_move_object;
 pub use metric_defs::{handle_add_metric_def, handle_remove_metric_def, handle_rename_metric_def, handle_set_metric_def_unit};
 pub use metric_entries::{
     handle_add_metric_entry, handle_remove_metric_entry, handle_reorder_metric_entry,
-    handle_set_fact, handle_set_max, handle_set_required, handle_set_value,
+    handle_set_fact, handle_set_in_process, handle_set_max, handle_set_required, handle_set_value,
 };
 pub use objects::{handle_add_object, handle_remove_object, handle_rename_object, handle_set_object_parent};
 
@@ -94,6 +94,11 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
             entry,
             fact,
         } => handle_set_fact(engine, &object, &entry, fact),
+        Command::SetInProcess {
+            object,
+            entry,
+            in_process,
+        } => handle_set_in_process(engine, &object, &entry, in_process),
         Command::Connect {
             from_object,
             from_entry,

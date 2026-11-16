@@ -22,9 +22,9 @@ fn supply_is_shared_proportionally() {
     let e = producer_with_two_consumers(MetricValue::Number(50.0));
     assert!((value_of(&e, "a", "r1") - 50.0).abs() < 1e-9);
     assert!((value_of(&e, "b", "r1") - 40.0).abs() < 1e-9);
-    assert_eq!(status(&e, "a", "r1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "a", "r1"), StatusCode::Expected);
     assert_eq!(status(&e, "b", "r1"), StatusCode::Ok);
-    assert_eq!(status(&e, "p", "o1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
 }
 
 #[test]
@@ -45,9 +45,9 @@ fn exact_and_surplus_supply() {
 #[test]
 fn zero_supply_is_deficit() {
     let e = producer_with_two_consumers(MetricValue::Number(0.0));
-    assert_eq!(status(&e, "a", "r1"), StatusCode::Deficit);
-    assert_eq!(status(&e, "b", "r1"), StatusCode::Deficit);
-    assert_eq!(status(&e, "p", "o1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "a", "r1"), StatusCode::Expected);
+    assert_eq!(status(&e, "b", "r1"), StatusCode::Expected);
+    assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn unconnected_metrics() {
     out(&mut e, "x", "o1", "tovary", MetricValue::Number(5.0), None);
     req(&mut e, "x", "r1", "tovary", MetricValue::Number(5.0), None);
     assert_eq!(status(&e, "x", "o1"), StatusCode::Surplus);
-    assert_eq!(status(&e, "x", "r1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "x", "r1"), StatusCode::Expected);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn output_limit_is_sum_of_target_limits() {
     req(&mut e, "b", "r1", "tovary", MetricValue::Number(40.0), Some(MetricValue::Number(20.0)));
     connect(&mut e, "p", "o1", "a", "r1");
     connect(&mut e, "p", "o1", "b", "r1");
-    assert_eq!(status(&e, "p", "o1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
     let v = e.object_view("p").unwrap();
     assert_eq!(v.outputs[0].max, Some(MetricValue::Number(1000.0)));
 }
@@ -90,7 +90,7 @@ fn own_limit_applies_when_a_target_has_no_limit() {
     req(&mut e, "b", "r1", "tovary", MetricValue::Number(40.0), None);
     connect(&mut e, "p", "o1", "a", "r1");
     connect(&mut e, "p", "o1", "b", "r1");
-    assert_eq!(status(&e, "p", "o1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
     assert_eq!(
         e.object_view("p").unwrap().outputs[0].max,
         Some(MetricValue::Number(80.0))
@@ -103,7 +103,7 @@ fn requirement_change_updates_all_sources() {
     assert_eq!(status(&e, "p", "o1"), StatusCode::Ok);
     set_required(&mut e, "a", "r1", MetricValue::Number(160.0));
     // спрос 200 > значение 100 → дефицит производителя
-    assert_eq!(status(&e, "p", "o1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "p", "o1"), StatusCode::Expected);
     assert!((value_of(&e, "a", "r1") - 100.0).abs() < 1e-9);
     assert!((value_of(&e, "b", "r1") - 40.0).abs() < 1e-9);
 }

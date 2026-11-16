@@ -3,16 +3,18 @@
 use polygram_core::geometry::EntryGeom;
 use polygram_core::{DynamicState, StatusCode};
 
-/// Ранг статуса (чем выше — тем хуже).
+/// Ранг статуса (чем выше — тем выше приоритет показа / хуже состояние).
+/// Ожидается > В процессе > В избытке > Обеспечен / Удовлетворён.
 pub fn status_rank(s: StatusCode) -> u8 {
     match s {
         StatusCode::Ok => 0,
-        StatusCode::Deficit => 1,
-        StatusCode::Surplus => 2,
+        StatusCode::Surplus => 1,
+        StatusCode::InProgress => 2,
+        StatusCode::Expected => 3,
     }
 }
 
-/// Худший статус среди записей.
+/// Худший (высокоприоритетнейший) статус среди записей.
 pub fn worst_status(entries: &[EntryGeom], dynamic: &DynamicState) -> StatusCode {
     let mut worst: u8 = 0;
     for e in entries {
@@ -22,8 +24,9 @@ pub fn worst_status(entries: &[EntryGeom], dynamic: &DynamicState) -> StatusCode
         }
     }
     match worst {
-        2 => StatusCode::Surplus,
-        1 => StatusCode::Deficit,
+        3 => StatusCode::Expected,
+        2 => StatusCode::InProgress,
+        1 => StatusCode::Surplus,
         _ => StatusCode::Ok,
     }
 }

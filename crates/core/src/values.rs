@@ -181,7 +181,12 @@ impl Values {
                 if !h.has_edges(e) {
                     StatusCode::Surplus
                 } else if sum_requests > exit_value + EPS {
-                    StatusCode::Deficit
+                    // Сумма запросов целей превышает выход.
+                    if h.object_metric(e).in_process {
+                        StatusCode::InProgress
+                    } else {
+                        StatusCode::Expected
+                    }
                 } else if (sum_requests - exit_value).abs() <= EPS {
                     StatusCode::Ok
                 } else {
@@ -193,7 +198,7 @@ impl Values {
                 match self.value[i] {
                     MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
                         if dt < now {
-                            StatusCode::Deficit // просрочено
+                            StatusCode::Expected // просрочено
                         } else {
                             StatusCode::Ok // в срок
                         }
@@ -263,12 +268,10 @@ impl Values {
                 }
                 self.supplied[i] = MetricValue::Number(sum_supply.min(required));
 
-                if !h.has_edges(e) {
-                    StatusCode::Deficit
-                } else if sum_supply >= required - EPS {
+                if sum_supply >= required - EPS {
                     StatusCode::Ok
                 } else {
-                    StatusCode::Deficit
+                    StatusCode::Expected
                 }
             }
             MetricKind::Deadline => {
@@ -276,9 +279,9 @@ impl Values {
                 match self.required[i] {
                     MetricValue::Deadline(dt) | MetricValue::Date(dt) => {
                         if dt < now {
-                            StatusCode::Deficit
+                            StatusCode::Expected // просрочено
                         } else {
-                            StatusCode::Ok
+                            StatusCode::Ok // в срок
                         }
                     }
                     _ => StatusCode::Ok,

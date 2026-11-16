@@ -14,8 +14,9 @@ pub fn summary(e: &Engine) {
     );
     let mut by_status: BTreeMap<&str, usize> = BTreeMap::new();
     for m in e.hierarchy().live_object_metrics() {
+        let meta = e.hierarchy().object_metric(m);
         *by_status
-            .entry(e.values().status[m.idx()].label_ru())
+            .entry(e.values().status[m.idx()].label_ru(meta.direction))
             .or_default() += 1;
     }
     for (k, v) in by_status {

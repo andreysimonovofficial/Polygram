@@ -186,29 +186,52 @@ pub struct ObjectMetric {
     pub alive: bool,
 }
 
-/// Единая «правда» о состоянии показателя (3 кода).
+/// Единая «правда» о состоянии показателя.
+/// Приоритет показа (чем выше ранг — тем выше приоритет, см. StatusCode::priority):
+/// Ожидается > В процессе > В избытке > Обеспечен / Удовлетворён.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatusCode {
+    /// Обеспечен (выход) / Удовлетворён (запрос) — приоритет самый низкий.
     Ok,
-    Deficit,
+    /// В избытке (выход): сумма запросов целей меньше выхода.
     Surplus,
+    /// В процессе (выход): сумма запросов целей больше выхода и флаг «В процессе» активирован.
+    InProgress,
+    /// Ожидается (запрос или выход): спрос не покрыт / флаг «В процессе» деактивирован.
+    Expected,
 }
 
 impl StatusCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Ok => "ok",
-            Self::Deficit => "deficit",
             Self::Surplus => "surplus",
+            Self::InProgress => "in_progress",
+            Self::Expected => "expected",
         }
     }
 
-    pub fn label_ru(self) -> &'static str {
+    /// Метка статуса по-русски с учётом направления (всегда верхний регистр).
+    pub fn label_ru(self, dir: Direction) -> &'static str {
         match self {
-            Self::Ok => "Норма",
-            Self::Deficit => "Дефицит",
-            Self::Surplus => "Избыток",
+            Self::Ok => match dir {
+                Direction::Request => "УДОВЛЕТВОРЁН",
+                Direction::Output => "ОБЕСПЕЧЕН",
+            },
+            Self::Surplus => "В ИЗБЫТКЕ",
+            Self::InProgress => "В ПРОЦЕССЕ",
+            Self::Expected => "ОЖИДАЕТСЯ",
+        }
+    }
+
+    /// Ранг приоритета показа статуса (чем выше — тем выше приоритет).
+    pub fn priority(self) -> u8 {
+        match self {
+            Self::Ok => 0,
+            Self::Surplus => 1,
+            Self::InProgress => 2,
+            Self::Expected => 3,
         }
     }
 }

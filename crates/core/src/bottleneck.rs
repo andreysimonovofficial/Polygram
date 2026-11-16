@@ -19,7 +19,7 @@ pub fn find(h: &Hierarchy, v: &Values, limit: usize) -> Vec<Bottleneck> {
         .live_object_metrics()
         .filter(|&e| {
             h.object_metric(e).direction == Direction::Output
-                && v.status[e.idx()] == StatusCode::Deficit
+                && v.status[e.idx()] == StatusCode::Expected
         })
         .map(|e| {
             // Недостача = сумма требуемого целями − значение выхода.

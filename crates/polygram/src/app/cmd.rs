@@ -50,6 +50,15 @@ impl PolygramApp {
             Command::SetFact { object, entry, fact } => {
                 format!("SetFact(object={object}, entry={entry}, fact={fact:?})")
             }
+            Command::SetInProcess {
+                object,
+                entry,
+                in_process,
+            } => {
+                format!(
+                    "SetInProcess(object={object}, entry={entry}, in_process={in_process})"
+                )
+            }
             Command::Connect { from_object, from_entry, to_object, to_entry, throughput } => {
                 format!("Connect({from_object}.{from_entry} → {to_object}.{to_entry}, t={throughput})")
             }
@@ -146,6 +155,15 @@ impl PolygramApp {
             }
             Command::SetFact { object, entry, fact } => {
                 format!("SetFact(object={object}, entry={entry}, fact={fact:?})")
+            }
+            Command::SetInProcess {
+                object,
+                entry,
+                in_process,
+            } => {
+                format!(
+                    "SetInProcess(object={object}, entry={entry}, in_process={in_process})"
+                )
             }
             Command::Connect { from_object, from_entry, to_object, to_entry, throughput } => {
                 format!("Connect({from_object}.{from_entry} → {to_object}.{to_entry}, t={throughput})")

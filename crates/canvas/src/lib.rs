@@ -286,35 +286,28 @@ impl Canvas {
 }
 
 /// Цвет точки статуса и линии связи с учётом направления (Запрос / Выход).
-/// Запрос: Удовлетворён(Ok) = Зелёный, Ожидается(Deficit) = Красный.
-/// Выход: Обеспечен(Ok) = Зелёный, Избыток(Surplus) = Жёлтый, Дефицит(Deficit) = Красный.
+/// Запрос: Удовлетворён(Ok) = Зелёный, Ожидается(Expected) = Красный.
+/// Выход: Обеспечен(Ok) = Зелёный, В избытке(Surplus) = Жёлтый, В процессе/Ожидается = Красный.
 pub fn status_dot_color(status: StatusCode, dir: Direction, theme: &Theme) -> Color32 {
-    match dir {
-        Direction::Request => match status {
-            StatusCode::Ok => theme.status_ok,
-            StatusCode::Deficit => theme.status_deficit,
-            StatusCode::Surplus => theme.text_muted,
+    match status {
+        StatusCode::Ok => theme.status_ok,
+        StatusCode::Surplus => match dir {
+            Direction::Request => theme.text_muted,
+            Direction::Output => theme.status_warning,
         },
-        Direction::Output => match status {
-            StatusCode::Ok => theme.status_ok,
-            StatusCode::Surplus => theme.status_warning,
-            StatusCode::Deficit => theme.status_deficit,
-        },
+        StatusCode::InProgress | StatusCode::Expected => theme.status_deficit,
     }
 }
 
 /// Метка статуса по-русски с учётом направления (всегда верхний регистр).
 pub fn status_label_ru(status: StatusCode, dir: Direction) -> &'static str {
-    match dir {
-        Direction::Request => match status {
-            StatusCode::Ok => "УДОВЛЕТВОРЁН",
-            StatusCode::Deficit => "ОЖИДАЕТСЯ",
-            StatusCode::Surplus => "НОРМА",
+    match status {
+        StatusCode::Ok => match dir {
+            Direction::Request => "УДОВЛЕТВОРЁН",
+            Direction::Output => "ОБЕСПЕЧЕН",
         },
-        Direction::Output => match status {
-            StatusCode::Ok => "ОБЕСПЕЧЕН",
-            StatusCode::Surplus => "ИЗБЫТОК",
-            StatusCode::Deficit => "В ПРОЦЕССЕ",
-        },
+        StatusCode::Surplus => "В ИЗБЫТКЕ",
+        StatusCode::InProgress => "В ПРОЦЕССЕ",
+        StatusCode::Expected => "ОЖИДАЕТСЯ",
     }
 }

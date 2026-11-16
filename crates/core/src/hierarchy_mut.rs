@@ -211,6 +211,7 @@ impl Hierarchy {
             metric_def,
             direction: dir,
             alive: true,
+            in_process: false,
         };
         let ix = if let Some(slot) = self.free_object_metrics.pop() {
             self.object_metrics[slot as usize] = data;

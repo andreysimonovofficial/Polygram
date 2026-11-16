@@ -170,3 +170,38 @@ pub fn handle_reorder_metric_entry(
         .push(crate::event::EventKind::MetricChanged { metric: 0 });
     Ok(Applied::default())
 }
+
+pub fn handle_set_in_process(
+    engine: &mut Engine,
+    object: &str,
+    entry: &str,
+    in_process: bool,
+) -> Result<Applied> {
+    let (_, e) = engine.find_entry(object, entry)?;
+    let om = &engine.hier.object_metric(e);
+    if om.in_process == in_process {
+        return Ok(Applied::default());
+    }
+    let dir = om.direction;
+    engine.hier.object_metrics[e.idx()].in_process = in_process;
+    engine.vals.mark_metric(&engine.hier, e);
+    // Флаг влияет на статус самого выхода и на статусы зависимых запросов через пересчёт входов.
+    match dir {
+        Direction::Output => {
+            for edge in engine.hier.out_entries(e) {
+                let to = engine.hier.edge(edge).to;
+                engine.vals.mark_in(to);
+            }
+        }
+        Direction::Request => {
+            for edge in engine.hier.in_entries(e) {
+                let from = engine.hier.edge(edge).from;
+                engine.vals.mark_out(from);
+            }
+        }
+    }
+    engine
+        .pending
+        .push(crate::event::EventKind::MetricChanged { metric: e.0 });
+    Ok(Applied::default())
+}

@@ -160,7 +160,7 @@ fn removing_nodes_updates_neighbours() {
     assert_eq!(status(&e, "a", "r1"), StatusCode::Ok);
     e.apply(Scope::Root, Command::RemoveObject { object: "p".into() })
         .unwrap();
-    assert_eq!(status(&e, "a", "r1"), StatusCode::Deficit);
+    assert_eq!(status(&e, "a", "r1"), StatusCode::Expected);
     assert_eq!(e.stats().edges, 0);
     assert_eq!(e.dynamic_state(), e.recomputed_state());
 }
@@ -180,7 +180,7 @@ fn slots_are_reused_without_stale_state() {
     req(&mut e, "b", "r1", "tovary", MetricValue::Number(10.0), None);
     assert_eq!(
         status(&e, "b", "r1"),
-        StatusCode::Deficit,
+        StatusCode::Expected,
         "в новом слоте не должно остаться чужого состояния"
     );
     assert_eq!(e.dynamic_state(), e.recomputed_state());
