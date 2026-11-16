@@ -42,12 +42,10 @@ pub fn geometry_with_predictions(
     let mut temp_reparent: Option<(String, Option<String>)> = None;
     if let Some(dept_id) = &drag.drag_over {
         if geometry.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
-            if let Some((gx, gy)) = drag.drag_ghost {
+            if drag.drag_ghost.is_some() {
                 if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == dragged_id) {
                     temp_reparent = Some((obj.id.clone(), obj.parent.clone()));
                     obj.parent = Some(dept_id.clone());
-                    obj.rect.x = gx;
-                    obj.rect.y = gy;
                 }
             }
         }

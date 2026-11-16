@@ -135,7 +135,7 @@ pub fn handle_drag(
 
             let can_move = true;
             if can_move {
-                app.drag.update_prediction(&object_id, preview.predicted);
+                app.drag.update_prediction(&object_id, cursor_cell);
             }
         }
     }
