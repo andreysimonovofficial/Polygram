@@ -1,38 +1,39 @@
+use egui::Color32;
 use egui::Vec2;
 use polygram_canvas::{Canvas, GridMode};
-use egui::Color32;
 use polygram_core::Published;
 use reqwest::blocking::Client;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub mod connection;
+pub mod binding;
+pub mod bindings;
 pub mod chat;
+pub mod cmd;
+pub mod commands;
+pub mod connection;
+pub mod connectors;
+pub mod departments;
 pub mod dialogs;
 pub mod drag;
-pub mod commands;
-pub mod ui_config;
-pub mod connectors;
-pub mod bindings;
-pub mod departments;
-pub mod state;
-pub mod cmd;
-pub mod snapshot;
+pub mod fonts;
 pub mod process;
 pub mod settings;
-pub mod binding;
+pub mod snapshot;
+pub mod state;
+pub mod ui_config;
 
-use connection::ConnectionState;
+use bindings::BindingManager;
 use chat::ChatState;
+use commands::CommandState;
+use connection::ConnectionState;
+use connectors::ConnectorManager;
 use dialogs::DialogState;
 use drag::DragState;
-use commands::CommandState;
-use ui_config::UiConfig;
-use connectors::ConnectorManager;
-use bindings::BindingManager;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use ui_config::UiConfig;
 
 pub use state::CommandLogEntry;
 

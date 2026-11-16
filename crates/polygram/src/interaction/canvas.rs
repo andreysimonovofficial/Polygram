@@ -1,9 +1,9 @@
-﻿use crate::app::drag::DragInteractionState;
+use crate::app::drag::DragInteractionState;
 use crate::app::PolygramApp;
-use polygram_canvas::{MetricBinding, paint_dashed_rect, paint_drag_preview, Theme};
-use polygram_core::types::{Direction, MAX_UI_METRICS_PER_SIDE, MetricKind, NodeKind};
-use polygram_core::{Published};
 use egui::{Color32, Context, Pos2, Rect, Stroke, Vec2};
+use polygram_canvas::{paint_dashed_rect, paint_drag_preview, MetricBinding, Theme};
+use polygram_core::types::{Direction, MetricKind, NodeKind, MAX_UI_METRICS_PER_SIDE};
+use polygram_core::Published;
 use std::collections::HashMap;
 
 /// Основное взаимодействие с холстом: зум, панорамирование, выделение,
@@ -33,15 +33,28 @@ pub fn handle_canvas_interaction(
     if app.fit_camera_requested {
         app.fit_camera_requested = false;
         let viewport = ui.clip_rect();
-        crate::interaction::camera::fit_camera_to_objects(&mut app.canvas.camera, &geometry, viewport, app.canvas.cell_size);
+        crate::interaction::camera::fit_camera_to_objects(
+            &mut app.canvas.camera,
+            &geometry,
+            viewport,
+            app.canvas.cell_size,
+        );
         app.ui_config_save();
-        app.add_event_log("info", "ui", "Камера подобрана под все объекты на холсте", None);
+        app.add_event_log(
+            "info",
+            "ui",
+            "Камера подобрана под все объекты на холсте",
+            None,
+        );
     }
 
     // Двойной клик по заголовку контейнера показателей — открыть окно показателей с развёрнутым разделом.
     let mut handled_by_container = false;
     if let Some(pos) = canvas_response.interact_pointer_pos() {
-        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        let is_double = ctx.input(|i| {
+            i.pointer
+                .button_double_clicked(egui::PointerButton::Primary)
+        });
         if is_double {
             for (object_id, dir, rect) in &app.canvas.container_header_hotspots {
                 if rect.contains(pos) {
@@ -69,7 +82,10 @@ pub fn handle_canvas_interaction(
 
     // Двойной клик по строке показателя — открыть окно показателей с настройками этого показателя.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
-        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        let is_double = ctx.input(|i| {
+            i.pointer
+                .button_double_clicked(egui::PointerButton::Primary)
+        });
         if is_double && !handled_by_container {
             for (object_id, dir, entry, rect) in &app.canvas.drag_metric_hotspots {
                 if rect.contains(pos) {
@@ -97,7 +113,13 @@ pub fn handle_canvas_interaction(
     }
 
     // Двойной клик по объекту — инлайн-редактирование названия прямо на холсте.
-    if canvas_response.hovered() && ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) && !handled_by_container {
+    if canvas_response.hovered()
+        && ctx.input(|i| {
+            i.pointer
+                .button_double_clicked(egui::PointerButton::Primary)
+        })
+        && !handled_by_container
+    {
         if let Some(pos) = canvas_response.interact_pointer_pos() {
             if let Some(object_id) = app.canvas.object_at(&geometry, pos) {
                 let obj_name = geometry
@@ -121,7 +143,13 @@ pub fn handle_canvas_interaction(
 
     if canvas_response.hovered() {
         let old_camera = app.canvas.camera.clone();
-        super::camera::handle_camera(ctx, &canvas_response, &mut app.canvas.camera, app.canvas.cell_size, ui);
+        super::camera::handle_camera(
+            ctx,
+            &canvas_response,
+            &mut app.canvas.camera,
+            app.canvas.cell_size,
+            ui,
+        );
         // Сохраняем положение камеры при каждом изменении, чтобы восстановить при перезапуске.
         if app.canvas.camera != old_camera {
             app.ui_config_save();
@@ -140,7 +168,9 @@ pub fn handle_canvas_interaction(
                     "ui",
                     &format!(
                         "Открыто контекстное меню на {}",
-                        object_id.map(|id| format!("объекте «{id}»")).unwrap_or_else(|| "пустом месте холста".to_owned())
+                        object_id
+                            .map(|id| format!("объекте «{id}»"))
+                            .unwrap_or_else(|| "пустом месте холста".to_owned())
                     ),
                     None,
                 );
@@ -175,11 +205,19 @@ pub fn handle_canvas_interaction(
         }
     }
 
-    app.canvas.paint(ui, &app.geometry_with_predictions(&published), &published.dynamic, hovered_object, app.dialogs.edit_target.as_deref(), &app.selected_objects, app.grid_mode, &bindings);
+    app.canvas.paint(
+        ui,
+        &app.geometry_with_predictions(&published),
+        &published.dynamic,
+        hovered_object,
+        app.dialogs.edit_target.as_deref(),
+        &app.selected_objects,
+        app.grid_mode,
+        &bindings,
+    );
 
     // Перетаскивание показателя: графическая копия строки у курсора и подсветка целевого объекта (рисуется поверх холста).
-    if app.drag.drag_metric().is_some()
-        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    if app.drag.drag_metric().is_some() && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
         if let Some(cur) = canvas_response.interact_pointer_pos() {
             if let Some((source_object, source_dir, entry)) = &app.drag.drag_metric() {
@@ -232,27 +270,26 @@ pub fn handle_canvas_interaction(
                             painter.rect_stroke(
                                 rect_px.expand(2.0),
                                 2.0,
-                                Stroke::new(
-                                    2.0_f32 * app.canvas.camera.zoom,
-                                    theme.accent,
-                                ),
+                                Stroke::new(2.0_f32 * app.canvas.camera.zoom, theme.accent),
                                 egui::StrokeKind::Middle,
                             );
                         }
                     }
                 }
-
             }
         }
     }
 
     // Перетаскивание объекта: подсветить отдел под курсором (как процесс подсвечивается,
     // когда в него перетаскивают показатель).
-    if app.drag.drag_object().is_some()
-        && canvas_response.dragged_by(egui::PointerButton::Primary)
+    if app.drag.drag_object().is_some() && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
         if let Some(cur) = canvas_response.interact_pointer_pos() {
-            let dragged_id = app.drag.drag_object().map(|s| s.to_string()).unwrap_or_default();
+            let dragged_id = app
+                .drag
+                .drag_object()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
             let cell_px = app.canvas.cell_px();
             let offset = app.canvas.camera.offset;
             let zoom = app.canvas.camera.zoom;
@@ -280,38 +317,41 @@ pub fn handle_canvas_interaction(
 
     // Перетаскивание объекта: нарисовать пустую пунктирную рамку ("призрачная копия")
     // в клетке, куда объект уедет при Drop, если цель занята другим объектом или отделом.
-    if app.drag.drag_ghost.is_some()
-        && canvas_response.dragged_by(egui::PointerButton::Primary)
-    {
-                if let Some((gx, gy)) = app.drag.drag_ghost {
-                    if let Some(dragged) = geometry.objects.iter().find(|o| {
-                        o.id == app.drag.drag_object().as_deref().unwrap_or("")
-                    }) {
-                        let cell_px = app.canvas.cell_px();
-                        let offset = app.canvas.camera.offset;
-                        let zoom = app.canvas.camera.zoom;
-                        // Процесс всегда 256×256px = 16×16 клеток по CSS-спецификации,
-                        // независимо от хранимого rect.w/h.
-                        let (gw, gh) = if dragged.kind == NodeKind::Process {
-                            (16, 16)
-                        } else {
-                            (dragged.rect.w, dragged.rect.h)
-                        };
-                        let rect_px = Rect::from_min_size(
-                            Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
-                            Vec2::new(gw as f32 * cell_px, gh as f32 * cell_px),
-                        );
-                        let painter = ui.painter();
-                        paint_dashed_rect(painter, rect_px, zoom, theme.accent);
-                    }
-                }
+    if app.drag.drag_ghost.is_some() && canvas_response.dragged_by(egui::PointerButton::Primary) {
+        if let Some((gx, gy)) = app.drag.drag_ghost {
+            if let Some(dragged) = geometry
+                .objects
+                .iter()
+                .find(|o| o.id == app.drag.drag_object().as_deref().unwrap_or(""))
+            {
+                let cell_px = app.canvas.cell_px();
+                let offset = app.canvas.camera.offset;
+                let zoom = app.canvas.camera.zoom;
+                // Процесс всегда 256×256px = 16×16 клеток по CSS-спецификации,
+                // независимо от хранимого rect.w/h.
+                let (gw, gh) = if dragged.kind == NodeKind::Process {
+                    (16, 16)
+                } else {
+                    (dragged.rect.w, dragged.rect.h)
+                };
+                let rect_px = Rect::from_min_size(
+                    Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
+                    Vec2::new(gw as f32 * cell_px, gh as f32 * cell_px),
+                );
+                let painter = ui.painter();
+                paint_dashed_rect(painter, rect_px, zoom, theme.accent);
+            }
+        }
     }
 
     // Selection Box: рисуем резиновый прямоугольник поверх холста.
     if app.drag.selection_box_start().is_some()
         && canvas_response.dragged_by(egui::PointerButton::Primary)
     {
-        if let (Some(start), Some(cur)) = (app.drag.selection_box_start(), canvas_response.interact_pointer_pos()) {
+        if let (Some(start), Some(cur)) = (
+            app.drag.selection_box_start(),
+            canvas_response.interact_pointer_pos(),
+        ) {
             let painter = ui.painter();
             let x = start.x.min(cur.x);
             let y = start.y.min(cur.y);
@@ -343,7 +383,10 @@ pub fn handle_canvas_interaction(
 
     // Добавить показатель по клику на строку "+ Добавить показатель" — открыть диалог.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
-        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        let is_double = ctx.input(|i| {
+            i.pointer
+                .button_double_clicked(egui::PointerButton::Primary)
+        });
         for (object_id, dir, rect) in &app.canvas.add_metric_hotspots {
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
                 let n = match dir {
@@ -386,7 +429,9 @@ pub fn handle_canvas_interaction(
                 app.add_event_log(
                     "info",
                     "ui",
-                    &format!("Открыт диалог добавления показателя в объект «{object_id}» ({dir:?})"),
+                    &format!(
+                        "Открыт диалог добавления показателя в объект «{object_id}» ({dir:?})"
+                    ),
                     None,
                 );
                 break;
@@ -398,7 +443,10 @@ pub fn handle_canvas_interaction(
 
     // Открыть диалог редактирования списка показателей контейнера по клику на ≡.
     if let Some(pos) = canvas_response.interact_pointer_pos() {
-        let is_double = ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary));
+        let is_double = ctx.input(|i| {
+            i.pointer
+                .button_double_clicked(egui::PointerButton::Primary)
+        });
         for (object_id, dir, rect) in &app.canvas.container_menu_hotspots {
             if rect.contains(pos) && canvas_response.clicked() && !is_double {
                 app.dialogs.container_menu_target = Some(object_id.clone());
@@ -417,134 +465,3 @@ pub fn handle_canvas_interaction(
 
     super::container_menu::handle_container_menu_dialog(app, ctx, published, theme);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::handle_canvas_interaction;
-    use crate::app::drag::DragInteractionState;
-    use crate::app::PolygramApp;
-    use polygram_canvas::theme::Theme;
-    use polygram_core::{
-        geometry::Geometry, geometry::ObjectGeom, layout::Rect as CoreRect,
-        types::NodeKind, Published,
-    };
-    use std::sync::mpsc;
-
-    use egui::{Context, Pos2, PointerButton, Event, Rect, RawInput, Vec2};
-
-    fn make_app() -> PolygramApp {
-        let (_tx, rx) = mpsc::channel::<std::sync::Arc<Published>>();
-        let mut app = PolygramApp::new(rx);
-        let geometry = Geometry {
-            rev: 1,
-            objects: vec![ObjectGeom {
-                ix: 0,
-                id: "obj1".into(),
-                name: "Объект 1".into(),
-                kind: NodeKind::Process,
-                rect: CoreRect::new(10, 10, 16, 16),
-                requests: vec![],
-                outputs: vec![],
-                parent: None,
-            }],
-            edges: vec![],
-        };
-        let published = Published {
-            rev: 1,
-            dynamic: Default::default(),
-            geometry,
-            metric_defs: vec![],
-        };
-        app.connection.snapshot = Some(std::sync::Arc::new(published));
-        app
-    }
-
-    /// Эмулирует нажатие мыши на объект и начало перетаскивания через egui.
-    fn run_frame_button(
-        ctx: &Context,
-        app: &mut PolygramApp,
-        pos: Pos2,
-        button: PointerButton,
-        pressed: bool,
-        published: &std::sync::Arc<Published>,
-        close_menu: &mut bool,
-        theme: &Theme,
-    ) {
-        let mut raw_input = RawInput::default();
-        raw_input.screen_rect = Some(Rect::EVERYTHING);
-        raw_input.events.push(Event::PointerButton {
-            pos,
-            button,
-            pressed,
-            modifiers: Default::default(),
-        });
-        ctx.begin_pass(raw_input);
-        ctx.root_ui(|ui| {
-            handle_canvas_interaction(app, ctx, ui, published, close_menu, theme);
-        });
-        let mut output = ctx.end_pass();
-        output.textures_delta.clear();
-    }
-
-    #[test]
-    fn gui_drag_object_across_canvas() {
-        let ctx = Context::default();
-        let mut app = make_app();
-        let theme = app.canvas.theme.clone();
-
-        // Kamera по умолчанию: offset = (0,0), zoom = 1.0, cell_size = 16.0.
-        // Объект obj1 на клетке (10, 10) -> экранная позиция (160, 160).
-        let cell_px = 16.0;
-        let start_screen = Pos2::new(10.0 * cell_px, 10.0 * cell_px);
-        let end_cell = (20, 10);
-
-        let mut close_menu = false;
-        let published = app.connection.snapshot.as_ref().unwrap().clone();
-
-        // ---- Кадр 1: нажатие на объект (через egui weшь) ----
-        run_frame_button(
-            &ctx, &mut app, start_screen, PointerButton::Primary, true,
-            &published, &mut close_menu, &theme,
-        );
-
-        // ---- Старт перетаскивания (имитируем egui drag_started_by) ----
-        app.drag.start_drag_object(
-            "obj1".into(),
-            start_screen,
-            (10, 10),
-            Vec2::ZERO,
-        );
-        assert!(
-            matches!(app.drag.state, DragInteractionState::DraggingObject { .. }),
-            "ожидался старт перетаскивания, получено {:?}", app.drag.state
-        );
-        assert_eq!(
-            app.drag.drag_object(), Some("obj1"),
-            "перетаскиваемый объект должен быть obj1"
-        );
-
-        // ---- Движение мыши к целевой клетке (клиентское предсказание) ----
-        app.drag.update_prediction("obj1", end_cell);
-        assert_eq!(
-            app.drag.predicted_positions.get("obj1"), Some(&end_cell),
-            "предсказанная позиция должна быть {:?}", end_cell
-        );
-
-        // ---- Дроп объекта ----
-        let result = app.drag.end_drag_object();
-        assert_eq!(
-            result, Some(("obj1".to_string(), (10, 10), None)),
-            "end_drag_object должен вернуть объект и стартовую клетку (target нет без begin_drop_object)"
-        );
-        assert!(
-            matches!(app.drag.state, DragInteractionState::Idle),
-            "после дропа должно быть Idle, получено {:?}", app.drag.state
-        );
-        // Предсказанная позиция остаётся (клиентское предсказание применено).
-        assert_eq!(
-            app.drag.predicted_positions.get("obj1"), Some(&end_cell),
-            "предсказанная позиция после дропа должна остаться {:?}", end_cell
-        );
-    }
-}
-

@@ -1,30 +1,30 @@
-﻿//! РћРєРЅРѕ Polygram: egui-РѕР±РѕР»РѕС‡РєР° СЃ РјРµРЅСЋ, РїР°Р»РёС‚СЂРѕР№ РєРѕРјР°РЅРґ, СЃС‚СЂРѕРєРѕР№ СЃС‚Р°С‚СѓСЃР° Рё С…РѕР»СЃС‚РѕРј.
+//! РћРєРЅРѕ Polygram: egui-РѕР±РѕР»РѕС‡РєР° СЃ РјРµРЅСЋ, РїР°Р»РёС‚СЂРѕР№ РєРѕРјР°РЅРґ, СЃС‚СЂРѕРєРѕР№ СЃС‚Р°С‚СѓСЃР° Рё С…РѕР»СЃС‚РѕРј.
 //! Shell вЂ” thin-РєР»РёРµРЅС‚: РІСЃРµ РєРѕРјР°РЅРґС‹ СѓС…РѕРґСЏС‚ С‡РµСЂРµР· HTTP РЅР° polygram-api (8080),
 //! СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРґС‚СЏРіРёРІР°РµС‚СЃСЏ С‡РµСЂРµР· /api/snapshot. API-СЃРµСЂРІРµСЂ СЂР°Р±РѕС‚Р°РµС‚ 24/7,
 //! GUI РјРѕР¶РЅРѕ РїРµСЂРµСЃРѕР±РёСЂР°С‚СЊ Рё РїРµСЂРµР·Р°РїСѓСЃРєР°С‚СЊ СЃРєРѕР»СЊРєРѕ СѓРіРѕРґРЅРѕ.
 
 mod app;
+mod command_log_panel;
+mod connection_panel;
+mod connectors_panel;
+mod document;
+mod document_io;
+mod frontend_log_panel;
 mod interaction;
 mod menu;
 mod palette;
 mod panels;
-mod document;
-mod document_io;
-mod command_log_panel;
-mod connection_panel;
-mod connectors_panel;
-mod frontend_log_panel;
 mod status;
 
 use app::PolygramApp;
-use eframe::egui::{self, ColorImage, FontData, FontDefinitions};
+use eframe::egui::{self, ColorImage};
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
 use reqwest::blocking::Client;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 fn load_icon() -> egui::IconData {
     let img = image::load_from_memory(include_bytes!("../assets/favicon.png"))
@@ -36,163 +36,6 @@ fn load_icon() -> egui::IconData {
         width,
         height,
     }
-}
-
-fn register_fonts(ctx: &egui::Context) {
-    let mut fonts = FontDefinitions::default();
-
-    let families = ["inter"];
-    let weights = [
-        "thin", "extralight", "light", "regular", "medium", "semibold",
-        "bold", "extrabold", "black",
-    ];
-
-    let fallback_key = load_any_system_font(&mut fonts);
-    let unicode_fallback_key = load_unicode_fallback_font(&mut fonts);
-
-    for family in families {
-        for weight in weights {
-            let key = format!("{family}-{weight}");
-            let mut loaded = false;
-
-            if let Some(dir) = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            {
-                let path = dir.join(format!("fonts/{key}.ttf"));
-                if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Name(key.clone().into()))
-                        .or_default()
-                        .push(key.clone());
-                    loaded = true;
-                }
-            }
-            if !loaded {
-                let path = format!("fonts/{key}.ttf");
-                if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Name(key.clone().into()))
-                        .or_default()
-                        .push(key.clone());
-                    loaded = true;
-                }
-            }
-            if !loaded {
-                let path = format!("crates/polygram/fonts/{key}.ttf");
-                if let Ok(data) = std::fs::read(&path) {
-                    fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Name(key.clone().into()))
-                        .or_default()
-                        .push(key.clone());
-                    loaded = true;
-                }
-            }
-            if !loaded {
-                if let Some(fb) = &fallback_key {
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Name(key.clone().into()))
-                        .or_default()
-                        .push(fb.clone());
-                }
-            }
-            if let Some(uf) = &unicode_fallback_key {
-                fonts
-                    .families
-                    .entry(egui::FontFamily::Name(key.clone().into()))
-                    .or_default()
-                    .push(uf.clone());
-            }
-        }
-    }
-
-    if let Some(fb) = &fallback_key {
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .push(fb.clone());
-    }
-    if let Some(uf) = &unicode_fallback_key {
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .push(uf.clone());
-        fonts
-            .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default()
-            .push(uf.clone());
-    }
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .push("inter-regular".to_owned());
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .push("inter-semibold".to_owned());
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .push("inter-regular".to_owned());
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .push("inter-semibold".to_owned());
-
-    ctx.set_fonts(fonts);
-}
-
-fn load_any_system_font(fonts: &mut FontDefinitions) -> Option<String> {
-    for path in [
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/times.ttf",
-    ] {
-        if let Ok(data) = std::fs::read(path) {
-            let key = "system".to_owned();
-            fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
-            fonts
-                .families
-                .entry(egui::FontFamily::Name(key.clone().into()))
-                .or_default()
-                .push(key.clone());
-            return Some(key);
-        }
-    }
-    None
-}
-
-fn load_unicode_fallback_font(fonts: &mut FontDefinitions) -> Option<String> {
-    for path in [
-        "C:/Windows/Fonts/seguisym.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-    ] {
-        if let Ok(data) = std::fs::read(path) {
-            let key = "unicode-fallback".to_owned();
-            fonts.font_data.insert(key.clone(), std::sync::Arc::new(FontData::from_owned(data)));
-            fonts
-                .families
-                .entry(egui::FontFamily::Name(key.clone().into()))
-                .or_default()
-                .push(key.clone());
-            return Some(key);
-        }
-    }
-    None
 }
 
 impl eframe::App for PolygramApp {
@@ -258,15 +101,18 @@ impl eframe::App for PolygramApp {
 
             // Р’РёРґР¶РµС‚С‹.
             style.visuals.widgets.noninteractive.bg_fill = theme.panel_bg;
-            style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
-            style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
+            style.visuals.widgets.noninteractive.bg_stroke =
+                egui::Stroke::new(1.0, theme.panel_border);
+            style.visuals.widgets.noninteractive.fg_stroke =
+                egui::Stroke::new(1.0, theme.panel_text);
             style.visuals.widgets.noninteractive.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.inactive.bg_fill = theme.panel_bg;
             style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, theme.panel_border);
             style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
             style.visuals.widgets.inactive.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.hovered.bg_fill = theme.menu_hover;
-            style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, theme.accent_secondary);
+            style.visuals.widgets.hovered.bg_stroke =
+                egui::Stroke::new(1.0, theme.accent_secondary);
             style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, theme.panel_text);
             style.visuals.widgets.hovered.corner_radius = theme.widget_rounding_egui();
             style.visuals.widgets.active.bg_fill = theme.accent;
@@ -297,11 +143,26 @@ impl eframe::App for PolygramApp {
             };
 
             // РўРµРєСЃС‚РѕРІС‹Рµ СЃС‚РёР»Рё / С€СЂРёС„С‚С‹.
-            style.text_styles.get_mut(&egui::TextStyle::Body).map(|f| f.size = theme.text_size_body);
-            style.text_styles.get_mut(&egui::TextStyle::Button).map(|f| f.size = theme.text_size_button);
-            style.text_styles.get_mut(&egui::TextStyle::Small).map(|f| f.size = theme.text_size_small);
-            style.text_styles.get_mut(&egui::TextStyle::Heading).map(|f| f.size = theme.text_size_heading);
-            style.text_styles.get_mut(&egui::TextStyle::Monospace).map(|f| f.size = theme.text_size_monospace);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Body)
+                .map(|f| f.size = theme.text_size_body);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Button)
+                .map(|f| f.size = theme.text_size_button);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Small)
+                .map(|f| f.size = theme.text_size_small);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Heading)
+                .map(|f| f.size = theme.text_size_heading);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Monospace)
+                .map(|f| f.size = theme.text_size_monospace);
         });
     }
 
@@ -400,7 +261,12 @@ impl eframe::App for PolygramApp {
                 );
             } else {
                 interaction::handle_canvas_interaction(
-                    self, &ctx, ui, &published, &mut close_menu, &theme,
+                    self,
+                    &ctx,
+                    ui,
+                    &published,
+                    &mut close_menu,
+                    &theme,
                 );
             }
         });
@@ -443,7 +309,7 @@ impl eframe::App for PolygramApp {
             let ctx_repaint = ctx.clone();
             ctx.request_screenshot(move |image: Arc<ColorImage>| {
                 let dir = PathBuf::from("screenshots");
-                let res = save_screenshot(&image, &dir);
+                let res = crate::app::snapshot::save_screenshot(&image, &dir);
                 let mut guard = result.lock().unwrap();
                 *guard = Some(res.clone().map(|p| Ok(p)).unwrap_or_else(|e| Err(e)));
                 drop(guard);
@@ -460,7 +326,12 @@ impl eframe::App for PolygramApp {
             match res {
                 Ok(path) => {
                     self.last_status = format!("Снимок экрана сохранён: {}", path.display());
-                    self.add_event_log("info", "screenshot", &format!("Сохранён: {}", path.display()), None);
+                    self.add_event_log(
+                        "info",
+                        "screenshot",
+                        &format!("Сохранён: {}", path.display()),
+                        None,
+                    );
                 }
                 Err(e) => {
                     self.last_status = format!("Ошибка скриншота: {}", e);
@@ -490,33 +361,6 @@ impl eframe::App for PolygramApp {
     }
 }
 /// РЎРѕС…СЂР°РЅРёС‚СЊ РєР°РґСЂ egui ColorImage РєР°Рє PNG РІ СѓРєР°Р·Р°РЅРЅСѓСЋ РґРёСЂРµРєС‚РѕСЂРёСЋ.
-fn save_screenshot(image: &ColorImage, dir: &PathBuf) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-
-    let ts = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_secs();
-    let path = dir.join(format!("screenshot_{}.png", ts));
-
-    let width = image.width() as u32;
-    let height = image.height() as u32;
-    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
-    for pixel in &image.pixels {
-        let [r, g, b, a] = pixel.to_array();
-        rgba.push(r);
-        rgba.push(g);
-        rgba.push(b);
-        rgba.push(a);
-    }
-
-    let img = image::RgbaImage::from_raw(width, height, rgba)
-        .ok_or("Failed to create RgbaImage from screenshot pixels")?;
-    img.save(&path)
-        .map_err(|e| format!("Failed to save screenshot PNG: {}", e))?;
-
-    Ok(path)
-}
 
 fn main() -> eframe::Result {
     let api_client = Client::builder()
@@ -540,7 +384,7 @@ fn main() -> eframe::Result {
         "Polygram",
         options,
         Box::new(move |cc| {
-            register_fonts(&cc.egui_ctx);
+            crate::app::fonts::register_fonts(&cc.egui_ctx);
             let mut app = PolygramApp::new(snapshot_rx);
             app.start_api_process();
             app.try_connect_once();

@@ -6,18 +6,21 @@ mod add_metric;
 mod api_settings;
 pub mod camera;
 mod canvas;
+
+#[cfg(test)]
+mod canvas_tests;
+pub mod container_menu;
 mod context_menu;
 mod create_subdepartment;
-pub mod container_menu;
 mod delete;
 mod drag_object;
-mod reparent_confirm;
 mod rename;
+mod reparent_confirm;
 mod selection;
 
 pub use canvas::handle_canvas_interaction;
 pub use context_menu::context_menu;
 pub use create_subdepartment::handle_create_subdepartment;
 pub use delete::handle_delete_confirm;
-pub use reparent_confirm::handle_reparent_confirm;
 pub use rename::{handle_rename_dialog, inline_rename_editor};
+pub use reparent_confirm::handle_reparent_confirm;
