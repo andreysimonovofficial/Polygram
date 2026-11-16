@@ -5,7 +5,7 @@
 //! Запуск генератора: cargo run -p polygram --example gen_nested
 
 use polygram_core::{
-    document::{Document, DocEdge, DocObject, DocMetricDef},
+    document::{DocEdge, DocMetricDef, DocObject, Document},
     types::NodeKind,
 };
 use std::fs;

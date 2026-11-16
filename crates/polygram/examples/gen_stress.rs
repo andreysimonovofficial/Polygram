@@ -3,11 +3,11 @@
 //! РёРµСЂР°СЂС…РёСЏ РѕС‚РґРµР»РѕРІ Рё СЃРІСЏР·Рё РјРµР¶РґСѓ РѕР±СЉРµРєС‚Р°РјРё.
 //! Р—Р°РїСѓСЃРє: cargo run -p polygram --example gen_stress
 
+use chrono::{DateTime, Utc};
 use polygram_core::{
-    document::{Document, DocEdge, DocObject, DocObjectMetric, DocMetricDef},
+    document::{DocEdge, DocMetricDef, DocObject, DocObjectMetric, Document},
     types::{Direction, MetricKind, MetricValue, NodeKind},
 };
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::fs;
 
@@ -62,7 +62,13 @@ fn txt(s: &str) -> MetricValue {
     MetricValue::Text(s.to_owned())
 }
 
-fn entry(id: &str, md: &str, dir: Direction, value: MetricValue, required: MetricValue) -> DocObjectMetric {
+fn entry(
+    id: &str,
+    md: &str,
+    dir: Direction,
+    value: MetricValue,
+    required: MetricValue,
+) -> DocObjectMetric {
     DocObjectMetric {
         id: id.to_owned(),
         metric_def: md.to_owned(),
@@ -90,13 +96,13 @@ fn main() {
     }
 
     let add = |objects: &mut Vec<DocObject>,
-                   id: &str,
-                   name: &str,
-                   kind: NodeKind,
-                   at: [i32; 2],
-                   parent: Option<&str>,
-                   requests: Vec<DocObjectMetric>,
-                   outputs: Vec<DocObjectMetric>| {
+               id: &str,
+               name: &str,
+               kind: NodeKind,
+               at: [i32; 2],
+               parent: Option<&str>,
+               requests: Vec<DocObjectMetric>,
+               outputs: Vec<DocObjectMetric>| {
         objects.push(DocObject {
             id: id.to_owned(),
             name: name.to_owned(),
@@ -124,19 +130,73 @@ fn main() {
     };
 
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep000", "Р¦РµРЅС‚СЂР°Р»СЊРЅС‹Р№ РѕС„РёСЃ", NodeKind::Department, [2200, 0], None, reqs, outs);
+    add(
+        &mut objects,
+        "dep000",
+        "Р¦РµРЅС‚СЂР°Р»СЊРЅС‹Р№ РѕС„РёСЃ",
+        NodeKind::Department,
+        [2200, 0],
+        None,
+        reqs,
+        outs,
+    );
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep001", "Р¦РµС… Рђ", NodeKind::Department, [2200, 40], Some("dep000"), reqs, outs);
+    add(
+        &mut objects,
+        "dep001",
+        "Р¦РµС… Рђ",
+        NodeKind::Department,
+        [2200, 40],
+        Some("dep000"),
+        reqs,
+        outs,
+    );
     let (reqs, outs) = dmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "dep002", "Р¦РµС… Р‘", NodeKind::Department, [2200, 80], Some("dep000"), reqs, outs);
+    add(
+        &mut objects,
+        "dep002",
+        "Р¦РµС… Р‘",
+        NodeKind::Department,
+        [2200, 80],
+        Some("dep000"),
+        reqs,
+        outs,
+    );
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc000", "РџСЂРѕС†РµСЃСЃ 000", NodeKind::Process, [2240, 0], Some("dep000"), reqs, outs);
+    add(
+        &mut objects,
+        "proc000",
+        "РџСЂРѕС†РµСЃСЃ 000",
+        NodeKind::Process,
+        [2240, 0],
+        Some("dep000"),
+        reqs,
+        outs,
+    );
     proc_index.insert("proc000".to_owned(), objects.len() - 1);
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc001", "РџСЂРѕС†РµСЃСЃ 001", NodeKind::Process, [2240, 40], Some("dep001"), reqs, outs);
+    add(
+        &mut objects,
+        "proc001",
+        "РџСЂРѕС†РµСЃСЃ 001",
+        NodeKind::Process,
+        [2240, 40],
+        Some("dep001"),
+        reqs,
+        outs,
+    );
     proc_index.insert("proc001".to_owned(), objects.len() - 1);
     let (reqs, outs) = pmet(rng.range(40.0, 160.0), rng.range(40.0, 160.0));
-    add(&mut objects, "proc002", "РџСЂРѕС†РµСЃСЃ 002", NodeKind::Process, [2240, 80], Some("dep002"), reqs, outs);
+    add(
+        &mut objects,
+        "proc002",
+        "РџСЂРѕС†РµСЃСЃ 002",
+        NodeKind::Process,
+        [2240, 80],
+        Some("dep002"),
+        reqs,
+        outs,
+    );
     proc_index.insert("proc002".to_owned(), objects.len() - 1);
 
     // ---------- РћСЃС‚Р°Р»СЊРЅС‹Рµ РѕС‚РґРµР»С‹ (147) РЅР° СЃРµС‚РєРµ ----------
@@ -145,7 +205,16 @@ fn main() {
         let v = rng.range(40.0, 160.0);
         let r = rng.range(40.0, 160.0);
         let (reqs, outs) = dmet(v, r);
-        add(&mut objects, &id, &format!("РћС‚РґРµР» {:03}", i), NodeKind::Department, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
+        add(
+            &mut objects,
+            &id,
+            &format!("РћС‚РґРµР» {:03}", i),
+            NodeKind::Department,
+            grid_pos(&mut grid_idx, grid_pitch, grid_cols),
+            None,
+            reqs,
+            outs,
+        );
     }
 
     // ---------- РџСЂРѕС†РµСЃСЃС‹ (747) РЅР° СЃРµС‚РєРµ ----------
@@ -158,7 +227,16 @@ fn main() {
             r = 100.0;
         }
         let (reqs, outs) = pmet(v, r);
-        add(&mut objects, &id, &format!("РџСЂРѕС†РµСЃСЃ {:03}", i), NodeKind::Process, grid_pos(&mut grid_idx, grid_pitch, grid_cols), None, reqs, outs);
+        add(
+            &mut objects,
+            &id,
+            &format!("РџСЂРѕС†РµСЃСЃ {:03}", i),
+            NodeKind::Process,
+            grid_pos(&mut grid_idx, grid_pitch, grid_cols),
+            None,
+            reqs,
+            outs,
+        );
         proc_index.insert(id, objects.len() - 1);
     }
 
@@ -207,9 +285,9 @@ fn main() {
             continue;
         }
         let val = match i % 60 {
-            0 => 10.0,   // Deficit: СЃРїСЂРѕСЃ > Р·РЅР°С‡РµРЅРёРµ
-            1 => 200.0,  // Surplus: Р·РЅР°С‡РµРЅРёРµ > СЃРїСЂРѕСЃ
-            2 => 100.0,  // Ok: СЃР±Р°Р»Р°РЅСЃРёСЂРѕРІР°РЅРѕ
+            0 => 10.0,  // Deficit: СЃРїСЂРѕСЃ > Р·РЅР°С‡РµРЅРёРµ
+            1 => 200.0, // Surplus: Р·РЅР°С‡РµРЅРёРµ > СЃРїСЂРѕСЃ
+            2 => 100.0, // Ok: СЃР±Р°Р»Р°РЅСЃРёСЂРѕРІР°РЅРѕ
             _ => continue,
         };
         let from_out = objects
@@ -243,15 +321,69 @@ fn main() {
     }
 
     let metric_defs = vec![
-        DocMetricDef { id: "num".to_owned(), name: "Р’С‹СЂР°Р±РѕС‚РєР°".to_owned(), kind: MetricKind::Number, unit: "С€С‚.".to_owned(), api: None },
-        DocMetricDef { id: "dem".to_owned(), name: "РџРѕС‚СЂРµР±РЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Number, unit: "С€С‚.".to_owned(), api: None },
-        DocMetricDef { id: "pct".to_owned(), name: "Р—Р°РіСЂСѓР·РєР°".to_owned(), kind: MetricKind::Percentage, unit: "%".to_owned(), api: None },
-        DocMetricDef { id: "bin".to_owned(), name: "Р“РѕС‚РѕРІРЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Binary, unit: "".to_owned(), api: None },
-        DocMetricDef { id: "mon".to_owned(), name: "Р‘СЋРґР¶РµС‚".to_owned(), kind: MetricKind::Money, unit: "в‚Ѕ".to_owned(), api: None },
-        DocMetricDef { id: "dl".to_owned(), name: "РЎСЂРѕРє".to_owned(), kind: MetricKind::Deadline, unit: "РґРґ.РјРј.РіРіРіРі С‡С‡:РјРј".to_owned(), api: None },
-        DocMetricDef { id: "dt".to_owned(), name: "Р”Р°С‚Р°".to_owned(), kind: MetricKind::Date, unit: "РґРґ.РјРј.РіРіРіРі".to_owned(), api: None },
-        DocMetricDef { id: "txt".to_owned(), name: "РџСЂРёРјРµС‡Р°РЅРёРµ".to_owned(), kind: MetricKind::Text, unit: "".to_owned(), api: None },
-        DocMetricDef { id: "dur".to_owned(), name: "Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ".to_owned(), kind: MetricKind::Duration, unit: "С‡С‡:РјРј".to_owned(), api: None },
+        DocMetricDef {
+            id: "num".to_owned(),
+            name: "Р’С‹СЂР°Р±РѕС‚РєР°".to_owned(),
+            kind: MetricKind::Number,
+            unit: "С€С‚.".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "dem".to_owned(),
+            name: "РџРѕС‚СЂРµР±РЅРѕСЃС‚СЊ".to_owned(),
+            kind: MetricKind::Number,
+            unit: "С€С‚.".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "pct".to_owned(),
+            name: "Р—Р°РіСЂСѓР·РєР°".to_owned(),
+            kind: MetricKind::Percentage,
+            unit: "%".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "bin".to_owned(),
+            name: "Р“РѕС‚РѕРІРЅРѕСЃС‚СЊ".to_owned(),
+            kind: MetricKind::Binary,
+            unit: "".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "mon".to_owned(),
+            name: "Р‘СЋРґР¶РµС‚".to_owned(),
+            kind: MetricKind::Money,
+            unit: "в‚Ѕ".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "dl".to_owned(),
+            name: "РЎСЂРѕРє".to_owned(),
+            kind: MetricKind::Deadline,
+            unit: "РґРґ.РјРј.РіРіРіРі С‡С‡:РјРј".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "dt".to_owned(),
+            name: "Р”Р°С‚Р°".to_owned(),
+            kind: MetricKind::Date,
+            unit: "РґРґ.РјРј.РіРіРіРі".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "txt".to_owned(),
+            name: "РџСЂРёРјРµС‡Р°РЅРёРµ".to_owned(),
+            kind: MetricKind::Text,
+            unit: "".to_owned(),
+            api: None,
+        },
+        DocMetricDef {
+            id: "dur".to_owned(),
+            name: "Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ".to_owned(),
+            kind: MetricKind::Duration,
+            unit: "С‡С‡:РјРј".to_owned(),
+            api: None,
+        },
     ];
 
     let doc = Document {
