@@ -211,8 +211,12 @@ impl Engine {
                 api: md.api.clone(),
             });
         }
+        // Объекты в порядке зависимостей (родитель перед ребёнком), чтобы
+        // find_object(parent) не падал при прямой ссылке на родителя,
+        // который встречается позже в списке.
+        let ordered_objects = Self::topological_order(doc);
         // Потом объекты.
-        for o in &doc.objects {
+        for o in &ordered_objects {
             cmds.push(Command::AddObject {
                 id: Some(o.id.clone()),
                 name: o.name.clone(),
@@ -255,6 +259,35 @@ impl Engine {
             .map_err(|(i, e)| EngineError::Document(format!("команда {}: {e}", i + 1)))?;
         Ok(engine)
     }
+
+/// Топологическая сортировка объектов: родители před детьми.
+/// При циклической зависимости или отсутствующем родителе оставляет
+/// оставшиеся объекты как есть (ошибкаявится на apply_batch).
+fn topological_order(doc: &Document) -> Vec<&DocObject> {
+    use std::collections::HashSet;
+    let mut ordered: Vec<&DocObject> = Vec::new();
+    let mut added: HashSet<&str> = HashSet::new();
+    let mut remaining: Vec<&DocObject> = doc.objects.iter().collect();
+    while !remaining.is_empty() {
+        let mut progress = false;
+        let mut next_remaining = Vec::new();
+        for o in &remaining {
+            if o.parent.as_ref().map_or(true, |p| added.contains(p.as_str())) {
+                ordered.push(*o);
+                added.insert(o.id.as_str());
+                progress = true;
+            } else {
+                next_remaining.push(*o);
+            }
+        }
+        if !progress {
+            ordered.extend(remaining.into_iter());
+            break;
+        }
+        remaining = next_remaining;
+    }
+    ordered
+}
 
     pub fn from_json(json: &str) -> Result<Engine> {
         Engine::from_document(&Document::parse(json)?)
