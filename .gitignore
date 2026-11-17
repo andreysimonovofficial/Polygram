@@ -2,3 +2,4 @@ target/
 *.pg
 !examples/*.pg
 screenshots/
+.obsidian/

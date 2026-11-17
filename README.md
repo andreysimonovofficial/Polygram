@@ -1,50 +1,55 @@
+---
+status: active
+owner: Andrii Simonov
+last_updated: 2026-11-17
+lang: en
+---
+
 # Polygram
 
-Визуальный графовый редактор для оркестрации ИИ-Корпораций.
+**Language:** **English** | [Русский](README.ru.md)
 
-Polygram — живая карта любой системы (завод, компания, дата-центр, домашнее хозяйство): объекты с показателями, связанные потоками. Видно, где чего не хватает, где избыток и где узкое место. Управлять картой может и человек, и ИИ-агент — на равных правах.
+Visual graph editor for orchestrating AI-Corporations with 10,000+ simultaneously operating AI agents and live employees, generating real monetary profit.
 
-С Polygram вы можете создавать и тонко настраивать **ИИ-Корпорации** из 10 000+ одновременно работающих ИИ-Агентов и живых сотрудников, которые генерируют реальную денежную прибыль.
+Polygram is a living map of any system (factory, company, data center, household): objects with metrics, connected by flows. It is visible where something is lacking, where there is surplus, and where the bottleneck is. The map can be managed by both a human and an AI agent — on equal terms.
 
-[![Build](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
-[![GUI](https://img.shields.io/badge/egui-0.37-purple?logo=egui)](https://github.com/emilk/egui)
-[![License](https://img.shields.io/badge/License-UNLICENSED-red)](LICENSE)
+With Polygram you can create and finely tune **AI-Corporations** from 10,000+ simultaneously operating AI agents and live employees that generate real monetary profit.
 
 ---
 
-## Что это такое
+## What it is
 
-Polygram разделяет **вычисления** и **окно**. Ядро на Rust работает без графики — на сервере, в дата-центре, в фоне у агента. Окно на egui — лишь тонкая оболочка, которая рисует то, что ядро уже посчитало.
+Polygram separates **computation** from **window**. The Rust core works without graphics — on a server, in a data center, in the background at the agent. The egui window is just a thin shell that draws what the core has already calculated.
 
-Все изменения идут **командами** (`Command`, сериализуются в JSON). Все результаты — **события** (`Event`) с номером ревизии. Окно, MCP, HTTP API и консольный терминал равноправны: каждый говорит на одном языке команд.
+All changes go through **commands** (`Command`, serialized as JSON). All results are **events** (`Event`) with a revision number. Window, MCP, HTTP API, and console terminal are equal: each speaks the same command language.
 
-> **Одна дверь.** Человек (меню), агент (MCP-инструменты) и внешний мир (Google Sheets, Analytics, Monobank и т. д.) входят через единый API.
-
----
-
-## Для кого
-
-| Роль | Что получает с Polygram |
-|------|-------------------------|
-| **Владелец бизнеса** | Визуальную модель ИИ-Корпорации: отделы, процессы, показатели прибыли, узкие места в реальном времени |
-| **Руководитель отдела** | Карту своего отдела с метриками, чатом отдела и историей изменений |
-| **ИИ-инженер** | API, MCP-сервер и JSONL-скрипты для управления агентами и коннекторами |
-| **Разработчик** | Ядро на Rust без зависимостей от UI, тестируемое изолированно, регрессия на JSONL |
+> **One door.** A human (menu), an agent (MCP tools), and the outside world (Google Sheets, Analytics, Monobank, etc.) enter through a single API.
 
 ---
 
-## Ключевые возможности
+## Who it is for
 
-### Графовая модель корпорации
-- **Отделы, процессы, показатели** — иерархия в трёх отдельных хранилищах (структура, значения/статусы, геометрия)
-- **Потоки между объектами** — связь результата одного объекта с запросом другого с коэффициентом пропускной способности
-- **Статусы метрик** — `Ok`, `Surplus`, `In Progress`, `Expected` — рассчитываются инкрементально при каждом изменении
+| Role | What they get from Polygram |
+|------|-----------------------------|
+| **Business owner** | Visual model of an AI-Corporation: departments, processes, profit metrics, bottlenecks in real time |
+| **Department head** | Map of their department with metrics, department chat, and change history |
+| **AI engineer** | API, MCP server, and JSONL scripts for managing agents and connectors |
+| **Developer** | Rust core without UI dependencies, testable in isolation, regression on JSONL |
 
-### 10 000+ объектов
-Целевой запас производительности — десятки тысяч объектов и связей. Ядро собирает граф за миллисекунды, пересчитывает только помеченное, публикует неизменяемые снимки для клиентов.
+---
 
-### Единый язык команд
-Одна команда — одна строка JSON. Работает одинаково из GUI, CLI, MCP и HTTP API:
+## Key capabilities
+
+### Graphical corporate model
+- **Departments, processes, metrics** — hierarchy in three separate stores (structure, values/statuses, geometry)
+- **Flows between objects** — connection of one object's result to another's request with throughput coefficient
+- **Metric statuses** — `Ok`, `Surplus`, `In Progress`, `Expected` — calculated incrementally on each change
+
+### 10,000+ objects
+Target performance reserve — tens of thousands of objects and connections. The core assembles the graph in milliseconds, recalculates only marked parts, publishes immutable snapshots for clients.
+
+### Unified command language
+One command — one JSON string. Works the same from GUI, CLI, MCP, and HTTP API:
 ```json
 {"cmd":"add_object","id":"sales","name":"Отдел продаж","kind":"department"}
 {"cmd":"add_metric_def","id":"profit","name":"Прибыль","kind":"money","unit":"$"}
@@ -52,141 +57,145 @@ Polygram разделяет **вычисления** и **окно**. Ядро �
 {"cmd":"connect","from_object":"marketing","from_entry":"leads","to_object":"sales","to_entry":"leads","throughput":100}
 ```
 
-### MCP-сервер (для ИИ-агентов)
-JSON-RPC 2.0 поверх stdio. Подключается к Claude Desktop, Open WebUI и другим MCP-клиентам. Инструменты:
-- `execute_command` — выполнить команду Polygram
-- `get_snapshot` — последний снимок состояния
-- `get_objects` — список всех объектов
-- `get_stats` — статистика графа
+### MCP server (for AI agents)
+JSON-RPC 2.0 over stdio. Connects to Claude Desktop, Open WebUI, and other MCP clients. Tools:
+- `execute_command` — execute a Polygram command
+- `get_snapshot` — last state snapshot
+- `get_objects` — list of all objects
+- `get_stats` — graph statistics
 
 ### HTTP API
-Порт 8080. Эндпоинты: `GET /api/snapshot`, `GET /api/stats`, `GET /api/objects`, `POST /api/commands`.
+Port 8080. Endpoints: `GET /api/snapshot`, `GET /api/stats`, `GET /api/objects`, `POST /api/commands`.
 
-### CLI-терминал `pg`
+### CLI terminal `pg`
 ```powershell
-pg bench 10000                    # замер скорости: 10 000 объектов
-pg run examples/demo.jsonl        # выполнить сценарий команд
-pg run examples/demo.jsonl --save corp.pg   # сохранить корпорацию в файл
-pg open corp.pg                   # сводка по проекту и узкие места
+pg bench 10000                    # speed test: 10,000 objects
+pg run examples/demo.jsonl        # run command scenario
+pg run examples/demo.jsonl --save corp.pg   # save corporation to file
+pg open corp.pg                   # project summary and bottlenecks
 ```
 
-### Визуальный холст (egui)
-- GPU-холст с камерой, зумом и перемещением
-- Уровни детализации и автоматическая раскладка
-- Прямые и Z-образные линии связей (построение на стороне холста, ядро их не хранит)
-- Сменная тема: контрастная, быстрая, прямые линии (позже — гламурная с кривыми Безье)
-- Виртуальная мышь и клавиатура для управления из агентов
-- Встроенные скриншоты холста (`Вид → Снимок экрана`)
+### Visual canvas (egui)
+- GPU canvas with camera, zoom, and panning
+- Levels of detail and automatic layout
+- Straight and Z-shaped connection lines (built on the canvas side, the core does not store them)
+- Changeable theme: contrast, fast, straight lines (later — glamorous with Bezier curves)
+- Virtual mouse and keyboard for agent control
+- Built-in canvas screenshots (`View → Screenshot`)
 
-### `.pg` — переносимый отдел
-Весь `.pg` файл — целая «корпорация» (отделы, процессы, настройки, коннекторы), который импортируется как отдел в другую систему. Пример: «ИИ-корпорация на флешке».
+### `.pg` — portable department
+The entire `.pg` file is a whole "corporation" (departments, processes, settings, connectors) that is imported as a department into another system. Example: "AI-corporation on a flash drive."
 
-### Чат по иерархии
-У каждого отдела свой чат. Изменения объектов и показателей появляются в материнском чате виджет-сообщениями. Агент видит только контекст под свою задачу — субагент слеп к чужим областям.
+### Chat by hierarchy
+Each department has its own chat. Object and metric changes appear in the parent chat as widget messages. The agent sees only the context for their task — the sub-agent is blind to other areas.
 
 ---
 
-## Архитектура (три хранилища)
+## Architecture (three stores)
 
 ```
 ┌─────────────────────────────────────────┐
 │  Command (JSON)  ◄──  GUI / CLI / MCP   │
 │                                      │    │
-│  Engine (один поток)                  │    │
-│  ├ Иерархия  — отделы, процессы       │    │
-│  ├ Значения  — числа и статусы        │    │
-│  └ Геометрия — координаты карточек    │    │
+│  Engine (one thread)                  │    │
+│  ├ Hierarchy  — departments, processes │    │
+│  ├ Values  — numbers and statuses      │    │
+│  └ Geometry — card coordinates        │    │
 │                                      │    │
-│  Event (ревизия) ──► Снимок для UI    │    │
+│  Event (revision) ──► Snapshot for UI │    │
 └─────────────────────────────────────────┘
 ```
 
-1. **`core`** — ядро: иерархия, значения и статусы, сетка карточек, команды, события, узкие места. Не знает про окно, графику и сеть.
-2. **`cli`** — консольный терминал `pg`, запуск ядра без окна, бенчмарки.
-3. **`canvas`** — GPU-холст, камера, уровни детализации, сменная тема, маршрутизация линий.
-4. **`polygram`** — окно egui: меню, палитра команд, строка статуса, холст.
-5. **`api`** — HTTP и MCP, срезы контекста, права и области.
-6. **`mcp`** — MCP-сервер (JSON-RPC 2.0 над stdio) для Claude Desktop и др.
+1. **`core`** — core: hierarchy, values and statuses, card grid, commands, events, bottlenecks. Does not know about window, graphics, and network.
+2. **`cli`** — console terminal `pg`, running the core without a window, benchmarks.
+3. **`canvas`** — GPU canvas, camera, levels of detail, theme switching, line routing.
+4. **`polygram`** — egui window: menu, command palette, status bar, canvas.
+5. **`api`** — HTTP and MCP, context slices, rights and scopes.
+6. **`mcp`** — MCP server (JSON-RPC 2.0 over stdio) for Claude Desktop and others.
 
-Правила:
-- Всё меняется только командой
-- Всё, что случилось — событие с ревизией
-- Один владелец данных (движок в своём потоке), остальные читают снимки
-- Производное не хранится (статусы и потоки пересчитываются; линии строит холст по положению карточек)
+Rules:
+- Everything changes only by command
+- Everything that happened — an event with a revision
+- One data owner (engine in its thread), others read snapshots
+- Derived data is not stored (statuses and flows are recalculated; lines are built by the canvas based on card positions)
 
 ---
 
-## Быстрый старт
+## Quick start
 
-### Сборка
+### Build
 ```powershell
 cargo build --release
 ```
 
-### Запуск приложения
+### Run application
 ```powershell
 cargo run --release -p polygram
 ```
 
-### Демонстрация (мини-завод)
+### Demo (mini-factory)
 ```powershell
-# Собрать и запустить демо-сценарий
+# Build and run demo scenario
 cargo run --release -p polygram-cli -- run examples/demo.jsonl --save demo.pg
 
-# Добавить мощности (узкие места исчезнут)
+# Add power (bottlenecks disappear)
 cargo run --release -p polygram-cli -- run examples/demo_fix.jsonl --load demo.pg
 ```
 
-### Бенчмарк производительности
+### Performance benchmark
 ```powershell
 cargo run --release -p polygram-cli -- bench 10000
 ```
 
-### Все тесты
+### All tests
 ```powershell
-cargo test -p polygram-core        # 34+ проверки ядра
-cargo test                         # все тесты workspace
+cargo test -p polygram-core        # 34+ core checks
+cargo test                         # all workspace tests
 ```
 
 ---
 
-## Пример: ИИ-корпорация за 3 шага
+## Example: AI-corporation in 3 steps
 
-1. **Создайте отделы** — маркетинг, продажи, поддержка, финансы
-2. **Добавьте показатели** — лиды, сделки, выручка, прибыль ($), НПС
-3. **Соедините потоками** — маркетинг → продажи → выручка → прибыль
+1. **Create departments** — marketing, sales, support, finance
+2. **Add metrics** — leads, deals, revenue, profit ($), NPS
+3. **Connect by flows** — marketing → sales → revenue → profit
 
-Теперь каждая сделка, каждый лид и каждый доллар отображаются на графе в реальном времени. Узкие места подсвечиваются автоматически. Агенты управляют через MCP, человек — через меню и холст.
+Now every deal, every lead, and every dollar is displayed on the graph in real time. Bottlenecks are highlighted automatically. Agents manage via MCP, humans — via menu and canvas.
 
 ---
 
-## Стек технологий
+## Technology stack
 
-- **Язык:** Rust (edition 2021)
+- **Language:** Rust (edition 2021)
 - **GUI:** egui 0.37 + eframe
-- **Сериализация:** serde + serde_json
+- **Serialization:** serde + serde_json
 - **HTTP API:** reqwest + tokio
-- **MCP:** JSON-RPC 2.0 над stdio
-- **Тестирование:** встроенный `test` + регрессия на JSONL
+- **MCP:** JSON-RPC 2.0 over stdio
+- **Testing:** built-in `test` + regression on JSONL
 
 ---
 
-## Документация
+## Documentation
 
-| Файл | Описание |
-|------|----------|
-| `docs/VISION.md` | Визия проекта |
-| `docs/ARCHITECTURE.md` | Архитектура: комнаты и двери |
-| `docs/TESTING.md` | Автоматизированное регрессионное тестирование |
-| `docs/DECISIONS/` | ADR-решения (0001–0011) |
-| `examples/mcp/README.md` | MCP-сервер и подключение |
-
----
-
-## Лицензия
-
-[[LICENSE]]
+| File | Description |
+|------|-------------|
+| `docs/VISION.md` | Project vision |
+| `docs/ARCHITECTURE.md` | Architecture: rooms and doors |
+| `docs/TESTING.md` | Automated regression testing |
+| `docs/DECISIONS/` | ADR decisions (0001–0011) |
+| `examples/mcp/README.md` | MCP server and connection |
+| `docs/en/` | Product & technical documentation (English, Diátaxis) |
+| `docs/ru/` | Product & technical documentation (Russian, source of truth) |
+| `handbook/en/` | Company handbook (English) |
+| `handbook/ru/` | Company handbook (Russian, source of truth) |
 
 ---
 
-С Polygram ваша ИИ-Корпорация — не диаграмма, а работающая система, которая считает деньги в реальном времени.
+## License
+
+[LICENSE](LICENSE)
+
+---
+
+With Polygram your AI-Corporation is not a diagram, but a working system that counts money in real time.
