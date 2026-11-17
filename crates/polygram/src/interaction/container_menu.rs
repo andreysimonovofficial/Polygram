@@ -1,7 +1,7 @@
 //! Экран редактирования списка показателей объекта (запросы и результаты) — полноэкранный вид.
 //! Два раскрывающихся раздела: ЗАПРОС и РЕЗУЛЬТАТ с показаниями каждого.
 
-use crate::app::{PolygramApp, dialogs::EntryApiBinding};
+use crate::app::{PolygramApp, dialogs::EntryApiBinding, dialogs::ContainerMenuTab};
 use crate::interaction::api_settings::render_entry_api_settings;
 use polygram_core::{Direction, MetricValue, Published};
 use polygram_canvas::Theme;
@@ -215,140 +215,178 @@ pub fn render_metrics_screen(
     });
     ui.separator();
 
-    // Инициализировать буферы редактирования.
-    app.dialogs
-        .ensure_container_menu_edits(&requests, Direction::Request, published);
-    app.dialogs
-        .ensure_container_menu_edits(&results, Direction::Result, published);
-
-    let mut delete_entry: Option<(String, Direction)> = None;
-
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        // Раздел: ЗАПРОС
-        let req_is_open = app
-            .dialogs
-            .container_menu_section_open
-            .get(&Direction::Request)
-            .copied()
-            .unwrap_or(false);
-        let req_arrow = if req_is_open { "▼" } else { "▶" };
-        let req_header_resp = ui.horizontal(|ui| {
-            ui.label(req_arrow);
-            ui.label(format!("ЗАПРОС ({})", requests.len()));
-        });
-        if req_header_resp.response.clicked() {
-            app.dialogs
-                .container_menu_section_open
-                .insert(Direction::Result, false);
-            app.dialogs
-                .container_menu_section_open
-                .insert(Direction::Request, !req_is_open);
-        }
-        if req_is_open {
-            render_metric_section(
-                ui,
-                app,
-                ctx,
-                published,
-                theme,
-                &object_id,
-                Direction::Request,
-                &requests,
-                &mut delete_entry,
-            );
-        }
-
-        ui.separator();
-
-        // Раздел: РЕЗУЛЬТАТ
-        let result_is_open = app
-            .dialogs
-            .container_menu_section_open
-            .get(&Direction::Result)
-            .copied()
-            .unwrap_or(false);
-        let result_arrow = if result_is_open { "▼" } else { "▶" };
-        let result_header_resp = ui.horizontal(|ui| {
-            ui.label(result_arrow);
-            ui.label(format!("РЕЗУЛЬТАТ ({})", results.len()));
-        });
-        if result_header_resp.response.clicked() {
-            app.dialogs
-                .container_menu_section_open
-                .insert(Direction::Request, false);
-            app.dialogs
-                .container_menu_section_open
-                .insert(Direction::Result, !result_is_open);
-        }
-        if result_is_open {
-            render_metric_section(
-                ui,
-                app,
-                ctx,
-                published,
-                theme,
-                &object_id,
-                Direction::Result,
-                &results,
-                &mut delete_entry,
-            );
-        }
-    });
-
-    ui.separator();
-    ui.horizontal(|ui| {
-        if ui.button("Применить").clicked() {
-            let (value_cmds, unit_cmds) = app.dialogs.apply_container_edits();
-            for (entry_name, dir, value) in value_cmds {
-                match dir {
-                    Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
-                        object: object_id.clone(),
-                        entry: entry_name.clone(),
-                        required: MetricValue::Number(value),
-                    }),
-                    Direction::Result => app.apply_cmd(polygram_core::Command::SetValue {
-                        object: object_id.clone(),
-                        entry: entry_name.clone(),
-                        value: MetricValue::Number(value),
-                    }),
-                }
-                app.add_event_log(
-                    "info",
-                    "command",
-                    &format!("Объект «{object_id}»: запись «{entry_name}» установлена в {value}"),
-                    None,
-                );
+    // Вкладки: Метрики / Чат.
+    egui::Frame::new().inner_margin(0.0).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing();
+            let metrics_btn = egui::Button::new("Метрики")
+                .fill(if app.dialogs.container_menu_tab == ContainerMenuTab::Metrics {
+                    ui.style().visuals.weak_text_color().linear_multiply(0.1)
+                } else {
+                    egui::Color32::TRANSPARENT
+                });
+            if ui.add(metrics_btn).clicked() {
+                app.dialogs.container_menu_tab = ContainerMenuTab::Metrics;
             }
-            for (metric_def, unit) in unit_cmds {
-                app.apply_cmd(polygram_core::Command::SetMetricDefUnit {
-                    metric_def: metric_def.clone(),
-                    unit: unit.clone(),
+            ui.separator();
+            let chat_btn = egui::Button::new("Чат")
+                .fill(if app.dialogs.container_menu_tab == ContainerMenuTab::Chat {
+                    ui.style().visuals.weak_text_color().linear_multiply(0.1)
+                } else {
+                    egui::Color32::TRANSPARENT
+                });
+            if ui.add(chat_btn).clicked() {
+                app.dialogs.container_menu_tab = ContainerMenuTab::Chat;
+            }
+            ui.spacing();
+        });
+    });
+    ui.separator();
+
+    match app.dialogs.container_menu_tab {
+        ContainerMenuTab::Metrics => {
+            // Инициализировать буферы редактирования.
+            app.dialogs
+                .ensure_container_menu_edits(&requests, Direction::Request, published);
+            app.dialogs
+                .ensure_container_menu_edits(&results, Direction::Result, published);
+
+            let mut delete_entry: Option<(String, Direction)> = None;
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                // Раздел: ЗАПРОС
+                let req_is_open = app
+                    .dialogs
+                    .container_menu_section_open
+                    .get(&Direction::Request)
+                    .copied()
+                    .unwrap_or(false);
+                let req_arrow = if req_is_open { "▼" } else { "▶" };
+                let req_header_resp = ui.horizontal(|ui| {
+                    ui.label(req_arrow);
+                    ui.label(format!("ЗАПРОС ({})", requests.len()));
+                });
+                if req_header_resp.response.clicked() {
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Result, false);
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Request, !req_is_open);
+                }
+                if req_is_open {
+                    render_metric_section(
+                        ui,
+                        app,
+                        ctx,
+                        published,
+                        theme,
+                        &object_id,
+                        Direction::Request,
+                        &requests,
+                        &mut delete_entry,
+                    );
+                }
+
+                ui.separator();
+
+                // Раздел: РЕЗУЛЬТАТ
+                let result_is_open = app
+                    .dialogs
+                    .container_menu_section_open
+                    .get(&Direction::Result)
+                    .copied()
+                    .unwrap_or(false);
+                let result_arrow = if result_is_open { "▼" } else { "▶" };
+                let result_header_resp = ui.horizontal(|ui| {
+                    ui.label(result_arrow);
+                    ui.label(format!("РЕЗУЛЬТАТ ({})", results.len()));
+                });
+                if result_header_resp.response.clicked() {
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Request, false);
+                    app.dialogs
+                        .container_menu_section_open
+                        .insert(Direction::Result, !result_is_open);
+                }
+                if result_is_open {
+                    render_metric_section(
+                        ui,
+                        app,
+                        ctx,
+                        published,
+                        theme,
+                        &object_id,
+                        Direction::Result,
+                        &results,
+                        &mut delete_entry,
+                    );
+                }
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Применить").clicked() {
+                    let (value_cmds, unit_cmds) = app.dialogs.apply_container_edits();
+                    for (entry_name, dir, value) in value_cmds {
+                        match dir {
+                            Direction::Request => app.apply_cmd(polygram_core::Command::SetRequired {
+                                object: object_id.clone(),
+                                entry: entry_name.clone(),
+                                required: MetricValue::Number(value),
+                            }),
+                            Direction::Result => app.apply_cmd(polygram_core::Command::SetValue {
+                                object: object_id.clone(),
+                                entry: entry_name.clone(),
+                                value: MetricValue::Number(value),
+                            }),
+                        }
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Объект «{object_id}»: запись «{entry_name}» установлена в {value}"),
+                            None,
+                        );
+                    }
+                    for (metric_def, unit) in unit_cmds {
+                        app.apply_cmd(polygram_core::Command::SetMetricDefUnit {
+                            metric_def: metric_def.clone(),
+                            unit: unit.clone(),
+                        });
+                        app.add_event_log(
+                            "info",
+                            "command",
+                            &format!("Показатель «{metric_def}»: единица измерения изменена на «{unit}»"),
+                            None,
+                        );
+                    }
+                }
+                if ui.button("Закрыть").clicked() {
+                    close_screen = true;
+                }
+            });
+
+            // Удалить показатель.
+            if let Some((entry_name, dir)) = delete_entry {
+                app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
+                    object: object_id.clone(),
+                    entry: entry_name.clone(),
                 });
                 app.add_event_log(
-                    "info",
+                    "warn",
                     "command",
-                    &format!("Показатель «{metric_def}»: единица измерения изменена на «{unit}»"),
+                    &format!("Объект «{object_id}»: удалена запись «{entry_name}»"),
                     None,
                 );
             }
         }
-        if ui.button("Закрыть").clicked() {
-            close_screen = true;
+        ContainerMenuTab::Chat => {
+            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown), |ui| {
+                ui.heading("Чат");
+                ui.label("Здесь будет чат объекта.");
+            });
         }
-    });
-
-    // Удалить показатель.
-    if let Some((entry_name, dir)) = delete_entry {
-        app.apply_cmd(polygram_core::Command::RemoveMetricEntry {
-            object: object_id.clone(),
-            entry: entry_name.clone(),
-        });
-        app.add_event_log(
-            "warn",
-            "command",
-            &format!("Объект «{object_id}»: удалена запись «{entry_name}»"),
-            None,
-        );
     }
 
     if close_screen {

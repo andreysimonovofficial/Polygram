@@ -11,6 +11,14 @@ pub struct EntryApiBinding {
     pub interval_secs: u64,
 }
 
+/// Вкладки полноэкранного окна показателей объекта.
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum ContainerMenuTab {
+    #[default]
+    Metrics,
+    Chat,
+}
+
 pub struct DialogState {
     pub rename_target: Option<String>,
     pub rename_input: String,
@@ -28,6 +36,8 @@ pub struct DialogState {
     pub add_metric_api_cell: String,
     pub container_menu_target: Option<String>,
     pub container_menu_active_section: Option<Direction>,
+    /// Активная вкладка полноэкранного окна показателей объекта.
+    pub container_menu_tab: ContainerMenuTab,
     /// Какие секции раскрыты в едином окне Показателей (ключ — направление).
     pub container_menu_section_open: std::collections::HashMap<Direction, bool>,
     /// Per-metric edit buffers: (entry_name, direction, value_str, unit_str).
@@ -66,6 +76,7 @@ impl DialogState {
             add_metric_api_cell: String::new(),
             container_menu_target: None,
             container_menu_active_section: None,
+            container_menu_tab: ContainerMenuTab::Metrics,
             container_menu_section_open: Default::default(),
             container_menu_edits: Vec::new(),
             container_menu_api_settings: HashMap::new(),
@@ -105,6 +116,7 @@ impl DialogState {
     pub fn reset_container_menu(&mut self) {
         self.container_menu_target = None;
         self.container_menu_active_section = None;
+        self.container_menu_tab = ContainerMenuTab::Metrics;
         self.container_menu_section_open.clear();
         self.container_menu_edits.clear();
         self.container_menu_api_settings.clear();
