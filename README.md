@@ -185,7 +185,7 @@ cargo test                         # все тесты workspace
 
 ## Лицензия
 
-UNLICENSED
+[[LICENSE]]
 
 ---
 
