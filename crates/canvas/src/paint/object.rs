@@ -258,11 +258,11 @@ fn paint_metric_container(
     } else {
         status_text.to_string()
     };
-    let header_text_color = if container_hovered { theme.text } else { dot_color };
+    let header_text_color = if container_hovered { theme.text } else { theme.text_muted };
     let header_cy = cy + 16.0 * zoom; // top:4 + h:24/2 = 16
 
     // ◆ символ (слева, left:4, top:4, center x=12 y=16)
-    let header_symbol_color = if container_hovered { theme.text } else { theme.text_muted };
+    let header_symbol_color = dot_color;
     painter.text(
         Pos2::new(cx + 12.0 * zoom, header_cy),
         egui::Align2::CENTER_CENTER,
