@@ -2,6 +2,7 @@
 //! Два раскрывающихся раздела: ЗАПРОС и РЕЗУЛЬТАТ с показаниями каждого.
 
 use crate::app::{PolygramApp, dialogs::EntryApiBinding, dialogs::ContainerMenuTab};
+use crate::icons::lucide_icon;
 use crate::interaction::api_settings::render_entry_api_settings;
 use polygram_core::{Direction, MetricValue, Published};
 use polygram_canvas::Theme;
@@ -131,9 +132,7 @@ fn render_metric_section(
             if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
                 let icon = if info.ok { Lucide::Globe } else { Lucide::TriangleAlert };
                 let color = if info.ok { theme.status_ok } else { theme.status_deficit };
-                if ui.add(
-                    icon.size(16.0).color(color).image().sense(egui::Sense::click()),
-                ).clicked() {
+                if lucide_icon(ui, icon, 16.0, color).clicked() {
                     if let Some(e) = &info.error {
                         ctx.copy_text(e.clone());
                     }
@@ -143,9 +142,7 @@ fn render_metric_section(
                 }
             }
 
-            if ui.add(
-                Lucide::Settings.size(16.0).image().sense(egui::Sense::click()),
-            ).clicked() {
+            if lucide_icon(ui, Lucide::Settings, 16.0, theme.text).clicked() {
                 if app
                     .dialogs
                     .container_menu_api_expanded
@@ -158,9 +155,7 @@ fn render_metric_section(
                         Some(entry.name.clone());
                 }
             }
-            if ui.add(
-                Lucide::Trash.size(16.0).image().sense(egui::Sense::click()),
-            ).clicked() {
+            if lucide_icon(ui, Lucide::Trash, 16.0, theme.text).clicked() {
                 *delete_entry = Some((entry.name.clone(), dir));
             }
         });
@@ -212,9 +207,7 @@ pub fn render_metrics_screen(
 
     // Заголовок с кнопкой возврата.
     ui.horizontal(|ui| {
-        if ui.add(
-            Lucide::ArrowLeft.size(14.0).image().sense(egui::Sense::click()),
-        ).clicked() || ui.button("Назад").clicked() {
+        if lucide_icon(ui, Lucide::ArrowLeft, 14.0, theme.text).clicked() || ui.button("Назад").clicked() {
             close_screen = true;
         }
         ui.label(format!("Показатели — объект «{object_id}»"));
