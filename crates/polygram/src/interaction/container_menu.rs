@@ -6,6 +6,7 @@ use crate::interaction::api_settings::render_entry_api_settings;
 use polygram_core::{Direction, MetricValue, Published};
 use polygram_canvas::Theme;
 use egui::Context;
+use egui_lucide::Lucide;
 
 /// Переключает приложение на полноэкранный вид показателей объекта.
 pub fn handle_container_menu_dialog(
@@ -128,9 +129,9 @@ fn render_metric_section(
             // Статус привязки и время последнего опроса для этой записи.
             let binding_id = format!("{}:{}", object_id, entry.name);
             if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
-                let icon_text = if info.ok { "🌐" } else { "⚠" };
-                let btn = egui::Button::new(icon_text);
-                if ui.add(btn).clicked() {
+                let icon = if info.ok { Lucide::Globe } else { Lucide::TriangleAlert };
+                let color = if info.ok { theme.status_ok } else { theme.status_deficit };
+                if ui.add(icon.size(16.0).color(color)).clicked() {
                     if let Some(e) = &info.error {
                         ctx.copy_text(e.clone());
                     }
@@ -140,7 +141,7 @@ fn render_metric_section(
                 }
             }
 
-            if ui.button("⚙").clicked() {
+            if ui.add(Lucide::Settings.size(16.0)).clicked() {
                 if app
                     .dialogs
                     .container_menu_api_expanded
@@ -153,7 +154,7 @@ fn render_metric_section(
                         Some(entry.name.clone());
                 }
             }
-            if ui.button("🗑").clicked() {
+            if ui.add(Lucide::Trash.size(16.0)).clicked() {
                 *delete_entry = Some((entry.name.clone(), dir));
             }
         });
@@ -205,7 +206,7 @@ pub fn render_metrics_screen(
 
     // Заголовок с кнопкой возврата.
     ui.horizontal(|ui| {
-        if ui.button("← Назад").clicked() {
+        if ui.add(Lucide::ArrowLeft.size(14.0)).clicked() || ui.button("Назад").clicked() {
             close_screen = true;
         }
         ui.label(format!("Показатели — объект «{object_id}»"));
@@ -261,9 +262,9 @@ pub fn render_metrics_screen(
                     .get(&Direction::Request)
                     .copied()
                     .unwrap_or(false);
-                let req_arrow = if req_is_open { "▼" } else { "▶" };
+                let req_arrow = if req_is_open { Lucide::ChevronDown } else { Lucide::ChevronRight };
                 let req_header_resp = ui.horizontal(|ui| {
-                    ui.label(req_arrow);
+                    ui.add(req_arrow.size(14.0));
                     ui.label(format!("ЗАПРОС ({})", requests.len()));
                 });
                 if req_header_resp.response.clicked() {
@@ -297,9 +298,9 @@ pub fn render_metrics_screen(
                     .get(&Direction::Result)
                     .copied()
                     .unwrap_or(false);
-                let result_arrow = if result_is_open { "▼" } else { "▶" };
+                let result_arrow = if result_is_open { Lucide::ChevronDown } else { Lucide::ChevronRight };
                 let result_header_resp = ui.horizontal(|ui| {
-                    ui.label(result_arrow);
+                    ui.add(result_arrow.size(14.0));
                     ui.label(format!("РЕЗУЛЬТАТ ({})", results.len()));
                 });
                 if result_header_resp.response.clicked() {

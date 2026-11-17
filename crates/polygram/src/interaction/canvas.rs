@@ -230,6 +230,7 @@ pub fn handle_canvas_interaction(
                 );
                 let binding = bindings.get(&(source_object.clone(), entry.name.clone()));
                 paint_drag_preview(
+                    ui,
                     painter,
                     preview_rect,
                     entry,

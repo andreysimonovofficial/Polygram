@@ -4,6 +4,7 @@
 
 mod camera;
 mod hit_test;
+mod icons;
 mod paint;
 mod paint_department;
 mod paint_object;
@@ -225,6 +226,7 @@ impl Canvas {
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
             if object.kind == NodeKind::Process {
             let (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots) = paint_process(
+                ui,
                 painter,
                 object,
                 dynamic,

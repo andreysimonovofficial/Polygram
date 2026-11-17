@@ -5,16 +5,19 @@ use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 use std::collections::HashMap;
 
+use crate::icons::paint_lucide;
 use crate::paint::constants::{MAX_VISIBLE_METRICS, TEXT_X_PAD};
 use crate::paint::status::worst_status;
 use crate::status_dot_color;
 use crate::status_label_ru;
+use egui_lucide::Lucide;
 
 /// Высокопроизводительный процедурный рендер объекта "Процесс" по фиксированной CSS-геометрии.
 /// Карточка 256×256: заголовок (Имя + #ID + ◆) → контейнер Запрос (y:32) → контейнер Результат (y:144).
 /// Каждый контейнер 248×108: шапка (LABEL (N) СТАТУС + ◆) + 4 строки показателя на фиксированных y (28, 48, 68, 88).
 /// Возвращает (горячие зоны добавления показателя, горячие зоны меню контейнеров, горячие зоны перетаскивания показателей).
 pub fn paint_process(
+    ui: &egui::Ui,
     painter: &Painter,
     object: &ObjectGeom,
     dynamic: &DynamicState,
@@ -139,11 +142,10 @@ pub fn paint_process(
     // CSS: ◆ left:8 top:4 h:28 → center y=18; Имя left:24 top:4 h:28 → center y=18; #ID left:8 top:4 h:28 → center y=18
     let header_h = 28.0 * zoom;
     let header_cy = oy + 4.0 * zoom + header_h / 2.0;
-    painter.text(
-        Pos2::new(ox + 16.0 * zoom, header_cy),
-        egui::Align2::CENTER_CENTER,
-        "◆",
-        egui::FontId::new(10.0 * zoom, egui::FontFamily::Proportional),
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(ox + 16.0 * zoom, header_cy), Vec2::splat(10.0 * zoom)),
+        Lucide::Diamond,
         body_text_color,
     );
     let id_text = format!("#{}", object.id);
@@ -170,7 +172,7 @@ pub fn paint_process(
     );
     let req_hovered = container_hovered_dir == Some(Direction::Request);
     paint_metric_container(
-        painter, object, dynamic, theme, zoom,
+        ui, painter, object, dynamic, theme, zoom,
         req_hovered,
         mouse_pos,
         Direction::Request, &object.requests, req_rect,
@@ -186,7 +188,7 @@ pub fn paint_process(
     );
     let result_hovered = container_hovered_dir == Some(Direction::Result);
     paint_metric_container(
-        painter, object, dynamic, theme, zoom,
+        ui, painter, object, dynamic, theme, zoom,
         result_hovered,
         mouse_pos,
         Direction::Result, &object.results, result_rect,
@@ -200,6 +202,7 @@ pub fn paint_process(
 
 /// Рисование одного контейнера показателей (Запрос или Результат): рамка, шапка, строки.
 fn paint_metric_container(
+ui: &egui::Ui,
     painter: &Painter,
     object: &ObjectGeom,
     dynamic: &DynamicState,
@@ -263,11 +266,10 @@ fn paint_metric_container(
 
     // ◆ символ (слева, left:4, top:4, center x=12 y=16)
     let header_symbol_color = dot_color;
-    painter.text(
-        Pos2::new(cx + 12.0 * zoom, header_cy),
-        egui::Align2::CENTER_CENTER,
-        "◆",
-        egui::FontId::new(9.0 * zoom, egui::FontFamily::Proportional),
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(cx + 12.0 * zoom, header_cy), Vec2::splat(9.0 * zoom)),
+        Lucide::Diamond,
         header_symbol_color,
     );
 
@@ -293,11 +295,11 @@ fn paint_metric_container(
     let visible = entries.len().min(MAX_VISIBLE_METRICS);
     let show_add = visible < MAX_VISIBLE_METRICS;
 
-    let (left_sym, right_sym) = match dir {
-        Direction::Request => ("▶", "◀"),
-        Direction::Result => ("◀", "▶"),
+    let sym_size = (8.0 * zoom).max(10.0 * zoom);
+    let (left_icon, right_icon) = match dir {
+        Direction::Request => (Lucide::ChevronRight, Lucide::ChevronLeft),
+        Direction::Result => (Lucide::ChevronLeft, Lucide::ChevronRight),
     };
-    let symbol_font = egui::FontId::new((8.0 * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
 
     for (i, entry) in entries.iter().enumerate().take(MAX_VISIBLE_METRICS) {
         let row_y = cy + row_offsets[i] * zoom;
@@ -321,19 +323,20 @@ fn paint_metric_container(
 
         // Символ сцепления слева — выровнен по левому краю ромба заголовка контейнера.
         // Ромб: центр в cx+12, шрифт 9px → левый край ≈ cx+12-4.5 = cx+7.5.
-        painter.text(
-            Pos2::new(cx + 8.0 * zoom, cy_row),
-            egui::Align2::LEFT_CENTER,
-            left_sym,
-            symbol_font.clone(),
+        paint_lucide(
+            ui,
+            Rect::from_center_size(Pos2::new(cx + 8.0 * zoom, cy_row), Vec2::splat(sym_size)),
+            left_icon,
             row_dot_color,
         );
         // Символ сцепления справа с отступом от правого края строки
-        painter.text(
-            Pos2::new(row_x + row_w - 4.0 * zoom, cy_row),
-            egui::Align2::RIGHT_CENTER,
-            right_sym,
-            symbol_font.clone(),
+        paint_lucide(
+            ui,
+            Rect::from_center_size(
+                Pos2::new(row_x + row_w - 4.0 * zoom, cy_row),
+                Vec2::splat(sym_size),
+            ),
+            right_icon,
             row_dot_color,
         );
         // Имя с отступом от левого края строки

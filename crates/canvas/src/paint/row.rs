@@ -1,11 +1,12 @@
 //! Рисование одной строки показателя и строки "+ Добавить показатель".
 
-use egui::{Painter, Pos2, Rect, Stroke, Vec2};
-use polygram_core::types::Direction;
-use polygram_core::{DynamicState, EntryGeom};
-
+use crate::icons::paint_lucide;
 use crate::paint::constants::{ROW_BORDER_WIDTH, SYMBOL_X_PAD, TEXT_X_PAD};
 use crate::status_dot_color;
+use egui::{Painter, Pos2, Rect, Stroke, Vec2};
+use egui_lucide::Lucide;
+use polygram_core::types::Direction;
+use polygram_core::{DynamicState, EntryGeom};
 
 /// Информация о API-привязке одной строки показателя (показывается внутри строки).
 #[derive(Clone, Debug, Default)]
@@ -20,6 +21,7 @@ pub struct MetricBinding {
 /// binding — опциональная API-привязка этой строки (иконка + время последнего опроса внутри строки).
 /// error_hotspots — накопление rect иконок ошибок + текст ошибки для копирования по клику.
 pub fn paint_metric_row(
+    ui: &egui::Ui,
     painter: &Painter,
     rect: Rect,
     entry: &EntryGeom,
@@ -45,23 +47,21 @@ pub fn paint_metric_row(
     // Символы сцепления слева и справа внутри тела строки.
     // Запрос: слева ▶, справа ◀. Результат: слева ◀, справа ▶.
     let dot_color = status_dot_color(status, dir, theme);
-    let symbol_font = egui::FontId::new((theme.text_size * zoom).max(10.0 * zoom), egui::FontFamily::Proportional);
-    let (left_sym, right_sym) = match dir {
-        Direction::Request => ("▶", "◀"),
-        Direction::Result => ("◀", "▶"),
+    let sym_size = (theme.text_size * zoom).max(10.0 * zoom);
+    let (left_icon, right_icon) = match dir {
+        Direction::Request => (Lucide::ChevronRight, Lucide::ChevronLeft),
+        Direction::Result => (Lucide::ChevronLeft, Lucide::ChevronRight),
     };
-    painter.text(
-        Pos2::new(rect.min.x + SYMBOL_X_PAD * zoom, cy),
-        egui::Align2::LEFT_CENTER,
-        left_sym,
-        symbol_font.clone(),
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(rect.min.x + SYMBOL_X_PAD * zoom, cy), Vec2::splat(sym_size)),
+        left_icon,
         dot_color,
     );
-    painter.text(
-        Pos2::new(rect.max.x - SYMBOL_X_PAD * zoom, cy),
-        egui::Align2::RIGHT_CENTER,
-        right_sym,
-        symbol_font,
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(rect.max.x - SYMBOL_X_PAD * zoom, cy), Vec2::splat(sym_size)),
+        right_icon,
         dot_color,
     );
 
@@ -82,14 +82,13 @@ pub fn paint_metric_row(
         } else {
             theme.status_deficit
         };
-        let icon_text = if b.ok { "🌐" } else { "⚠" };
+        let icon = if b.ok { Lucide::Globe } else { Lucide::TriangleAlert };
         let name_w_est = entry.name.len() as f32 * 7.0 * zoom;
         let icon_x = rect.min.x + TEXT_X_PAD * zoom + name_w_est + 8.0 * zoom;
-        painter.text(
-            Pos2::new(icon_x, cy),
-            egui::Align2::LEFT_CENTER,
-            icon_text,
-            egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        paint_lucide(
+            ui,
+            Rect::from_center_size(Pos2::new(icon_x, cy), Vec2::splat(theme.text_size * zoom)),
+            icon,
             icon_color,
         );
         if let Some(ts) = &b.last_updated {
@@ -135,6 +134,7 @@ pub fn paint_metric_row(
 
 /// Рисовать графическую копию строки показателя в произвольном месте (превью при Drag&Drop).
 pub fn paint_drag_preview(
+    ui: &egui::Ui,
     painter: &Painter,
     rect: Rect,
     entry: &EntryGeom,
@@ -144,7 +144,7 @@ pub fn paint_drag_preview(
     dir: Direction,
     binding: Option<&MetricBinding>,
 ) {
-    paint_metric_row(painter, rect, entry, dynamic, zoom, theme, false, dir, binding, &mut Vec::new());
+    paint_metric_row(ui, painter, rect, entry, dynamic, zoom, theme, false, dir, binding, &mut Vec::new());
 }
 
 /// Рисовать строку "+ Добавить показатель" (центрированная, кликабельная).

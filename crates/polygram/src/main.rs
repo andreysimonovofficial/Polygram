@@ -10,6 +10,7 @@ mod connectors_panel;
 mod document;
 mod document_io;
 mod frontend_log_panel;
+mod icons;
 mod interaction;
 mod menu;
 mod palette;
@@ -18,6 +19,7 @@ mod status;
 
 use app::PolygramApp;
 use eframe::egui::{self, ColorImage};
+use egui_extras;
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
 use reqwest::blocking::Client;
@@ -479,6 +481,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             crate::app::fonts::register_fonts(&cc.egui_ctx);
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             let mut app = PolygramApp::new(snapshot_rx);
             app.start_api_process();
             app.try_connect_once();
