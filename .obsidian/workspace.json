@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "e4b2464da7340b2f",
+        "id": "93cb1b6330c97a74",
         "type": "tabs",
         "children": [
           {
-            "id": "42d6ca2b6fa971ef",
+            "id": "1b786bd2af14edeb",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -188,11 +188,11 @@
       "bases:Создать новую базу": false
     }
   },
-  "active": "42d6ca2b6fa971ef",
+  "active": "1b786bd2af14edeb",
   "lastOpenFiles": [
-    "LICENSE.md",
+    "AGENTS.md",
     "README.md",
-    "UNLICENSED.md",
-    "AGENTS.md"
+    "LICENSE.md",
+    "UNLICENSED.md"
   ]
 }
