@@ -131,7 +131,9 @@ fn render_metric_section(
             if let Some(info) = app.bindings.api_bindings.get(&binding_id) {
                 let icon = if info.ok { Lucide::Globe } else { Lucide::TriangleAlert };
                 let color = if info.ok { theme.status_ok } else { theme.status_deficit };
-                if ui.add(icon.size(16.0).color(color)).clicked() {
+                if ui.add(
+                    icon.size(16.0).color(color).image().sense(egui::Sense::click()),
+                ).clicked() {
                     if let Some(e) = &info.error {
                         ctx.copy_text(e.clone());
                     }
@@ -141,7 +143,9 @@ fn render_metric_section(
                 }
             }
 
-            if ui.add(Lucide::Settings.size(16.0)).clicked() {
+            if ui.add(
+                Lucide::Settings.size(16.0).image().sense(egui::Sense::click()),
+            ).clicked() {
                 if app
                     .dialogs
                     .container_menu_api_expanded
@@ -154,7 +158,9 @@ fn render_metric_section(
                         Some(entry.name.clone());
                 }
             }
-            if ui.add(Lucide::Trash.size(16.0)).clicked() {
+            if ui.add(
+                Lucide::Trash.size(16.0).image().sense(egui::Sense::click()),
+            ).clicked() {
                 *delete_entry = Some((entry.name.clone(), dir));
             }
         });
@@ -206,7 +212,9 @@ pub fn render_metrics_screen(
 
     // Заголовок с кнопкой возврата.
     ui.horizontal(|ui| {
-        if ui.add(Lucide::ArrowLeft.size(14.0)).clicked() || ui.button("Назад").clicked() {
+        if ui.add(
+            Lucide::ArrowLeft.size(14.0).image().sense(egui::Sense::click()),
+        ).clicked() || ui.button("Назад").clicked() {
             close_screen = true;
         }
         ui.label(format!("Показатели — объект «{object_id}»"));
