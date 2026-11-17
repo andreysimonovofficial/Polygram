@@ -194,7 +194,7 @@ Now every deal, every lead, and every dollar is displayed on the graph in real t
 
 ## License
 
-[LICENSE](LICENSE)
+[LICENSE](LICENSE.md)
 
 ---
 

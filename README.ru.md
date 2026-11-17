@@ -194,7 +194,7 @@ cargo test                         # все тесты workspace
 
 ## Лицензия
 
-[LICENSE](LICENSE)
+[LICENSE](LICENSE.md)
 
 ---
 
