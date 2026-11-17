@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 12 168 190" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Titanium Emblem Gradients -->
+    <!-- Diamond Left -->
+    <linearGradient id="v8-top-l" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#F8FAFC" />
+      <stop offset="70%" stop-color="#E2E7ED" />
+      <stop offset="100%" stop-color="#C5CBD4" />
+    </linearGradient>
+
+    <!-- Diamond Right -->
+    <linearGradient id="v8-top-r" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#C2C8D2" />
+      <stop offset="50%" stop-color="#9BA2AE" />
+      <stop offset="100%" stop-color="#767D89" />
+    </linearGradient>
+
+    <!-- Left Wing Upper Outer: High-reflection titanium sheen -->
+    <linearGradient id="v8-wing-l-out-top" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#9AA1AD" />
+      <stop offset="30%" stop-color="#FFFFFF" />
+      <stop offset="80%" stop-color="#E2E6EC" />
+      <stop offset="100%" stop-color="#BAC1CC" />
+    </linearGradient>
+
+    <!-- Left Wing Lower Tip: Angled specular reflection -->
+    <linearGradient id="v8-wing-l-out-btm" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="50%" stop-color="#DCE2EA" />
+      <stop offset="100%" stop-color="#98A0AC" />
+    </linearGradient>
+
+    <!-- Left Wing Inner: Soft shadow facet -->
+    <linearGradient id="v8-wing-l-in" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#C2C9D3" />
+      <stop offset="50%" stop-color="#9EA5B0" />
+      <stop offset="100%" stop-color="#787F8C" />
+    </linearGradient>
+
+    <!-- Central Keel Left: Crisp lit facet -->
+    <linearGradient id="v8-keel-l" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#EDF1F5" />
+      <stop offset="100%" stop-color="#BAC1CA" />
+    </linearGradient>
+
+    <!-- Central Keel Right: Clean titanium shadow (not pitch black) -->
+    <linearGradient id="v8-keel-r" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#AAB1BD" />
+      <stop offset="50%" stop-color="#808794" />
+      <stop offset="100%" stop-color="#5B626E" />
+    </linearGradient>
+
+    <!-- Right Wing Inner: Bright Specular highlight facing center -->
+    <linearGradient id="v8-wing-r-in" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="40%" stop-color="#F2F5F8" />
+      <stop offset="100%" stop-color="#BAC2CC" />
+    </linearGradient>
+
+    <!-- Right Wing Upper Outer: Bright luminous titanium mid-tone -->
+    <linearGradient id="v8-wing-r-out-top" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#D6DCE5" />
+      <stop offset="45%" stop-color="#B2B9C4" />
+      <stop offset="100%" stop-color="#8D95A2" />
+    </linearGradient>
+
+    <!-- Right Wing Lower Tip: Defined titanium shadow (visible, clear) -->
+    <linearGradient id="v8-wing-r-out-btm" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#A5ACB8" />
+      <stop offset="50%" stop-color="#7C8491" />
+      <stop offset="100%" stop-color="#555C68" />
+    </linearGradient>
+
+    <!-- Globe Precision Wireframe Gradients -->
+    <linearGradient id="globe-rim" x1="40" y1="50" x2="160" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#EBF0F6" />
+      <stop offset="35%" stop-color="#B8C0CC" />
+      <stop offset="70%" stop-color="#88909D" />
+      <stop offset="100%" stop-color="#626A76" />
+    </linearGradient>
+
+    <linearGradient id="globe-rim-outer" x1="40" y1="50" x2="160" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#545A65" />
+      <stop offset="50%" stop-color="#343841" />
+      <stop offset="100%" stop-color="#1E2228" />
+    </linearGradient>
+
+    <linearGradient id="globe-parallel-n" x1="32" y1="88" x2="168" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7B828E" />
+      <stop offset="25%" stop-color="#CAD1DB" />
+      <stop offset="75%" stop-color="#CAD1DB" />
+      <stop offset="100%" stop-color="#7B828E" />
+    </linearGradient>
+
+    <linearGradient id="globe-parallel-s" x1="33" y1="140" x2="167" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6A717E" />
+      <stop offset="25%" stop-color="#A8B0BB" />
+      <stop offset="75%" stop-color="#A8B0BB" />
+      <stop offset="100%" stop-color="#6A717E" />
+    </linearGradient>
+
+    <linearGradient id="globe-meridian" x1="100" y1="42" x2="100" y2="186" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#DCE2EB" />
+      <stop offset="50%" stop-color="#939AA6" />
+      <stop offset="100%" stop-color="#5B626E" />
+    </linearGradient>
+
+    <linearGradient id="globe-ellipse" x1="55" y1="50" x2="145" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#DFE5EE" />
+      <stop offset="40%" stop-color="#A4ABB8" />
+      <stop offset="100%" stop-color="#5A616E" />
+    </linearGradient>
+
+    <!-- Deep Ambient Drop Shadow -->
+    <filter id="v8-emblem-shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.2" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+  </defs>
+  <!-- 1. Precision Wireframe Globe (Center 100, 114, R 72) -->
+  <g class="v8-globe" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="100" cy="114" r="73.2" stroke="url(#globe-rim-outer)" stroke-width="1.8" />
+    <circle cx="100" cy="114" r="72" stroke="url(#globe-rim)" stroke-width="2.2" />
+    <line x1="32.9" y1="88" x2="167.1" y2="88" stroke="url(#globe-parallel-n)" stroke-width="2.0" />
+    <line x1="32.9" y1="140" x2="167.1" y2="140" stroke="url(#globe-parallel-s)" stroke-width="2.0" />
+    <line x1="100" y1="42" x2="100" y2="186" stroke="url(#globe-meridian)" stroke-width="1.8" />
+    <ellipse cx="100" cy="114" rx="44.2" ry="72" stroke="url(#globe-ellipse)" stroke-width="2.0" />
+  </g>
+
+  <!-- 2. V8 Titanium Kinetic Emblem (Option 1) -->
+  <g class="v8-core" filter="url(#v8-emblem-shadow)">
+    <polygon points="100,20 79,80 100,116" fill="url(#v8-top-l)" />
+    <polygon points="100,20 121,80 100,116" fill="url(#v8-top-r)" />
+
+    <polygon points="76,84 57,135 76,146" fill="url(#v8-wing-l-out-top)" />
+    <polygon points="57,135 45,168 76,146" fill="url(#v8-wing-l-out-btm)" />
+    <polygon points="76,84 76,146 100,157" fill="url(#v8-wing-l-in)" />
+
+    <polygon points="100,157 76,146 100,196" fill="url(#v8-keel-l)" />
+    <polygon points="100,157 100,196 124,146" fill="url(#v8-keel-r)" />
+
+    <polygon points="124,84 100,157 124,146" fill="url(#v8-wing-r-in)" />
+    <polygon points="124,84 143,135 124,146" fill="url(#v8-wing-r-out-top)" />
+    <polygon points="143,135 155,168 124,146" fill="url(#v8-wing-r-out-btm)" />
+  </g>
+</svg>

@@ -1,0 +1,4 @@
+# Продолжение демо: добавим мощности — узкие места должны исчезнуть.
+# Запуск:  pg run examples/demo_fix.jsonl --load demo.pg
+{"cmd":"set_value","node":"power","metric":"o1","value":95}
+{"cmd":"set_value","node":"factory","metric":"o1","value":30}

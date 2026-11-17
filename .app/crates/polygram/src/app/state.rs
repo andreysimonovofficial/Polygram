@@ -1,0 +1,83 @@
+use crate::app::PolygramApp;
+use crate::app::ui_config::ThemeConfig;
+use chrono::Local;
+use std::fmt;
+
+pub struct CommandLogEntry {
+    pub cmd: String,
+    pub result: String,
+}
+
+pub struct EventLogEntry {
+    pub time: String,
+    pub level: String,
+    pub category: String,
+    pub message: String,
+    pub detail: Option<String>,
+}
+
+impl fmt::Debug for EventLogEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EventLogEntry")
+            .field("time", &self.time)
+            .field("level", &self.level)
+            .field("category", &self.category)
+            .field("message", &self.message)
+            .field("detail", &self.detail)
+            .finish()
+    }
+}
+
+impl PolygramApp {
+    pub fn add_event_log(&mut self, level: &str, category: &str, message: &str, detail: Option<&str>) {
+        let time = Local::now().format("%H:%M:%S").to_string();
+        self.commands.event_log.push(EventLogEntry {
+            time,
+            level: level.to_owned(),
+            category: category.to_owned(),
+            message: message.to_owned(),
+            detail: detail.map(|s| s.to_owned()),
+        });
+        if self.commands.event_log.len() > 500 {
+            self.commands.event_log.remove(0);
+        }
+    }
+    pub fn ui_config_save(&self) {
+        let ui_config = crate::app::ui_config::UiConfig {
+            show_sidebar: self.show_sidebar,
+            show_command_log_panel: self.show_command_log_panel,
+            show_frontend_log_panel: self.show_frontend_log_panel,
+            show_chat_panel: self.show_chat_panel,
+            show_connectors_panel: self.show_connectors_panel,
+            grid_mode: self.grid_mode,
+            grid_color: self.grid_color,
+            show_cursor_coords: self.show_cursor_coords,
+            theme: ThemeConfig::from_theme(&self.canvas.theme),
+            last_opened_file: self.last_opened_file.clone(),
+            camera_offset: [self.canvas.camera.offset.x, self.canvas.camera.offset.y],
+            camera_zoom: self.canvas.camera.zoom,
+        };
+        ui_config.save();
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    pub fn set_last_opened_file(&mut self, path: Option<String>) {
+        self.last_opened_file = path;
+        self.ui_config_save();
+    }
+
+    pub fn poll_chat(&mut self) {
+        self.chat.poll();
+    }
+
+    pub fn add_connection_log(&mut self, ok: bool, message: &str) {
+        self.connection.add_connection_log(ok, message);
+    }
+}

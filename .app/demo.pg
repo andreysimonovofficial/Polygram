@@ -1,0 +1,181 @@
+{
+  "format": "polygram/2",
+  "name": "Новый граф",
+  "nodes": [
+    {
+      "id": "ore",
+      "name": "Рудник",
+      "kind": "process",
+      "at": [
+        0,
+        0
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "o1",
+          "name": "Руда",
+          "kind": "number",
+          "unit": "т/ч",
+          "value": 120.0,
+          "required": 0.0,
+          "max": null
+        }
+      ]
+    },
+    {
+      "id": "power",
+      "name": "Электростанция",
+      "kind": "process",
+      "at": [
+        0,
+        3
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "o1",
+          "name": "Энергия",
+          "kind": "number",
+          "unit": "МВт",
+          "value": 70.0,
+          "required": 0.0,
+          "max": null
+        }
+      ]
+    },
+    {
+      "id": "smelter",
+      "name": "Плавильня",
+      "kind": "process",
+      "at": [
+        11,
+        0
+      ],
+      "inputs": [
+        {
+          "id": "i1",
+          "name": "Руда",
+          "kind": "number",
+          "unit": "т/ч",
+          "value": 0.0,
+          "required": 100.0,
+          "max": null
+        },
+        {
+          "id": "i2",
+          "name": "Энергия",
+          "kind": "number",
+          "unit": "МВт",
+          "value": 0.0,
+          "required": 40.0,
+          "max": null
+        }
+      ],
+      "outputs": [
+        {
+          "id": "o1",
+          "name": "Металл",
+          "kind": "number",
+          "unit": "т/ч",
+          "value": 80.0,
+          "required": 0.0,
+          "max": null
+        }
+      ]
+    },
+    {
+      "id": "factory",
+      "name": "Завод",
+      "kind": "process",
+      "at": [
+        22,
+        0
+      ],
+      "inputs": [
+        {
+          "id": "i1",
+          "name": "Металл",
+          "kind": "number",
+          "unit": "т/ч",
+          "value": 0.0,
+          "required": 60.0,
+          "max": null
+        },
+        {
+          "id": "i2",
+          "name": "Энергия",
+          "kind": "number",
+          "unit": "МВт",
+          "value": 0.0,
+          "required": 50.0,
+          "max": null
+        }
+      ],
+      "outputs": [
+        {
+          "id": "o1",
+          "name": "Изделия",
+          "kind": "number",
+          "unit": "шт/ч",
+          "value": 20.0,
+          "required": 0.0,
+          "max": null
+        }
+      ]
+    },
+    {
+      "id": "shop",
+      "name": "Магазин",
+      "kind": "process",
+      "at": [
+        33,
+        0
+      ],
+      "inputs": [
+        {
+          "id": "i1",
+          "name": "Изделия",
+          "kind": "number",
+          "unit": "шт/ч",
+          "value": 0.0,
+          "required": 30.0,
+          "max": null
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "ore",
+      "from_metric": "o1",
+      "to_node": "smelter",
+      "to_metric": "i1"
+    },
+    {
+      "from_node": "power",
+      "from_metric": "o1",
+      "to_node": "smelter",
+      "to_metric": "i2"
+    },
+    {
+      "from_node": "power",
+      "from_metric": "o1",
+      "to_node": "factory",
+      "to_metric": "i2"
+    },
+    {
+      "from_node": "smelter",
+      "from_metric": "o1",
+      "to_node": "factory",
+      "to_metric": "i1"
+    },
+    {
+      "from_node": "factory",
+      "from_metric": "o1",
+      "to_node": "shop",
+      "to_metric": "i1"
+    }
+  ]
+}

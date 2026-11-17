@@ -1,0 +1,497 @@
+[
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep901",
+        "parent":  "dep900"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep902",
+        "parent":  "dep901"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep903",
+        "parent":  "dep902"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep904",
+        "parent":  "dep903"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep905",
+        "parent":  "dep904"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep906",
+        "parent":  "dep905"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep907",
+        "parent":  "dep906"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep908",
+        "parent":  "dep907"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep909",
+        "parent":  "dep908"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep910",
+        "parent":  "dep909"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep911",
+        "parent":  "dep910"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep912",
+        "parent":  "dep911"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep913",
+        "parent":  "dep912"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep914",
+        "parent":  "dep913"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep915",
+        "parent":  "dep914"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep916",
+        "parent":  "dep915"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep917",
+        "parent":  "dep916"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep918",
+        "parent":  "dep917"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep919",
+        "parent":  "dep918"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep920",
+        "parent":  "dep919"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep921",
+        "parent":  "dep920"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep922",
+        "parent":  "dep921"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep923",
+        "parent":  "dep922"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep924",
+        "parent":  "dep923"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep925",
+        "parent":  "dep924"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep926",
+        "parent":  "dep925"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep927",
+        "parent":  "dep926"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep928",
+        "parent":  "dep927"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep929",
+        "parent":  "dep928"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep930",
+        "parent":  "dep929"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep931",
+        "parent":  "dep930"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep932",
+        "parent":  "dep931"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep933",
+        "parent":  "dep932"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep934",
+        "parent":  "dep933"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep935",
+        "parent":  "dep934"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep936",
+        "parent":  "dep935"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep937",
+        "parent":  "dep936"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep938",
+        "parent":  "dep937"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep939",
+        "parent":  "dep938"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep940",
+        "parent":  "dep939"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep941",
+        "parent":  "dep940"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep942",
+        "parent":  "dep941"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep943",
+        "parent":  "dep942"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep944",
+        "parent":  "dep943"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep945",
+        "parent":  "dep944"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep946",
+        "parent":  "dep945"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep947",
+        "parent":  "dep946"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep948",
+        "parent":  "dep947"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep949",
+        "parent":  "dep948"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep950",
+        "parent":  "dep949"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep951",
+        "parent":  "dep950"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep952",
+        "parent":  "dep951"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep953",
+        "parent":  "dep952"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep954",
+        "parent":  "dep953"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep955",
+        "parent":  "dep954"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep956",
+        "parent":  "dep955"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep957",
+        "parent":  "dep956"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep958",
+        "parent":  "dep957"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep959",
+        "parent":  "dep958"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep960",
+        "parent":  "dep959"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep961",
+        "parent":  "dep960"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep962",
+        "parent":  "dep961"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep963",
+        "parent":  "dep962"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep964",
+        "parent":  "dep963"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep965",
+        "parent":  "dep964"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep966",
+        "parent":  "dep965"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep967",
+        "parent":  "dep966"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep968",
+        "parent":  "dep967"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep969",
+        "parent":  "dep968"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep970",
+        "parent":  "dep969"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep971",
+        "parent":  "dep970"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep972",
+        "parent":  "dep971"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep973",
+        "parent":  "dep972"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep974",
+        "parent":  "dep973"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep975",
+        "parent":  "dep974"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep976",
+        "parent":  "dep975"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep977",
+        "parent":  "dep976"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep978",
+        "parent":  "dep977"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep979",
+        "parent":  "dep978"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep980",
+        "parent":  "dep979"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep981",
+        "parent":  "dep980"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep982",
+        "parent":  "dep981"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep983",
+        "parent":  "dep982"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep984",
+        "parent":  "dep983"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep985",
+        "parent":  "dep984"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep986",
+        "parent":  "dep985"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep987",
+        "parent":  "dep986"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep988",
+        "parent":  "dep987"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep989",
+        "parent":  "dep988"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep990",
+        "parent":  "dep989"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep991",
+        "parent":  "dep990"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep992",
+        "parent":  "dep991"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep993",
+        "parent":  "dep992"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep994",
+        "parent":  "dep993"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep995",
+        "parent":  "dep994"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep996",
+        "parent":  "dep995"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep997",
+        "parent":  "dep996"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep998",
+        "parent":  "dep997"
+    },
+    {
+        "cmd":  "set_object_parent",
+        "object":  "dep999",
+        "parent":  "dep998"
+    }
+]
