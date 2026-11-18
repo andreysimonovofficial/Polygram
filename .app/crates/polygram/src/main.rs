@@ -502,7 +502,7 @@ impl eframe::App for PolygramApp {
                 // Управление выполнением.
                 ui.horizontal(|ui| {
                     if ui.button("Следующий шаг").clicked() {
-                        match self.qa.run_next_step(&ctx) {
+                        match self.qa.try_advance(&ctx) {
                             Ok(true) => {
                                 self.last_status = "QA шаг выполнен".to_owned();
                             }
@@ -513,6 +513,10 @@ impl eframe::App for PolygramApp {
                                 self.last_status = format!("QA ошибка: {e}");
                             }
                         }
+                    }
+                    if ui.button("Авто: Вкл").clicked() {
+                        self.qa.set_auto_advance(true);
+                        self.last_status = "QA авто-продвижение включено".to_owned();
                     }
                     if ui.button("Отчёт").clicked() {
                         let report = self.qa.get_report();
@@ -565,6 +569,19 @@ impl eframe::App for PolygramApp {
                     }
                 }
             });
+
+        // Авто-продвижение QA runner по кадрам egui.
+        if self.qa.auto_advance {
+            match self.qa.try_advance(&ctx) {
+                Ok(true) => {
+                    self.last_status = "QA авто-шаг выполнен".to_owned();
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    self.last_status = format!("QA ошибка: {e}");
+                }
+            }
+        }
 
         interaction::handle_delete_confirm(self, &ctx);
 

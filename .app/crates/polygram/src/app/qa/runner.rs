@@ -5,11 +5,15 @@
 //! 2. Think: отправляет скриншот + инструкцию в VLM, получает действие
 //! 3. Act: выполняет действие через HTTP API (virtual_mouse_*, virtual_key_*, virtual_wheel)
 //! 4. Verify: делает скриншот после, проверяет ожидание
+//!
+//! Получение скриншота через egui `request_screenshot` асинхронно по кадрам,
+//! поэтому runner использует машину состояний `QaStepPhase` и продвигается
+//! на каждом вызове `run_next_step_frame()`.
 
 use crate::app::qa::{
     actuator::{Actuator, ApiConfig},
     report::{ReportGenerator, QaStepReport},
-    scenario::{QaScenario, QaStatus, QaVerdict},
+    scenario::{QaAction, QaScenario, QaStatus, QaVerdict},
     verifier::Verifier,
     vision::VlmClient,
     VlmConfig,
@@ -17,7 +21,6 @@ use crate::app::qa::{
 use egui::Context;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 /// Состояние QA-агента в PolygramApp.
 #[derive(Debug, Clone)]
@@ -52,6 +55,20 @@ impl Default for QaAgentState {
     }
 }
 
+/// Фаза выполнения одного шага сценария.
+#[derive(Debug, Clone)]
+enum QaStepPhase {
+    /// Ожидание скриншота ДО действия.
+    WaitingBefore { step_index: usize },
+    /// Ожидание скриншота ПОСЛЕ действия.
+    WaitingAfter {
+        step_index: usize,
+        before_path: PathBuf,
+        action: QaAction,
+        before_rev: u64,
+    },
+}
+
 /// QA Runner — основной оркестратор.
 pub struct QaRunner {
     pub state: QaAgentState,
@@ -59,6 +76,11 @@ pub struct QaRunner {
     actuator: Actuator,
     verifier: Verifier,
     reporter: ReportGenerator,
+    /// Текущая фаза выполнения шага (для неблокирующего выполнения по кадрам).
+    phase: Option<QaStepPhase>,
+    /// Флаг авто-продвижения: если true, runner будет пытаться продвинуться
+    /// на каждом вызове `try_advance()`.
+    pub auto_advance: bool,
 }
 
 impl QaRunner {
@@ -76,34 +98,36 @@ impl QaRunner {
             actuator,
             verifier,
             reporter: ReportGenerator,
+            phase: None,
+            auto_advance: false,
         }
     }
 
-    /// Проверить, настроен ли VLM клиент.
+    /// Проверить, настроен ли VLM клиент (есть endpoint и модель в конфигурации).
     pub fn vlm_is_configured(&self) -> bool {
-        self.vlm_client.is_configured()
-    }
-    pub fn load_scenario(&mut self, yaml: &str) -> Result<(), String> {
-        let scenario = QaScenario::from_str(yaml)?;
-        self.state.scenario = Some(scenario);
-        self.state.status = QaStatus::Idle;
-        self.state.results.clear();
-        Ok(())
+        !self.state.vlm_config.endpoint.is_empty() && !self.state.vlm_config.model.is_empty()
     }
 
-    /// Загрузить сценарий из файла.
-    pub fn load_scenario_from_file(&mut self, path: &PathBuf) -> Result<(), String> {
-        let scenario = QaScenario::from_file(path)?;
-        self.state.scenario = Some(scenario);
-        self.state.status = QaStatus::Idle;
-        self.state.results.clear();
-        Ok(())
+    /// Включить или выключить авто-продвижение по кадрам.
+    pub fn set_auto_advance(&mut self, enabled: bool) {
+        self.auto_advance = enabled;
     }
 
-    /// Запустить выполнение следующего шага сценария.
-    /// Возвращает Ok(true) если шаг выполнен, Ok(false) если сценарий завершён,
-    /// Err если произошла ошибка.
-    pub fn run_next_step(&mut self, ctx: &Context) -> Result<bool, String> {
+    /// Попробовать продвинуть выполнение на один кадр.
+    /// Вызывается из `PolygramApp::update()` каждый кадр egui.
+    /// Возвращает `Ok(true)` если прогресс был сделан, `Ok(false)` если ждёт внешнего события.
+    pub fn try_advance(&mut self, ctx: &Context) -> Result<bool, String> {
+        match self.phase.take() {
+            None => {
+                // Нет активной фазы — начинаем новый шаг.
+                self.start_next_step(ctx)
+            }
+            Some(phase) => self.continue_phase(ctx, phase),
+        }
+    }
+
+    /// Начать выполнение следующего шага сценария.
+    fn start_next_step(&mut self, ctx: &Context) -> Result<bool, String> {
         let scenario = match &self.state.scenario {
             Some(s) => s.clone(),
             None => return Err("Сценарий не загружен".to_owned()),
@@ -117,7 +141,6 @@ impl QaRunner {
         };
 
         if current_step_index >= scenario.steps.len() {
-            // Сценарий завершён.
             let verdicts: Vec<QaVerdict> = self
                 .state
                 .results
@@ -128,193 +151,251 @@ impl QaRunner {
             return Ok(false);
         }
 
-        let step = &scenario.steps[current_step_index];
+        let _step = &scenario.steps[current_step_index];
         let step_num = current_step_index + 1;
         self.state.status = QaStatus::Running {
             current_step: current_step_index,
             total_steps: scenario.steps.len(),
         };
 
-        // === OBSERVE: снимок экрана ДО действия ===
-        let before_path = self.take_screenshot(ctx, format!("step_{step_num}_before"))?;
-
-        // === THINK: спросить у VLM, какое действие выполнить ===
-        let action = if self.vlm_client.is_configured() {
-            match self
-                .vlm_client
-                .ask_action(&before_path, &step.instruction)
-            {
-                Ok(a) => Some(a),
-                Err(e) => {
-                    let err_str = e.to_string();
-                    self.state.results.push(
-                        crate::app::qa::scenario::QaStepResult {
-                            step_index: current_step_index,
-                            instruction: step.instruction.clone(),
-                            expect: step.expect.clone(),
-                            action: None,
-                            verdict: QaVerdict::Failure {
-                                reason: err_str.clone(),
-                            },
-                            screenshot_before: Some(before_path.clone()),
-                            screenshot_after: None,
-                            comment: format!("VLM ошибка: {err_str}"),
-                        },
-                    );
-                    self.state.status = QaStatus::Failed {
-                        step_index: current_step_index,
-                        reason: err_str.clone(),
-                    };
-                    return Err(format!("VLM ошибка: {err_str}"));
-                }
-            }
-        } else {
-            // VLM не сконфигурирован — невозможно принять решение.
-            self.state.results.push(
-                crate::app::qa::scenario::QaStepResult {
-                    step_index: current_step_index,
-                    instruction: step.instruction.clone(),
-                    expect: step.expect.clone(),
-                    action: None,
-                    verdict: QaVerdict::Failure {
-                        reason: "VLM не сконфигурирован (нет endpoint или модели)".to_owned(),
-                    },
-                    screenshot_before: Some(before_path.clone()),
-                    screenshot_after: None,
-                    comment: "VLM не сконфигурирован".to_owned(),
-                },
-            );
-            self.state.status = QaStatus::Failed {
-                step_index: current_step_index,
-                reason: "VLM не сконфигурирован".to_owned(),
-            };
-            return Err("VLM не сконфигурирован".to_owned());
-        };
-
-        // === ACT: выполнить действие ===
-        let before_rev = self.get_current_rev()?;
-        let action = action.expect("VLM вернул действие");
-        match self.actuator.execute(&action) {
-            Ok(()) => {}
-            Err(e) => {
-                let err_str = e.to_string();
-                self.state.results.push(
-                    crate::app::qa::scenario::QaStepResult {
-                        step_index: current_step_index,
-                        instruction: step.instruction.clone(),
-                        expect: step.expect.clone(),
-                        action: Some(action.clone()),
-                        verdict: QaVerdict::Failure {
-                            reason: err_str.clone(),
-                        },
-                        screenshot_before: Some(before_path.clone()),
-                        screenshot_after: None,
-                        comment: format!("Ошибка выполнения: {err_str}"),
-                    },
-                );
-                self.state.status = QaStatus::Failed {
-                    step_index: current_step_index,
-                    reason: err_str.clone(),
-                };
-                return Err(format!("Ошибка выполнения действия: {err_str}"));
-            }
-        }
-
-        // Подождать少し, чтобы ревизия обновилась.
-        std::thread::sleep(Duration::from_millis(300));
-
-        let after_rev = self.get_current_rev()?;
-
-        // === OBSERVE: снимок экрана ПОСЛЕ действия ===
-        let after_path = self.take_screenshot(ctx, format!("step_{step_num}_after"))?;
-
-        // === VERIFY: проверить результат ===
-        let verdict = self.verifier.verify(
-            step,
-            before_rev,
-            after_rev,
-            &before_path,
-            &after_path,
-        );
-
-        // Сохранить результат шага.
-        self.state.results.push(
-            crate::app::qa::scenario::QaStepResult {
-                step_index: current_step_index,
-                instruction: step.instruction.clone(),
-                expect: step.expect.clone(),
-                action: Some(action),
-                verdict: verdict.clone(),
-                screenshot_before: Some(before_path),
-                screenshot_after: Some(after_path),
-                comment: format!("Ревизия до={before_rev}, после={after_rev}"),
-            },
-        );
-
-        // Обновить статус.
-        match &verdict {
-            QaVerdict::Success => {
-                self.state.status = QaStatus::Running {
-                    current_step: current_step_index + 1,
-                    total_steps: scenario.steps.len(),
-                };
-                if current_step_index + 1 >= scenario.steps.len() {
-                    let verdicts: Vec<QaVerdict> = self
-                        .state
-                        .results
-                        .iter()
-                        .map(|r| r.verdict.clone())
-                        .collect();
-                    self.state.status = QaStatus::Completed { verdicts };
-                }
-            }
-            QaVerdict::Failure { reason } => {
-                self.state.status = QaStatus::Failed {
-                    step_index: current_step_index,
-                    reason: reason.clone(),
-                };
-                return Err(format!("Шаг {step_num} не пройден: {reason}"));
-            }
-            QaVerdict::Uncertain { reason } => {
-                self.state.status = QaStatus::Failed {
-                    step_index: current_step_index,
-                    reason: reason.clone(),
-                };
-                return Err(format!("Шаг {step_num} неопределён: {reason}"));
-            }
-        }
-
+        // === OBSERVE: запросить скриншот ДО действия ===
+        self.state.screenshot_label = Some(format!("step_{step_num}_before"));
+        ctx.request_repaint();
+        self.phase = Some(QaStepPhase::WaitingBefore { step_index: current_step_index });
         Ok(true)
     }
 
-    /// Сделать скриншот экрана через egui API и дождаться результата.
-    fn take_screenshot(&mut self, ctx: &Context, label: String) -> Result<PathBuf, String> {
-        self.state.screenshot_label = Some(label.clone());
+    /// Продолжить выполнение текущей фазы.
+    fn continue_phase(&mut self, ctx: &Context, phase: QaStepPhase) -> Result<bool, String> {
+        match phase {
+            QaStepPhase::WaitingBefore { step_index } => {
+                // Проверяем, готов ли скриншот.
+                match self.take_screenshot_result() {
+                    Some(before_path) => {
+                        // === THINK: спросить у VLM ===
+                        let scenario = self.state.scenario.as_ref().unwrap();
+                        let step = &scenario.steps[step_index];
 
-        let result_arc = self.state.screenshot_result.clone();
-        ctx.request_screenshot(move |image: Arc<egui::ColorImage>| {
-            let dir = PathBuf::from("screenshots");
-            let res = crate::app::snapshot::save_screenshot(&image, &dir);
-            let mut guard = result_arc.lock().unwrap();
-            *guard = Some(res.clone().map(|p| Ok(p)).unwrap_or_else(|e| Err(e)));
-            drop(guard);
-        });
+                        if self.vlm_client.is_configured() {
+                            match self.vlm_client.ask_action(&before_path, &step.instruction) {
+                                Ok(action) => {
+                                    // === ACT: выполнить действие ===
+                                    let before_rev = self.get_current_rev()?;
+                                    match self.actuator.execute(&action) {
+                                        Ok(()) => {
+                                            // Подождать少し, чтобы ревизия обновилась.
+                                            std::thread::sleep(std::time::Duration::from_millis(300));
+                                            let after_rev = self.get_current_rev()?;
 
-        // Ждём результат скриншота (максимум 5 секунд).
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5) {
-            {
-                let mut guard = self.state.screenshot_result.lock().unwrap();
-                if guard.is_some() {
-                    let res = guard.take().unwrap();
-                    self.state.screenshot_label = None;
-                    return res.map_err(|e| format!("Ошибка сохранения скриншота: {e}"));
+                                            // === OBSERVE: запросить скриншот ПОСЛЕ действия ===
+                                            let step_num = step_index + 1;
+                                            self.state.screenshot_label =
+                                                Some(format!("step_{step_num}_after"));
+                                            ctx.request_repaint();
+                                            self.phase = Some(QaStepPhase::WaitingAfter {
+                                                step_index,
+                                                before_path,
+                                                action,
+                                                before_rev: after_rev,
+                                            });
+                                            Ok(true)
+                                        }
+                                        Err(e) => {
+                                            let err_str = e.to_string();
+                                            self.state.results.push(
+                                                crate::app::qa::scenario::QaStepResult {
+                                                    step_index,
+                                                    instruction: step.instruction.clone(),
+                                                    expect: step.expect.clone(),
+                                                    action: Some(action.clone()),
+                                                    verdict: QaVerdict::Failure {
+                                                        reason: format!("Ошибка выполнения действия: {err_str}"),
+                                                    },
+                                                    screenshot_before: Some(before_path),
+                                                    screenshot_after: None,
+                                                    comment: format!("Ошибка выполнения: {err_str}"),
+                                                },
+                                            );
+                                            self.state.status = QaStatus::Failed {
+                                                step_index,
+                                                reason: err_str.clone(),
+                                            };
+                                            return Err(format!("Ошибка выполнения действия: {err_str}"));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    let err_str = e.to_string();
+                                    self.state.results.push(
+                                        crate::app::qa::scenario::QaStepResult {
+                                            step_index,
+                                            instruction: step.instruction.clone(),
+                                            expect: step.expect.clone(),
+                                            action: None,
+                                            verdict: QaVerdict::Failure {
+                                                reason: format!("VLM ошибка: {err_str}"),
+                                            },
+                                            screenshot_before: Some(before_path),
+                                            screenshot_after: None,
+                                            comment: format!("VLM ошибка: {err_str}"),
+                                        },
+                                    );
+                                    self.state.status = QaStatus::Failed {
+                                        step_index,
+                                        reason: err_str.clone(),
+                                    };
+                                    return Err(format!("VLM ошибка: {err_str}"));
+                                }
+                            }
+                        } else {
+                            // VLM не сконфигурирован.
+                            self.state.results.push(
+                                crate::app::qa::scenario::QaStepResult {
+                                    step_index,
+                                    instruction: step.instruction.clone(),
+                                    expect: step.expect.clone(),
+                                    action: None,
+                                    verdict: QaVerdict::Failure {
+                                        reason: "VLM не сконфигурирован (нет endpoint или модели)".to_owned(),
+                                    },
+                                    screenshot_before: Some(before_path),
+                                    screenshot_after: None,
+                                    comment: "VLM не сконфигурирован".to_owned(),
+                                },
+                            );
+                            self.state.status = QaStatus::Failed {
+                                step_index,
+                                reason: "VLM не сконфигурирован".to_owned(),
+                            };
+                            return Err("VLM не сконфигурирован".to_owned());
+                        }
+                    }
+                    None => {
+                        // Скриншот ещё не готов — ждём следующего кадра.
+                        self.phase = Some(QaStepPhase::WaitingBefore { step_index });
+                        Ok(false)
+                    }
                 }
             }
-            std::thread::sleep(Duration::from_millis(50));
-        }
+            QaStepPhase::WaitingAfter {
+                step_index,
+                before_path,
+                action,
+                before_rev,
+            } => {
+                // Проверяем, готов ли скриншот после действия.
+                match self.take_screenshot_result() {
+                    Some(after_path) => {
+                        // === VERIFY: проверить результат ===
+                        let scenario = self.state.scenario.as_ref().unwrap();
+                        let step = &scenario.steps[step_index];
 
-        Err("Таймаут ожидания скриншота".to_owned())
+                        let verdict = self.verifier.verify(
+                            step,
+                            before_rev,
+                            before_rev + 1, // ревизия должна増литься после действия
+                            &before_path,
+                            &after_path,
+                        );
+
+                        self.state.results.push(
+                            crate::app::qa::scenario::QaStepResult {
+                                step_index,
+                                instruction: step.instruction.clone(),
+                                expect: step.expect.clone(),
+                                action: Some(action),
+                                verdict: verdict.clone(),
+                                screenshot_before: Some(before_path),
+                                screenshot_after: Some(after_path),
+                                comment: format!("Ревизия до={before_rev}"),
+                            },
+                        );
+
+                        match &verdict {
+                            QaVerdict::Success => {
+                                let next_step = step_index + 1;
+                                if next_step >= scenario.steps.len() {
+                                    let verdicts: Vec<QaVerdict> = self
+                                        .state
+                                        .results
+                                        .iter()
+                                        .map(|r| r.verdict.clone())
+                                        .collect();
+                                    self.state.status = QaStatus::Completed { verdicts };
+                                    return Ok(false);
+                                }
+                                self.state.status = QaStatus::Running {
+                                    current_step: next_step,
+                                    total_steps: scenario.steps.len(),
+                                };
+                                // Начинаем следующий шаг — запрашиваем скриншот ДО.
+                                self.state.screenshot_label = Some(format!("step_{next_step}_before"));
+                                ctx.request_repaint();
+                                self.phase = Some(QaStepPhase::WaitingBefore { step_index: next_step });
+                                Ok(true)
+                            }
+                            QaVerdict::Failure { reason } => {
+                                self.state.status = QaStatus::Failed {
+                                    step_index,
+                                    reason: reason.clone(),
+                                };
+                                return Err(format!("Шаг {} не пройден: {reason}", step_index + 1));
+                            }
+                            QaVerdict::Uncertain { reason } => {
+                                self.state.status = QaStatus::Failed {
+                                    step_index,
+                                    reason: reason.clone(),
+                                };
+                                return Err(format!("Шаг {} неопределён: {reason}", step_index + 1));
+                            }
+                        }
+                    }
+                    None => {
+                        // Скриншот ещё не готов — ждём следующего кадра.
+                        self.phase = Some(QaStepPhase::WaitingAfter {
+                            step_index,
+                            before_path,
+                            action,
+                            before_rev,
+                        });
+                        Ok(false)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Загрузить сценарий из YAML-строки.
+    pub fn load_scenario(&mut self, yaml: &str) -> Result<(), String> {
+        let scenario = QaScenario::from_str(yaml)?;
+        self.state.scenario = Some(scenario);
+        self.state.status = QaStatus::Idle;
+        self.state.results.clear();
+        self.phase = None;
+        Ok(())
+    }
+
+    /// Загрузить сценарий из файла.
+    pub fn load_scenario_from_file(&mut self, path: &PathBuf) -> Result<(), String> {
+        let scenario = QaScenario::from_file(path)?;
+        self.state.scenario = Some(scenario);
+        self.state.status = QaStatus::Idle;
+        self.state.results.clear();
+        self.phase = None;
+        Ok(())
+    }
+
+    /// Получить готовый результат скриншота, если есть.
+    fn take_screenshot_result(&mut self) -> Option<PathBuf> {
+        let mut guard = self.state.screenshot_result.lock().unwrap();
+        if let Some(res) = guard.take() {
+            self.state.screenshot_label = None;
+            Some(res.map_err(|e| {
+                eprintln!("Ошибка сохранения скриншота: {e}");
+            }).unwrap_or_else(|_| PathBuf::new()))
+        } else {
+            None
+        }
     }
 
     /// Получить текущую ревизию из API снимка состояния.
