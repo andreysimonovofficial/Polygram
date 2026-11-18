@@ -19,11 +19,13 @@ pub mod dialogs;
 pub mod drag;
 pub mod fonts;
 pub mod process;
+pub mod qa;
 pub mod settings;
 pub mod snapshot;
 pub mod state;
 pub mod ui_config;
 
+use crate::app::qa::{QaAgentState, QaRunner};
 use bindings::BindingManager;
 use chat::ChatState;
 use commands::CommandState;
@@ -398,7 +400,10 @@ pub struct PolygramApp {
     pub virtual_path_index: usize,
     /// Точка начала рисования фигуры (позиция курсора в момент нажатия кнопки).
     pub virtual_draw_start: Option<egui::Pos2>,
-
+    /// Состояние QA-агента (сценарии, runner, VLM конфигурация).
+    pub qa: QaRunner,
+    /// Буфер ввода YAML сценария (временное поле для UI).
+    pub qa_scenario_yaml_input: String,
 }
 
 impl PolygramApp {
@@ -462,6 +467,8 @@ impl PolygramApp {
             virtual_cursor_pos: egui::Pos2::default(),
             virtual_path_index: 0,
             virtual_draw_start: None,
+            qa: QaRunner::new(QaAgentState::default()),
+            qa_scenario_yaml_input: String::new(),
         }
     }
 }

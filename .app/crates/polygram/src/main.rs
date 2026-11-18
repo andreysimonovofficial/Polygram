@@ -18,6 +18,7 @@ mod panels;
 mod status;
 
 use app::PolygramApp;
+use app::qa::{QaStatus, QaVerdict};
 use eframe::egui::{self, ColorImage};
 use egui_extras;
 use polygram_core::Published;
@@ -442,6 +443,128 @@ impl eframe::App for PolygramApp {
                 self.ui_config_save();
             }
         }
+
+        // QA-агент панель: Observe → Think → Act → Verify.
+        let mut qa_window_open = true;
+        egui::Window::new("QA Агент")
+            .open(&mut qa_window_open)
+            .show(&ctx, |ui| {
+                ui.heading("QA Агент — Observe → Think → Act → Verify");
+                ui.separator();
+
+                // Конфигурация VLM.
+                ui.collapsing("Конфигурация VLM", |ui| {
+                    ui.label("Endpoint:");
+                    ui.text_edit_singleline(&mut self.qa.state.vlm_config.endpoint);
+                    ui.label("Модель:");
+                    ui.text_edit_singleline(&mut self.qa.state.vlm_config.model);
+                    ui.label("API ключ (опционально):");
+                    let api_key_input = self.qa.state.vlm_config.api_key.clone().unwrap_or_default();
+                    let mut api_key_buf = api_key_input;
+                    if ui.text_edit_singleline(&mut api_key_buf).changed() {
+                        self.qa.state.vlm_config.api_key = if api_key_buf.is_empty() {
+                            None
+                        } else {
+                            Some(api_key_buf)
+                        };
+                    }
+                    if self.qa.vlm_is_configured() {
+                        ui.label(egui::RichText::new("VLM сконфигурирован").color(egui::Color32::GREEN));
+                    } else {
+                        ui.label(egui::RichText::new("VLM не сконфигурирован").color(egui::Color32::RED));
+                    }
+                });
+
+                ui.separator();
+
+                // Загрузка сценария.
+                ui.label("Сценарий (YAML):");
+                let new_text = egui::TextEdit::multiline(&mut self.qa_scenario_yaml_input)
+                    .min_size([300.0, 100.0].into())
+                    .show(ui)
+                    .response;
+                if new_text.changed() {
+                    // text already updated in self.qa_scenario_yaml_input
+                }
+                if ui.button("Загрузить сценарий").clicked() {
+                    match self.qa.load_scenario(&self.qa_scenario_yaml_input) {
+                        Ok(()) => {
+                            self.last_status = "Сценарий загружен".to_owned();
+                        }
+                        Err(e) => {
+                            self.last_status = format!("Ошибка загрузки сценария: {e}");
+                        }
+                    }
+                }
+
+                ui.separator();
+
+                // Управление выполнением.
+                ui.horizontal(|ui| {
+                    if ui.button("Следующий шаг").clicked() {
+                        match self.qa.run_next_step(&ctx) {
+                            Ok(true) => {
+                                self.last_status = "QA шаг выполнен".to_owned();
+                            }
+                            Ok(false) => {
+                                self.last_status = "QA сценарий завершён".to_owned();
+                            }
+                            Err(e) => {
+                                self.last_status = format!("QA ошибка: {e}");
+                            }
+                        }
+                    }
+                    if ui.button("Отчёт").clicked() {
+                        let report = self.qa.get_report();
+                        self.last_status = report.clone();
+                        self.add_event_log("info", "qa_report", &report, None);
+                    }
+                });
+
+                ui.separator();
+
+                // Статус.
+                match self.qa.status() {
+                    QaStatus::Idle => {
+                        ui.label(egui::RichText::new("Статус: ожидание").color(egui::Color32::GRAY));
+                    }
+                    QaStatus::Running { current_step, total_steps } => {
+                        ui.label(egui::RichText::new(format!(
+                            "Статус: выполнение шага {} из {}",
+                            current_step + 1,
+                            total_steps
+                        )).color(egui::Color32::YELLOW));
+                    }
+                    QaStatus::Completed { .. } => {
+                        ui.label(egui::RichText::new("Статус: завершён").color(egui::Color32::GREEN));
+                    }
+                    QaStatus::Failed { step_index, reason } => {
+                        ui.label(egui::RichText::new(format!(
+                            "Статус: ошибка на шаге {} — {}",
+                            step_index + 1,
+                            reason
+                        )).color(egui::Color32::RED));
+                    }
+                }
+
+                // Результаты шагов.
+                if !self.qa.get_step_reports().is_empty() {
+                    ui.separator();
+                    ui.label("Результаты шагов:");
+                    for report in self.qa.get_step_reports() {
+                        ui.label(format!(
+                            "Шаг {}: {} — {}",
+                            report.step_index + 1,
+                            report.action_description,
+                            match report.verdict {
+                                QaVerdict::Success => "Успешно",
+                                QaVerdict::Failure { .. } => "Ошибка",
+                                QaVerdict::Uncertain { .. } => "Неопределённо",
+                            }
+                        ));
+                    }
+                }
+            });
 
         interaction::handle_delete_confirm(self, &ctx);
 
