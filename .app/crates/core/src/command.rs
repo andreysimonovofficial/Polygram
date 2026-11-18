@@ -177,6 +177,18 @@ pub enum Command {
     VirtualMouseCurve { x: i32, y: i32, cx: i32, cy: i32 },
     /// Виртуальная мышь: движение по скруглённой кривой через массив точек [(x,y), ...].
     VirtualMousePath { points: Vec<(i32, i32)> },
+    /// Виртуальная мышь: нажатие средней кнопки (2).
+    VirtualMouseDownMiddle,
+    /// Виртуальная мышь: отпускание средней кнопки (2).
+    VirtualMouseUpMiddle,
+    /// Виртуальная клавиатура: нажатие клавиши (имя клавиши, например "Control", "C").
+    VirtualKeyDown { key: String },
+    /// Виртуальная клавиатура: отпускание клавиши (имя клавиши, например "Control", "C").
+    VirtualKeyUp { key: String },
+    /// Виртуальная мышь: прокрутка колёсика (delta_x, delta_y).
+    VirtualWheel { delta_x: f32, delta_y: f32 },
+    /// Виртуальная мышь: перетащить объект с id object_id на координаты (to_x, to_y).
+    VirtualDrag { object_id: String, to_x: i32, to_y: i32 },
 }
 
 fn default_throughput() -> f64 {

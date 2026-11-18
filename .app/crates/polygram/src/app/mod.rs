@@ -163,6 +163,92 @@ impl PolygramApp {
             });
         }
 
+        // Средняя кнопка мыши.
+        if vi.mouse_middle_pressed && !prev.mouse_middle_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Middle,
+                pressed: true,
+                modifiers: Default::default(),
+            });
+        } else if !vi.mouse_middle_pressed && prev.mouse_middle_pressed {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Middle,
+                pressed: false,
+                modifiers: Default::default(),
+            });
+        }
+
+        // Виртуальная клавиатура: нажатие/отпускание клавиш (комбинации).
+        let prev_keys: std::collections::HashSet<&str> = prev
+            .keyboard_keys
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        let curr_keys: std::collections::HashSet<&str> = vi
+            .keyboard_keys
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        for key in curr_keys.difference(&prev_keys) {
+            if let Some(egui_key) = parse_key_name(key) {
+                events.push(egui::Event::Key {
+                    key: egui_key,
+                    pressed: true,
+                    modifiers: Default::default(),
+                    repeat: false,
+                    physical_key: None,
+                });
+            }
+        }
+        for key in prev_keys.difference(&curr_keys) {
+            if let Some(egui_key) = parse_key_name(key) {
+                events.push(egui::Event::Key {
+                    key: egui_key,
+                    pressed: false,
+                    modifiers: Default::default(),
+                    repeat: false,
+                    physical_key: None,
+                });
+            }
+        }
+
+        // Виртуальная мышь: прокрутка колёсика.
+        if vi.wheel_delta != (0.0, 0.0) {
+            events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::Vec2::new(vi.wheel_delta.0, vi.wheel_delta.1),
+                modifiers: Default::default(),
+                phase: egui::TouchPhase::End,
+                source: egui::MouseWheelSource::Trackpad,
+            });
+        }
+
+        // Виртуальная мышь: перетаскивание объекта.
+        if let Some(drag_to) = vi.drag_to {
+            if !prev.mouse_left_pressed {
+                // Начало перетаскивания: нажатие левой кнопки в текущей позиции.
+                events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                });
+            }
+            // Проверяем достижение цели перетаскивания.
+            let drag_reached = (pos.x - drag_to.0).abs() < 1.0 && (pos.y - drag_to.1).abs() < 1.0;
+            if drag_reached && prev.mouse_left_pressed {
+                // Конец перетаскивания: отпускание левой кнопки в целевой позиции.
+                events.push(egui::Event::PointerButton {
+                    pos: egui::Pos2::new(drag_to.0, drag_to.1),
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                });
+            }
+        }
+
         // Текст виртуальной клавиатуры — отправляем при изменении непустого текста.
         if !vi.keyboard_text.is_empty() && vi.keyboard_text != prev.keyboard_text {
             events.push(egui::Event::Text(vi.keyboard_text.clone()));
@@ -178,6 +264,21 @@ impl PolygramApp {
         let mut next = vi.clone();
         next.mouse_x = pos.x;
         next.mouse_y = pos.y;
+
+        // Очищаем состояние перетаскивания после завершения.
+        if next.drag_to.is_some() && !prev.mouse_left_pressed {
+            // Курсор достиг цели и кнопка отпущена — сбрасываем состояние перетаскивания.
+            next.drag_target = None;
+            next.drag_to = None;
+            next.target_x = 0.0;
+            next.target_y = 0.0;
+        }
+
+        // Сбрасываем дельта колёсика после обработки.
+        if next.wheel_delta != (0.0, 0.0) {
+            next.wheel_delta = (0.0, 0.0);
+        }
+
         if next != *prev {
             self.virtual_input = next;
             ctx.request_repaint();
@@ -186,6 +287,52 @@ impl PolygramApp {
         // Непрерывная перерисовка, пока курсор виден.
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
     }
+}
+
+/// Преобразует строковое имя клавиши в `egui::Key`.
+/// Поддерживает буквы, цифры, функциональные клавиши, модификаторы и специальные клавиши.
+fn parse_key_name(name: &str) -> Option<egui::Key> {
+    let key = match name {
+        // Буквы
+        "A" => egui::Key::A, "B" => egui::Key::B, "C" => egui::Key::C, "D" => egui::Key::D,
+        "E" => egui::Key::E, "F" => egui::Key::F, "G" => egui::Key::G, "H" => egui::Key::H,
+        "I" => egui::Key::I, "J" => egui::Key::J, "K" => egui::Key::K, "L" => egui::Key::L,
+        "M" => egui::Key::M, "N" => egui::Key::N, "O" => egui::Key::O, "P" => egui::Key::P,
+        "Q" => egui::Key::Q, "R" => egui::Key::R, "S" => egui::Key::S, "T" => egui::Key::T,
+        "U" => egui::Key::U, "V" => egui::Key::V, "W" => egui::Key::W, "X" => egui::Key::X,
+        "Y" => egui::Key::Y, "Z" => egui::Key::Z,
+        // Цифры
+        "0" => egui::Key::Num0, "1" => egui::Key::Num1, "2" => egui::Key::Num2,
+        "3" => egui::Key::Num3, "4" => egui::Key::Num4, "5" => egui::Key::Num5,
+        "6" => egui::Key::Num6, "7" => egui::Key::Num7, "8" => egui::Key::Num8,
+        "9" => egui::Key::Num9,
+        // Модификаторы не являются вариантами egui::Key — они через egui::Modifiers.
+        // Специальные клавиши
+        "Enter" => egui::Key::Enter, "Return" => egui::Key::Enter,
+        "Escape" => egui::Key::Escape, "Esc" => egui::Key::Escape,
+        "Tab" => egui::Key::Tab, "Backspace" => egui::Key::Backspace,
+        "Delete" => egui::Key::Delete, "Insert" => egui::Key::Insert,
+        "Home" => egui::Key::Home, "End" => egui::Key::End,
+        "PageUp" => egui::Key::PageUp, "PageDown" => egui::Key::PageDown,
+        "Space" => egui::Key::Space,
+        "ArrowUp" => egui::Key::ArrowUp, "Up" => egui::Key::ArrowUp,
+        "ArrowDown" => egui::Key::ArrowDown, "Down" => egui::Key::ArrowDown,
+        "ArrowLeft" => egui::Key::ArrowLeft, "Left" => egui::Key::ArrowLeft,
+        "ArrowRight" => egui::Key::ArrowRight, "Right" => egui::Key::ArrowRight,
+        // Функциональные клавиши
+        "F1" => egui::Key::F1, "F2" => egui::Key::F2, "F3" => egui::Key::F3,
+        "F4" => egui::Key::F4, "F5" => egui::Key::F5, "F6" => egui::Key::F6,
+        "F7" => egui::Key::F7, "F8" => egui::Key::F8, "F9" => egui::Key::F9,
+        "F10" => egui::Key::F10, "F11" => egui::Key::F11, "F12" => egui::Key::F12,
+        // Символы
+        "Minus" => egui::Key::Minus, "Plus" => egui::Key::Plus,
+        "Equals" => egui::Key::Equals, "Comma" => egui::Key::Comma,
+        "Period" => egui::Key::Period, "Slash" => egui::Key::Slash,
+        "Semicolon" => egui::Key::Semicolon, "Quote" => egui::Key::Quote,
+        "Backslash" => egui::Key::Backslash,
+        _ => return None,
+    };
+    Some(key)
 }
 
 pub struct PolygramApp {

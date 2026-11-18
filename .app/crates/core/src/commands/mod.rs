@@ -193,6 +193,77 @@ pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied
             })
         }
 
+        // Виртуальная мышь: нажатие средней кнопки.
+        Command::VirtualMouseDownMiddle => {
+            engine.virtual_input.mouse_middle_pressed = true;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: отпускание средней кнопки.
+        Command::VirtualMouseUpMiddle => {
+            engine.virtual_input.mouse_middle_pressed = false;
+            engine.virtual_input.target_x = 0.0;
+            engine.virtual_input.target_y = 0.0;
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная клавиатура: нажатие клавиши.
+        Command::VirtualKeyDown { key } => {
+            if !engine.virtual_input.keyboard_keys.contains(&key) {
+                engine.virtual_input.keyboard_keys.push(key);
+            }
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная клавиатура: отпускание клавиши.
+        Command::VirtualKeyUp { key } => {
+            engine.virtual_input.keyboard_keys.retain(|k| k != &key);
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: прокрутка колёсика.
+        Command::VirtualWheel { delta_x, delta_y } => {
+            engine.virtual_input.wheel_delta = (delta_x, delta_y);
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
+        // Виртуальная мышь: перетащить объект.
+        Command::VirtualDrag { object_id, to_x, to_y } => {
+            engine.virtual_input.drag_target = Some(object_id);
+            engine.virtual_input.drag_to = Some((to_x as f32, to_y as f32));
+            engine.rev += 1;
+            Ok(Applied {
+                rev: engine.rev,
+                created: None,
+                at: None,
+            })
+        }
+
         // Виртуальная клавиатура: ввод текста.
         Command::VirtualKeyboardType { text } => {
             engine.virtual_input.keyboard_text = text;

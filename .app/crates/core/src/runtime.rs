@@ -41,10 +41,20 @@ pub struct VirtualInputState {
     pub mouse_left_pressed: bool,
     /// Правая кнопка мыши зажата.
     pub mouse_right_pressed: bool,
+    /// Средняя кнопка мыши зажата.
+    pub mouse_middle_pressed: bool,
     /// Текст для ввода виртуальной клавиатуры (очищается после подачи).
     pub keyboard_text: String,
+    /// Нажатые клавиши (имена клавиш, например "Control", "C", "V") — для комбинаций клавиш.
+    pub keyboard_keys: Vec<String>,
+    /// Дельта прокрутки колёсика мыши (x, y).
+    pub wheel_delta: (f32, f32),
     /// Фигура для рисования курсором: Some(kind, x2, y2) — рисовать от точки нажатия до (x2, y2).
     pub draw_shape: Option<(u8, f32, f32)>,
+    /// Цель перетаскивания: Some(object_id) — объект, который перетаскивается.
+    pub drag_target: Option<String>,
+    /// Целевые координаты перетаскивания: Some((x, y)) — куда перетаскивать объект.
+    pub drag_to: Option<(f32, f32)>,
     /// Точки скруглённой кривой для анимации (устанавливается командой VirtualMousePath).
     pub path_points: Vec<(f32, f32)>,
     /// Индекс текущей точки на кривой (для анимации в GUI).
@@ -62,8 +72,13 @@ impl Default for VirtualInputState {
             mouse_y: 0.0,
             mouse_left_pressed: false,
             mouse_right_pressed: false,
+            mouse_middle_pressed: false,
             keyboard_text: String::new(),
+            keyboard_keys: Vec::new(),
+            wheel_delta: (0.0, 0.0),
             draw_shape: None,
+            drag_target: None,
+            drag_to: None,
             path_points: Vec::new(),
             path_index: 0,
         }

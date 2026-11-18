@@ -88,6 +88,16 @@ impl PolygramApp {
                 let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
                 format!("VirtualMousePath[{}]", pts.join(";"))
             }
+            Command::VirtualMouseDownMiddle => "VirtualMouseDownMiddle".to_owned(),
+            Command::VirtualMouseUpMiddle => "VirtualMouseUpMiddle".to_owned(),
+            Command::VirtualKeyDown { key } => format!("VirtualKeyDown(key={key})"),
+            Command::VirtualKeyUp { key } => format!("VirtualKeyUp(key={key})"),
+            Command::VirtualWheel { delta_x, delta_y } => {
+                format!("VirtualWheel(delta_x={delta_x}, delta_y={delta_y})")
+            }
+            Command::VirtualDrag { object_id, to_x, to_y } => {
+                format!("VirtualDrag(object_id={object_id}, to_x={to_x}, to_y={to_y})")
+            }
         };
 
         self.add_event_log("info", "command", &format!("Отправлена команда: {cmd_label}"), Some(&cmd_str));
@@ -211,6 +221,16 @@ impl PolygramApp {
             Command::VirtualMousePath { points } => {
                 let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
                 format!("VirtualMousePath[{}]", pts.join(";"))
+            }
+            Command::VirtualMouseDownMiddle => "VirtualMouseDownMiddle".to_owned(),
+            Command::VirtualMouseUpMiddle => "VirtualMouseUpMiddle".to_owned(),
+            Command::VirtualKeyDown { key } => format!("VirtualKeyDown(key={key})"),
+            Command::VirtualKeyUp { key } => format!("VirtualKeyUp(key={key})"),
+            Command::VirtualWheel { delta_x, delta_y } => {
+                format!("VirtualWheel(delta_x={delta_x}, delta_y={delta_y})")
+            }
+            Command::VirtualDrag { object_id, to_x, to_y } => {
+                format!("VirtualDrag(object_id={object_id}, to_x={to_x}, to_y={to_y})")
             }
         }).collect();
 
