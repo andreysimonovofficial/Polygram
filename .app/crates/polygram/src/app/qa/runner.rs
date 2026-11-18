@@ -159,7 +159,20 @@ impl QaRunner {
         };
 
         // === OBSERVE: запросить скриншот ДО действия ===
+        // Очищаем предыдущий результат скриншота.
+        {
+            let mut guard = self.state.screenshot_result.lock().unwrap();
+            *guard = None;
+        }
         self.state.screenshot_label = Some(format!("step_{step_num}_before"));
+        let result_arc = self.state.screenshot_result.clone();
+        ctx.request_screenshot(move |image: Arc<egui::ColorImage>| {
+            let dir = PathBuf::from("screenshots");
+            let res = crate::app::snapshot::save_screenshot(&image, &dir);
+            let mut guard = result_arc.lock().unwrap();
+            *guard = Some(res.clone().map(|p| Ok(p)).unwrap_or_else(|e| Err(e)));
+            drop(guard);
+        });
         ctx.request_repaint();
         self.phase = Some(QaStepPhase::WaitingBefore { step_index: current_step_index });
         Ok(true)
@@ -188,9 +201,22 @@ impl QaRunner {
                                             let after_rev = self.get_current_rev()?;
 
                                             // === OBSERVE: запросить скриншот ПОСЛЕ действия ===
+                                            // Очищаем предыдущий результат скриншота.
+                                            {
+                                                let mut guard = self.state.screenshot_result.lock().unwrap();
+                                                *guard = None;
+                                            }
                                             let step_num = step_index + 1;
                                             self.state.screenshot_label =
                                                 Some(format!("step_{step_num}_after"));
+                                            let result_arc = self.state.screenshot_result.clone();
+                                            ctx.request_screenshot(move |image: Arc<egui::ColorImage>| {
+                                                let dir = PathBuf::from("screenshots");
+                                                let res = crate::app::snapshot::save_screenshot(&image, &dir);
+                                                let mut guard = result_arc.lock().unwrap();
+                                                *guard = Some(res.clone().map(|p| Ok(p)).unwrap_or_else(|e| Err(e)));
+                                                drop(guard);
+                                            });
                                             ctx.request_repaint();
                                             self.phase = Some(QaStepPhase::WaitingAfter {
                                                 step_index,
