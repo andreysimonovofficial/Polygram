@@ -1,0 +1,16 @@
+# Build output
+target/
+Cargo.lock
+*.rlib
+*.d
+
+# Documentation output
+target/doc/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
