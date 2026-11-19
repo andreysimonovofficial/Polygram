@@ -52,7 +52,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             };
             let item_rounding = theme.menu_item_rounding;
             let item_bg_fill = theme.menu_item_bg_fill;
-            let hovered_bg_fill = Color32::from_rgb(60, 60, 70);
+            let hovered_bg_fill = Color32::from_rgb(52, 52, 52);
             let hover_pos = ctx.input(|i| i.pointer.hover_pos());
 
             let icon_size = 16.0;
@@ -75,7 +75,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 let cursor = ui.cursor();
                 let item_rect = egui::Rect::from_min_size(
                     cursor.min,
-                    egui::vec2(max_width, font_id.size + 2.0 * button_padding.y),
+                    egui::vec2(max_width, (font_id.size + 2.0 * button_padding.y) * 1.5),
                 );
 
                 // Фон пункта: базовый или при наведении.

@@ -48,7 +48,7 @@ impl Theme {
             menu_frame_fill: Color32::from_rgb(30, 30, 30),     // #1E1E1E
             menu_frame_stroke_color: Color32::from_rgb(56, 56, 56), // #383838
             menu_frame_stroke_width: 0.5,
-            menu_item_bg_fill: Color32::from_rgb(52, 52, 52),   // #343434
+            menu_item_bg_fill: Color32::from_rgb(30, 30, 30),   // #1E1E1E
         }
     }
 }
