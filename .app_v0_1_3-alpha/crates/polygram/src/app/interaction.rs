@@ -32,7 +32,8 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
 
     Window::new("")
         .title_bar(false)
-        .default_pos(pos)
+        .fixed_pos(pos)
+        .movable(false)
         .resizable(false)
         .collapsible(false)
         .frame(
