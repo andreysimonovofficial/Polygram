@@ -35,6 +35,7 @@ pub fn context_menu(
     }
     let mut close = false;
     let mut create_department = false;
+    let mut create_process = false;
     let mut rename = false;
 
     let mut item_rects: Vec<egui::Rect> = Vec::with_capacity(items.len());
@@ -143,6 +144,8 @@ pub fn context_menu(
                     close = true;
                     if *item == "Создать Отдел" {
                         create_department = true;
+                    } else if *item == "Создать Процесс" {
+                        create_process = true;
                     } else if *item == "Переименовать" {
                         rename = true;
                     } else if *item == "Добавить в Запрос" {
@@ -162,6 +165,14 @@ pub fn context_menu(
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
             app.canvas.add_department(cx, cy, format!("Отдел {}", app.canvas.objects.len() + 1));
+        }
+        app.right_click = None;
+    }
+
+    if create_process {
+        if let Some(pos) = app.right_click {
+            let (cx, cy) = app.canvas.screen_to_cell(pos);
+            app.canvas.add_process(cx, cy, format!("Процесс {}", app.canvas.objects.len() + 1));
         }
         app.right_click = None;
     }
