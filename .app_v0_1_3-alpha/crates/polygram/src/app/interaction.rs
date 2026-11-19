@@ -144,8 +144,8 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             }
         });
 
-    // Закрыть меню по клику вне него.
-    if ctx.input(|i| i.pointer.any_click()) {
+    // Закрыть меню по клику вне него (не в том же кадре, где открыли правым кликом).
+    if !app.menu_just_opened && ctx.input(|i| i.pointer.any_click()) {
         let pointer_pos = ctx.input(|i| i.pointer.hover_pos());
         let clicked_in_menu = pointer_pos.map_or(false, |p| {
             item_rects.iter().any(|r| r.contains(p))
@@ -155,8 +155,10 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
         }
     }
 
-    // Закрыть меню по нажатию любой клавиши.
-    if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. }))) {
+    // Закрыть меню по нажатию любой клавиши (не в том же кадре, где открыли правым кликом).
+    if !app.menu_just_opened
+        && ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. })))
+    {
         close = true;
     }
 
@@ -168,4 +170,6 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
     if close {
         app.right_click = None;
     }
+
+    app.menu_just_opened = false;
 }

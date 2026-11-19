@@ -15,6 +15,8 @@ pub struct PolygramApp {
     right_click: Option<Pos2>,
     /// Установлены ли загрузчики изображений egui_extras (включая SVG-загрузчик).
     image_loaders_installed: bool,
+    /// Меню только что открыто правым кликом — игнорировать close-логику в этом кадре.
+    menu_just_opened: bool,
 }
 
 impl PolygramApp {
@@ -24,6 +26,7 @@ impl PolygramApp {
             canvas: Canvas::new(),
             right_click: None,
             image_loaders_installed: false,
+            menu_just_opened: false,
         }
     }
 }
@@ -54,6 +57,7 @@ impl eframe::App for PolygramApp {
             if canvas_response.secondary_clicked() {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     self.right_click = Some(pos);
+                    self.menu_just_opened = true;
                 }
             }
         });
