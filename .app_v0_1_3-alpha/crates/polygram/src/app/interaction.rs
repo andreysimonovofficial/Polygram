@@ -93,6 +93,9 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 if response.clicked() {
                     close = true;
                 }
+
+                // Продвинуть курсор вниз, чтобы следующий пункт не накладывался на этот.
+                ui.allocate_space(item_rect.size());
             }
         });
 
