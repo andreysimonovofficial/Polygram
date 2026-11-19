@@ -11,10 +11,12 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
     };
 
     let mut close = false;
-    Window::new("Контекстное меню")
+    Window::new("")
+        .title_bar(false)
         .default_pos(pos)
         .resizable(false)
         .collapsible(false)
+        .frame(egui::Frame::new().shadow(app.canvas.theme.shadow))
         .show(ctx, |ui| {
             if ui.button("Создать Процесс").clicked() {
                 close = true;
