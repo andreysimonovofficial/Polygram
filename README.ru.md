@@ -2,4 +2,4 @@
 
 ![[docs/product/stack|stack]]
 
-![[docs/product/ux-ui|ux-ui]]
+![[docs/product/ux-ui/ux-ui|ux-ui]]

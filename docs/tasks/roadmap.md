@@ -1,7 +1,7 @@
 - [ ] **Pre-Seed (предпосевной)** — гипотезы, создание MVP
 	- [ ] Приложение Polygram MVP
 		- [ ] Документация
-			- [ ] [[ux-ui]]
+			- [ ] [[docs/product/ux-ui/ux-ui]]
 		- [ ] Разработка
 			- [ ] [[stack]]
 			- [ ] [[qa-poduct]]

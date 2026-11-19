@@ -1,0 +1,6 @@
+- [?] Продолжать делать QA Агента или сделать руками? 🔺 #project/Polygram
+- [ ] Burn Rate / Runway #project/Polygram
+- [?] screen.md ссылки: canvas.md, department.md... Дизайн, снимки, индикация. Один файл – одна ответственность. Один день – полностью выполнить один файл. #project/Polygram
+- [?] Сетка 4px. #project/Polygram
+- [?] Редактировать --> Настройки (Окно) #project/Polygram
+- [ ] Инструменты разработчика --> Лог команд Frontend / Backend #project/Polygram ✅ 2026-11-19
