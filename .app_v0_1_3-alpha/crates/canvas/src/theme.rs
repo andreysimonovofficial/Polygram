@@ -23,6 +23,14 @@ pub struct Theme {
     pub menu_item_rounding: CornerRadius,
     /// Отступ внешней рамки контекстного меню от пунктов внутри.
     pub menu_frame_margin: Margin,
+    /// Фон внешней рамки контекстного меню.
+    pub menu_frame_fill: Color32,
+    /// Цвет контура внешней рамки контекстного меню.
+    pub menu_frame_stroke_color: Color32,
+    /// Толщина контура внешней рамки контекстного меню.
+    pub menu_frame_stroke_width: f32,
+    /// Фон пунктов контекстного меню.
+    pub menu_item_bg_fill: Color32,
 }
 
 impl Theme {
@@ -37,6 +45,10 @@ impl Theme {
             menu_frame_rounding: CornerRadius::same(4),
             menu_item_rounding: CornerRadius::same(2),
             menu_frame_margin: Margin::same(8),
+            menu_frame_fill: Color32::from_rgb(30, 30, 30),     // #1E1E1E
+            menu_frame_stroke_color: Color32::from_rgb(56, 56, 56), // #383838
+            menu_frame_stroke_width: 0.5,
+            menu_item_bg_fill: Color32::from_rgb(52, 52, 52),   // #343434
         }
     }
 }
