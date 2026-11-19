@@ -315,6 +315,49 @@ impl Canvas {
         }
     }
 
+    /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.
+    /// Сначала проверяются процессы (с фиксированной геометрией 256×256px), затем отделы
+    /// (возвращается самый вложенный — с наименьшей площадью rect).
+    pub fn object_at_any<'a>(&'a self, screen_pos: Pos2) -> Option<&'a str> {
+        let cell_px = self.cell_px();
+        let zoom = self.camera.zoom;
+
+        // Сначала процессы (фиксированная CSS-геометрия 256×256px).
+        for object in &self.objects {
+            if object.kind != NodeKind::Process {
+                continue;
+            }
+            let r = &object.rect;
+            let rect_px = Rect::from_min_size(
+                self.cell_to_screen(r.x, r.y),
+                Vec2::new(256.0 * zoom, 256.0 * zoom),
+            );
+            if rect_px.contains(screen_pos) {
+                return Some(&object.id);
+            }
+        }
+
+        // Затем самый вложенный отдел (наименьшая площадь rect).
+        let mut best: Option<(&'a str, f32)> = None;
+        for object in &self.objects {
+            if object.kind != NodeKind::Department {
+                continue;
+            }
+            let r = &object.rect;
+            let rect_px = Rect::from_min_size(
+                self.cell_to_screen(r.x, r.y),
+                Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+            );
+            if rect_px.contains(screen_pos) {
+                let area = rect_px.area();
+                if best.map_or(true, |(_, a)| area < a) {
+                    best = Some((&object.id, area));
+                }
+            }
+        }
+        best.map(|(id, _)| id)
+    }
+
     /// Вернуть id отдела, под которым находится заданная экранная позиция.
     pub fn object_at<'a>(&'a self, screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
         for object in &self.objects {

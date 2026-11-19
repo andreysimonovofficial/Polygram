@@ -424,21 +424,48 @@ impl eframe::App for PolygramApp {
                 let (src_id, src_dir, src_name) = self.drag_metric_source.take().unwrap();
                 self.drag_metric_start = None;
                 if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    if let Some((dst_id, dst_dir, dst_name)) = self.drag_metric_under(cur) {
+                    // Реордер строки внутри того же контейнера (ЗАПРОС/РЕЗУЛЬТАТ одного объекта).
+                    let hovered_same = self.canvas.drag_metric_hotspots.iter()
+                        .find(|(oid, d, name, rect)| {
+                            *oid == src_id && *d == src_dir && rect.contains(cur)
+                        })
+                        .map(|(_, _, name, _)| name.clone());
+                    if let Some(hovered_name) = hovered_same {
+                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == src_id) {
+                            let entries = match src_dir {
+                                Direction::Request => &obj.requests,
+                                Direction::Result => &obj.results,
+                            };
+                            if let Some(to_ix) = entries.iter().position(|e| e.name == hovered_name) {
+                                // Найти from_ix для перетаскиваемой записи.
+                                if let Some(from_ix) = entries.iter().position(|e| e.name == src_name) {
+                                    if to_ix != from_ix {
+                                        self.apply_cmd(polygram_core::Command::ReorderMetricEntry {
+                                            object: src_id.clone(),
+                                            dir: src_dir,
+                                            from_ix,
+                                            to_ix,
+                                        });
+                                    }
+                                }
+                                self.drag_metric_source = None;
+                                return;
+                            }
+                        }
+                    }
+                    // Соединение показателя с объектом-целью: ищем любой объект под курсором.
+                    if let Some(dst_id) = self.canvas.object_at_any(cur) {
                         if src_id != dst_id {
-                            let valid = (src_dir == Direction::Request && dst_dir == Direction::Result)
-                                || (src_dir == Direction::Result && dst_dir == Direction::Request);
-                            if valid {
-                                let geometry = self.engine.geometry();
-                                let cmds = polygram_core::drag_domain::compute_metric_drop(
-                                    &polygram_core::drag_domain::MetricDropContext {
-                                        geometry,
-                                        source_object: src_id.clone(),
-                                        source_dir: src_dir,
-                                        entry_name: src_name.clone(),
-                                        target_id: dst_id.clone(),
-                                    },
-                                );
+                            let geometry = self.engine.geometry();
+                            let cmds = polygram_core::drag_domain::compute_metric_drop(
+                                &polygram_core::drag_domain::MetricDropContext {
+                                    geometry,
+                                    source_object: src_id.clone(),
+                                    source_dir: src_dir,
+                                    entry_name: src_name.clone(),
+                                    target_id: dst_id.to_owned(),
+                                },
+                            );
                                 if !cmds.is_empty() {
                                     if let Err((_, e)) = self.engine.apply_batch(
                                         polygram_core::types::Scope::Root,
@@ -470,7 +497,7 @@ impl eframe::App for PolygramApp {
                                                         source_object: src_id.clone(),
                                                         source_dir: src_dir,
                                                         entry_name: src_name.clone(),
-                                                        target_id: dst_id.clone(),
+                                                        target_id: dst_id.to_owned(),
                                                     },
                                                 );
                                             if !cmds2.is_empty() {
@@ -481,8 +508,7 @@ impl eframe::App for PolygramApp {
                                             }
                                         }
                                     }
-                                    self.sync_canvas_from_engine();
-                                }
+                                self.sync_canvas_from_engine();
                             }
                         }
                     }
