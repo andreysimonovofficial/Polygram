@@ -1,5 +1,6 @@
 //! Состояние приложения Polygram.
 //! Хранит Canvas, отслеживает правый клик по холсту и вызывает контекстное меню.
+//! Также отвечает за установку загрузчиков изображений egui_extras (включая SVG).
 
 use egui::Pos2;
 use polygram_canvas::Canvas;
@@ -10,8 +11,10 @@ mod interaction;
 /// Главное состояние приложения Polygram.
 pub struct PolygramApp {
     canvas: Canvas,
-    /// Экранная позиция последнего правого клика по холсту (открывает контекстное меню).
+    /// Экранная позиция последнего правого клика по холсте (открывает контекстное меню).
     right_click: Option<Pos2>,
+    /// Установлены ли загрузчики изображений egui_extras (включая SVG-загрузчик).
+    image_loaders_installed: bool,
 }
 
 impl PolygramApp {
@@ -20,6 +23,7 @@ impl PolygramApp {
         Self {
             canvas: Canvas::new(),
             right_click: None,
+            image_loaders_installed: false,
         }
     }
 }
@@ -32,6 +36,12 @@ impl Default for PolygramApp {
 
 impl eframe::App for PolygramApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Устанавливаем загрузчики изображений egui_extras (включая SVG) при первом кадре.
+        if !self.image_loaders_installed {
+            egui_extras::loaders::install_image_loaders(ui.ctx());
+            self.image_loaders_installed = true;
+        }
+
         egui::CentralPanel::default().show(ui, |ui| {
             self.canvas.paint(ui);
 
