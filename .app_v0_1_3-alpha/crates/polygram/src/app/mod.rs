@@ -182,6 +182,8 @@ impl eframe::App for PolygramApp {
                 egui::Sense::click_and_drag(),
             );
 
+            self.canvas.handle_camera(ui.ctx(), &canvas_response, ui);
+
             self.canvas.paint(ui, &self.selected_objects);
 
             if !canvas_response.hovered() {

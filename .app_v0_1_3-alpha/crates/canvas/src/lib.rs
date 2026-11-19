@@ -6,7 +6,7 @@ mod theme;
 
 pub use theme::{StatusCode, Theme};
 
-use egui::{Color32, Pos2, Rect, Stroke, Vec2};
+use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Stroke, Vec2};
 
 /// Camera of the canvas: offset and zoom.
 #[derive(Clone, Copy, Debug, Default)]
@@ -137,6 +137,53 @@ impl Canvas {
             (cell_x as f32 * self.cell_size + offset.x) * zoom,
             (cell_y as f32 * self.cell_size + offset.y) * zoom,
         )
+    }
+
+    /// Обработка камеры холста: зум колёсиком мыши к курсору и
+    /// панорамирование правой или средней кнопкой мыши (как в старом приложении).
+    /// Объекты на холсте адаптивно реагируют на изменение камеры при отрисовке
+    /// через [`Canvas::paint`], так как все координаты переводятся через
+    /// `cell_to_screen` с учётом `camera.zoom` и `camera.offset`.
+    pub fn handle_camera(
+        &mut self,
+        ctx: &Context,
+        canvas_response: &Response,
+        ui: &egui::Ui,
+    ) {
+        if !canvas_response.hovered() {
+            return;
+        }
+
+        // Зум колёсиком мыши к курсору: точка под курсором остаётся на месте.
+        let scroll = ctx.input(|i| i.smooth_scroll_delta());
+        if scroll.y.abs() > 0.001 {
+            if let Some(cursor) = ctx.pointer_hover_pos() {
+                let old_zoom = self.camera.zoom;
+                let world_cursor = Pos2::new(
+                    (cursor.x / old_zoom - self.camera.offset.x) / self.cell_size,
+                    (cursor.y / old_zoom - self.camera.offset.y) / self.cell_size,
+                );
+                let factor = (scroll.y * 0.01).exp();
+                let new_zoom = (old_zoom * factor).clamp(0.1, 10.0);
+                if new_zoom != old_zoom {
+                    // Новое смещение, чтобы та же мировая точка осталась под курсором.
+                    self.camera.offset.x = cursor.x / new_zoom - world_cursor.x * self.cell_size;
+                    self.camera.offset.y = cursor.y / new_zoom - world_cursor.y * self.cell_size;
+                    self.camera.zoom = new_zoom;
+                    ctx.request_repaint();
+                }
+            }
+        }
+
+        // Панорамирование правой или средней кнопкой мыши.
+        if canvas_response.dragged_by(PointerButton::Secondary)
+            || canvas_response.dragged_by(PointerButton::Middle)
+        {
+            self.camera.offset += ui.input(|i| i.pointer.delta());
+            self.camera.offset.x = (self.camera.offset.x / self.cell_size).round() * self.cell_size;
+            self.camera.offset.y = (self.camera.offset.y / self.cell_size).round() * self.cell_size;
+            ctx.request_repaint();
+        }
     }
 
     /// Adds a department at the given grid cell position.
