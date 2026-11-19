@@ -1,6 +1,7 @@
 //! Контекстное меню по правой кнопке мыши на холсте.
 //! Пункты «Создать Процесс» и «Создать Отдел» создают соответствующие объекты на холсте
-//! в позиции правого клика (привязка к клеткам). Все пункты одинаковой ширины,
+//! в позиции правого клика (привязка к клеткам). Если правый клик пришёлся на отдел,
+//! показывается дополнительный пункт «Переименовать». Все пункты одинаковой ширины,
 //! вычисляемой по самому длинному пункту. Текст и иконки внутри пунктов выровнены
 //! по левому краю по горизонтали, по центру по вертикали.
 //! Меню закрывается по клику вне него или по нажатию любой клавиши.
@@ -10,20 +11,24 @@ use egui::{Color32, Context, Rect, Stroke, TextStyle, Window};
 use crate::app::icons::paint_lucide_image;
 use egui_lucide::Lucide;
 
-/// Контекстное меню по правой кнопке на пустом месте холста.
+/// Контекстное меню по правой кнопке на пустом месте холста или на отделе.
 /// Пункты «Создать Процесс» и «Создать Отдел» создают соответствующие объекты на холсте
-/// и закрывают меню.
+/// и закрывают меню. Для отдела доступен пункт «Переименовать».
 pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
     let Some(pos) = app.right_click else {
         return;
     };
 
-    let items = [
+    let mut items: Vec<(&str, Lucide)> = vec![
         ("Создать Процесс", Lucide::SquareEqual),
         ("Создать Отдел", Lucide::Group),
     ];
+    if app.right_click_object.is_some() {
+        items.push(("Переименовать", Lucide::Pencil));
+    }
     let mut close = false;
     let mut create_department = false;
+    let mut rename = false;
 
     // Скопировать значения темы, которые нужны внутри замыкания и после него.
     let theme = app.canvas.theme;
@@ -97,7 +102,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 clamped_pos = egui::pos2(cx, cy);
             }
 
-            for (item, icon) in items {
+            for (item, icon) in &items {
                 // Рассчитать прямоугольник пункта заранее.
                 let cursor = ui.cursor();
                 let item_rect = egui::Rect::from_min_size(
@@ -124,7 +129,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                     item_rect.min + egui::vec2(button_padding.x, icon_y_rel),
                     egui::vec2(icon_size, icon_size),
                 );
-                paint_lucide_image(ui, icon_rect, icon, Color32::WHITE);
+                paint_lucide_image(ui, icon_rect, *icon, Color32::WHITE);
 
                 // Рисуем текст по левому краю после иконки, по центру по вертикали.
                 let text_color = Color32::WHITE;
@@ -140,8 +145,10 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
 
                 if response.clicked() {
                     close = true;
-                    if item == "Создать Отдел" {
+                    if *item == "Создать Отдел" {
                         create_department = true;
+                    } else if *item == "Переименовать" {
+                        rename = true;
                     }
                 }
 
@@ -155,6 +162,22 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
             app.canvas.add_department(cx, cy, format!("Отдел {}", app.canvas.objects.len() + 1));
+        }
+        app.right_click = None;
+    }
+
+    // Открыть диалог переименования отдела.
+    if rename {
+        if let Some(id) = &app.right_click_object {
+            let current_name = app
+                .canvas
+                .objects
+                .iter()
+                .find(|o| o.id == *id)
+                .map(|o| o.name.clone())
+                .unwrap_or_default();
+            app.rename_target = Some(id.clone());
+            app.rename_input = current_name;
         }
         app.right_click = None;
     }
@@ -187,4 +210,38 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
     }
 
     app.menu_just_opened = false;
+}
+
+/// Диалог переименования отдела (модальное окно).
+pub fn rename_dialog(app: &mut super::PolygramApp, ctx: &Context) {
+    let rename_target = app.rename_target.clone();
+    let mut do_rename = false;
+    if let Some(target) = &rename_target {
+        Window::new("Переименовать отдел")
+            .default_pos(egui::pos2(400.0, 300.0))
+            .resizable(false)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.label(format!("Отдел: {target}"));
+                ui.text_edit_singleline(&mut app.rename_input);
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        do_rename = true;
+                    }
+                    if ui.button("Отмена").clicked() {
+                        app.rename_target = None;
+                        app.rename_input.clear();
+                    }
+                });
+            });
+    }
+    if do_rename && !app.rename_input.is_empty() {
+        if let Some(target) = &app.rename_target {
+            if let Some(obj) = app.canvas.objects.iter_mut().find(|o| o.id == *target) {
+                obj.name = app.rename_input.clone();
+            }
+        }
+        app.rename_target = None;
+        app.rename_input.clear();
+    }
 }

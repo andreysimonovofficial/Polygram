@@ -155,7 +155,11 @@ impl Canvas {
     }
 
     /// Main render function: background + dot grid + department frames.
-    pub fn paint(&mut self, ui: &mut egui::Ui) {
+    pub fn paint(
+        &mut self,
+        ui: &mut egui::Ui,
+        selected_objects: &[String],
+    ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
         let cell_px = self.cell_px();
@@ -216,6 +220,16 @@ impl Canvas {
                 zoom,
                 &self.theme,
             );
+
+            // Рамка выделения вокруг выделенного отдела.
+            if selected_objects.iter().any(|id| id == &object.id) {
+                painter.rect_stroke(
+                    rect_px,
+                    0.0,
+                    Stroke::new(2.0 * zoom, self.theme.accent),
+                    egui::StrokeKind::Middle,
+                );
+            }
         }
     }
 }
@@ -263,4 +277,52 @@ pub fn paint_department_frame(
         egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
         theme.text_muted,
     );
+}
+
+/// Вернуть id отдела, под которым находится заданная экранная позиция.
+pub fn object_at<'a>(objects: &'a [ObjectGeom], screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
+    for object in objects {
+        if object.kind != ObjectKind::Department {
+            continue;
+        }
+        let r = &object.rect;
+        let rect_px = egui::Rect::from_min_size(
+            egui::pos2(
+                r.x as f32 * cell_px,
+                r.y as f32 * cell_px,
+            ),
+            egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+        );
+        // NOTE: caller must pass screen_pos already converted to canvas-local space.
+        if rect_px.contains(screen_pos) {
+            return Some(&object.id);
+        }
+    }
+    None
+}
+
+/// Вернуть id отдела, чья шапка содержит заданную экранную позицию.
+pub fn header_at<'a>(
+    objects: &'a [ObjectGeom],
+    screen_pos: Pos2,
+    cell_px: f32,
+) -> Option<&'a str> {
+    for object in objects {
+        if object.kind != ObjectKind::Department {
+            continue;
+        }
+        let r = &object.rect;
+        let header_h = cell_px * 1.0;
+        let header_rect = egui::Rect::from_min_size(
+            egui::pos2(
+                r.x as f32 * cell_px,
+                r.y as f32 * cell_px,
+            ),
+            egui::Vec2::new(r.w as f32 * cell_px, header_h),
+        );
+        if header_rect.contains(screen_pos) {
+            return Some(&object.id);
+        }
+    }
+    None
 }

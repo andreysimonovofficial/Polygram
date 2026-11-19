@@ -37,6 +37,8 @@ pub struct Theme {
     pub object_bg: Color32,
     /// Граница отдела.
     pub object_border: Color32,
+    /// Акцентный цвет (рамка выделения, активные элементы).
+    pub accent: Color32,
     /// Скругление углов отдела (в клетках).
     pub object_corner_radius: f32,
     /// Толщина границы отдела (в клетках).
@@ -71,6 +73,7 @@ impl Theme {
             // ========== Объекты холста (процессы, отделы) ==========
             object_bg: Color32::from_rgb(28, 28, 34),           // #1C1C22
             object_border: Color32::from_rgb(60, 60, 72),       // #3C3C48
+            accent: Color32::from_rgb(0, 217, 255),             // #00D9FF
             object_corner_radius: 2.0,
             object_border_width: 1.0,
             object_header_height_cells: 1.0,
