@@ -429,21 +429,19 @@ impl eframe::App for PolygramApp {
                             let valid = (src_dir == Direction::Request && dst_dir == Direction::Result)
                                 || (src_dir == Direction::Result && dst_dir == Direction::Request);
                             if valid {
-                                let (from_obj, from_entry, to_obj, to_entry) =
-                                    if src_dir == Direction::Request {
-                                        // src.Request -> dst.Result
-                                        (src_id.clone(), src_name.clone(), dst_id.clone(), dst_name.clone())
-                                    } else {
-                                        // src.Result -> dst.Request: edge from dst.Request to src.Result
-                                        (dst_id.clone(), dst_name.clone(), src_id.clone(), src_name.clone())
-                                    };
-                                self.apply_cmd(polygram_core::Command::Connect {
-                                    from_object: from_obj,
-                                    from_entry: from_entry,
-                                    to_object: to_obj,
-                                    to_entry: to_entry,
-                                    throughput: 100.0,
-                                });
+                                let geometry = self.engine.geometry();
+                                let cmds = polygram_core::drag_domain::compute_metric_drop(
+                                    &polygram_core::drag_domain::MetricDropContext {
+                                        geometry,
+                                        source_object: src_id.clone(),
+                                        source_dir: src_dir,
+                                        entry_name: src_name.clone(),
+                                        target_id: dst_id.clone(),
+                                    },
+                                );
+                                if !cmds.is_empty() {
+                                    self.apply_batch(cmds);
+                                }
                             }
                         }
                     }

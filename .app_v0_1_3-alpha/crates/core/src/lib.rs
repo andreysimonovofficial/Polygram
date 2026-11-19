@@ -7,6 +7,7 @@
 pub mod command;
 pub mod commands;
 pub mod commit;
+pub mod drag_domain;
 pub mod edges;
 pub mod engine;
 pub mod entries;
