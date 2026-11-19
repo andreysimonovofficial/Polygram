@@ -34,8 +34,6 @@ pub struct PolygramApp {
     pub rename_input: String,
     /// Стартовая позиция выделения рамкой (selection box), если активна.
     pub selection_box_start: Option<Pos2>,
-    /// Объект, над которым сейчас находится курсор (для подсветки при наведении).
-    pub hovered_object: Option<String>,
 }
 
 impl PolygramApp {
@@ -54,7 +52,6 @@ impl PolygramApp {
             rename_target: None,
             rename_input: String::new(),
             selection_box_start: None,
-            hovered_object: None,
         }
     }
 
@@ -185,12 +182,7 @@ impl eframe::App for PolygramApp {
                 egui::Sense::click_and_drag(),
             );
 
-            // Отслеживаем наведение на отдел для подсветки тонким белым контуром.
-            let hovered_pos = canvas_response.interact_pointer_pos();
-            let hovered_object = hovered_pos.and_then(|pos| self.object_under(pos));
-            self.hovered_object = hovered_object.clone();
-
-            self.canvas.paint(ui, &self.selected_objects, hovered_object.as_deref());
+            self.canvas.paint(ui, &self.selected_objects);
 
             if !canvas_response.hovered() {
                 // Вне холста ничего не обрабатываем (клики, драги, меню),

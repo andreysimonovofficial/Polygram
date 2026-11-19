@@ -163,7 +163,6 @@ impl Canvas {
         &mut self,
         ui: &mut egui::Ui,
         selected_objects: &[String],
-        hovered_object: Option<&str>,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -172,6 +171,9 @@ impl Canvas {
         let offset = self.camera.offset;
         let grid_color = self.theme.grid_color;
         let dot_radius_world = self.theme.dot_radius_world;
+
+        // Pointer position in screen coordinates (same space as cell_to_screen).
+        let pointer_pos = ui.ctx().input(|i| i.pointer.hover_pos());
 
         // Canvas background.
         painter.rect_filled(clip_rect, 0.0, self.theme.bg);
@@ -218,7 +220,7 @@ impl Canvas {
                 continue;
             }
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
-            let is_highlighted = is_selected || hovered_object == Some(&object.id);
+            let is_highlighted = is_selected || pointer_pos.map_or(false, |p| rect_px.contains(p));
             paint_department_frame(
                 painter,
                 object,
