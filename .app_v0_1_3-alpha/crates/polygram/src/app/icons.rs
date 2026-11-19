@@ -8,6 +8,7 @@ use egui_lucide::Lucide;
 
 /// Иконка Lucide с визуальной обратной связью при наведении.
 /// Цвет ярче, когда курсор над иконкой. Возвращает `Response` с `.clicked()`.
+#[allow(dead_code)]
 pub fn lucide_icon(ui: &mut Ui, icon: Lucide, size: f32, color: Color32) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
     let hovered = response.hovered();
@@ -17,6 +18,7 @@ pub fn lucide_icon(ui: &mut Ui, icon: Lucide, size: f32, color: Color32) -> egui
 }
 
 /// Кнопка-иконка Lucide (алиас для унификации вызовов). Возвращает `Response` с `.clicked()`.
+#[allow(dead_code)]
 pub fn lucide_button(ui: &mut Ui, icon: Lucide, size: f32, color: Color32) -> egui::Response {
     lucide_icon(ui, icon, size, color)
 }

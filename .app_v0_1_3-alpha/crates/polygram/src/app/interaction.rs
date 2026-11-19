@@ -3,8 +3,10 @@
 //! Все пункты одинаковой ширины, вычисляемой по самому длинному пункту.
 //! Текст и иконки внутри пунктов выровнены по левому краю по горизонтали,
 //! по центру по вертикали.
+//! Меню закрывается по клику вне него или по нажатию любой клавиши.
+//! Позиция меню ограничена границами экрана.
 
-use egui::{Color32, Context, Stroke, TextStyle, Window};
+use egui::{Color32, Context, Rect, Stroke, TextStyle, Window};
 use crate::app::icons::paint_lucide_image;
 use egui_lucide::Lucide;
 
@@ -21,7 +23,12 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
     ];
     let mut close = false;
 
-    let theme = &app.canvas.theme;
+    // Скопировать значения темы, которые нужны внутри замыкания и после него.
+    let theme = app.canvas.theme;
+
+    let mut item_rects: Vec<Rect> = Vec::with_capacity(items.len());
+    let mut need_clamp = false;
+    let mut clamped_pos = pos;
 
     Window::new("")
         .title_bar(false)
@@ -41,16 +48,9 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
         )
         .show(ctx, |ui| {
             // Стиль пунктов меню: нет контура, фон из темы.
-            let (font_id, button_padding) = {
-                let style = ui.style_mut();
-                style.visuals.widgets.inactive.bg_fill = theme.menu_item_bg_fill;
-                style.visuals.widgets.inactive.bg_stroke = Stroke::new(0.0, Color32::TRANSPARENT);
-                style.visuals.widgets.inactive.corner_radius = theme.menu_item_rounding;
-                (
-                    TextStyle::Button.resolve(style),
-                    style.spacing.button_padding,
-                )
-            };
+            let style = ui.style();
+            let font_id = TextStyle::Button.resolve(style);
+            let button_padding = style.spacing.button_padding;
             let item_rounding = theme.menu_item_rounding;
             let item_bg_fill = theme.menu_item_bg_fill;
             let hovered_bg_fill = Color32::from_rgb(52, 52, 52);
@@ -59,7 +59,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             let icon_size = 16.0;
             let icon_gap = 8.0;
 
-            // Измерить ширину самого длинного текста, чтобы все пункты были одинаковой ширины.
+            // Измерить ширину самого длинного текста.
             let max_text_width = ui.fonts_mut(|f| {
                 items
                     .iter()
@@ -70,8 +70,29 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                     .fold(0.0, f32::max)
             });
             let max_width = icon_size + icon_gap + max_text_width + 2.0 * button_padding.x;
-
             let item_height = (font_id.size + 2.0 * button_padding.y) * 1.5;
+            let menu_height = item_height * items.len() as f32;
+
+            // Ограничить позицию, чтобы меню не уходило за край экрана.
+            let screen_rect = ctx.viewport_rect();
+            let mut cx = pos.x;
+            if cx + max_width > screen_rect.right() {
+                cx = screen_rect.right() - max_width;
+            }
+            if cx < screen_rect.left() {
+                cx = screen_rect.left();
+            }
+            let mut cy = pos.y;
+            if cy + menu_height > screen_rect.bottom() {
+                cy = screen_rect.bottom() - menu_height;
+            }
+            if cy < screen_rect.top() {
+                cy = screen_rect.top();
+            }
+            if cx != pos.x || cy != pos.y {
+                need_clamp = true;
+                clamped_pos = egui::pos2(cx, cy);
+            }
 
             for (item, icon) in items {
                 // Рассчитать прямоугольник пункта заранее.
@@ -80,6 +101,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                     cursor.min,
                     egui::vec2(max_width, item_height),
                 );
+                item_rects.push(item_rect);
 
                 // Фон пункта: базовый или при наведении.
                 let is_hovered = hover_pos.map_or(false, |p| item_rect.contains(p));
@@ -121,6 +143,27 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 ui.allocate_space(item_rect.size());
             }
         });
+
+    // Закрыть меню по клику вне него.
+    if ctx.input(|i| i.pointer.any_click()) {
+        let pointer_pos = ctx.input(|i| i.pointer.hover_pos());
+        let clicked_in_menu = pointer_pos.map_or(false, |p| {
+            item_rects.iter().any(|r| r.contains(p))
+        });
+        if !clicked_in_menu {
+            close = true;
+        }
+    }
+
+    // Закрыть меню по нажатию любой клавиши.
+    if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. }))) {
+        close = true;
+    }
+
+    // Применить скорректированную позицию для следующего кадра.
+    if need_clamp {
+        app.right_click = Some(clamped_pos);
+    }
 
     if close {
         app.right_click = None;
