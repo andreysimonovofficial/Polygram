@@ -23,7 +23,6 @@ use eframe::egui::{self, ColorImage};
 use egui_extras;
 use polygram_core::Published;
 use polygram_core::{geometry::Geometry, values::DynamicState};
-use reqwest::blocking::Client;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -599,15 +598,12 @@ impl eframe::App for PolygramApp {
 /// РЎРѕС…СЂР°РЅРёС‚СЊ РєР°РґСЂ egui ColorImage РєР°Рє PNG РІ СѓРєР°Р·Р°РЅРЅСѓСЋ РґРёСЂРµРєС‚РѕСЂРёСЋ.
 
 fn main() -> eframe::Result {
-    let api_client = Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .unwrap();
     let api_base = "http://127.0.0.1:8080".to_owned();
 
-    // Фоновый опрос снимка состояния из API-сервера.
+    // WebSocket клиент для получения снимков состояния в реальном времени
+    // (push вместо 500-мс поллинга HTTP).
     let (snapshot_tx, snapshot_rx) = mpsc::channel();
-    PolygramApp::start_snapshot_polling(api_client.clone(), api_base.clone(), snapshot_tx);
+    PolygramApp::start_ws_client(api_base.clone(), snapshot_tx);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

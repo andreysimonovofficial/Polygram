@@ -13,6 +13,7 @@ use std::sync::Arc;
 use super::sync::{ApiBinding, ConnectorConfig};
 use super::ApiService;
 use super::chat::CreateChatMessage;
+use super::ws::ws_handler;
 
 #[derive(Deserialize)]
 pub struct CreateObject {
@@ -55,6 +56,7 @@ pub fn router(api: Arc<ApiService>) -> Router {
         .route("/api/snapshot", get(get_snapshot))
         .route("/api/stats", get(get_stats))
         .route("/api/virtual-input", get(get_virtual_input))
+        .route("/api/ws", get(ws_handler))
         .route("/api/objects", get(get_objects).post(post_object))
         .route("/api/objects/:id", get(get_object))
         .route("/api/commands", post(post_command))

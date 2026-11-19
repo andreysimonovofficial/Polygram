@@ -237,35 +237,38 @@ impl PolygramApp {
         let detail = format!("batch[{}]", labels.join("; "));
         self.add_event_log("info", "command", "Отправлена батч-команда", Some(&detail));
 
-        std::thread::spawn(move || {
-            let result = client
-                .post(format!("{api_base}/api/commands/batch"))
-                .json(&cmds)
-                .send();
+        // Синхронный вызов API — ждём ответа сервера.
+        let result = client
+            .post(format!("{api_base}/api/commands/batch"))
+            .json(&cmds)
+            .send();
 
-            match result {
-                Ok(resp) => {
-                    let status = resp.status();
-                    let body: Value = resp.json().unwrap_or_default();
-                    let ok = body
-                        .get("ok")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(status.is_success());
-                    let result_str = if ok {
-                        format!("OK (HTTP {status})")
-                    } else {
-                        let error = body
-                            .get("error")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("неизвестная ошибка");
-                        format!("Ошибка HTTP {status}: {error}")
-                    };
-                    eprintln!("Команды {cmd_str}: {result_str}");
-                }
-                Err(e) => {
-                    eprintln!("Не удалось отправить команды в API: {e}");
-                }
+        match result {
+            Ok(resp) => {
+                let status = resp.status();
+                let body: Value = resp.json().unwrap_or_default();
+                let ok = body
+                    .get("ok")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(status.is_success());
+                let result_str = if ok {
+                    format!("OK (HTTP {status})")
+                } else {
+                    let error = body
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("неизвестная ошибка");
+                    format!("Ошибка HTTP {status}: {error}")
+                };
+                eprintln!("Команды {cmd_str}: {result_str}");
             }
-        });
+            Err(e) => {
+                eprintln!("Не удалось отправить команды в API: {e}");
+            }
+        };
+
+        if self.commands.command_log.len() > 200 {
+            self.commands.command_log.remove(0);
+        }
     }
 }

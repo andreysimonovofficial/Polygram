@@ -51,6 +51,9 @@ async fn main() {
     };
     let api = Arc::new(api);
 
+    // Запуск трансляции снимков по WebSocket (push вместо поллинга).
+    api.start_snapshot_broadcast();
+
     // Фоновое автосохранение каждые 5 минут.
     let api_clone = Arc::clone(&api);
     tokio::spawn(async move {

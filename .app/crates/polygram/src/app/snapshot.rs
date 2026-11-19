@@ -2,11 +2,13 @@ use crate::app::PolygramApp;
 use egui::ColorImage;
 use image;
 use polygram_core::{geometry::Geometry, types::Direction, Published};
-use reqwest::blocking::Client;
+use serde_json::from_str;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use futures_util::StreamExt;
 
 impl PolygramApp {
     /// Обработка pending_move: если сервер не применил MoveObject (CellOccupied из-за буфера 2 кванта),
@@ -82,31 +84,57 @@ impl PolygramApp {
         }
     }
 
-    pub fn start_snapshot_polling(
-        api_client: Client,
+    pub fn start_ws_client(
         api_base: String,
         tx: mpsc::Sender<Arc<Published>>,
     ) {
-        std::thread::spawn(move || loop {
-            let result =
-                (|| -> Result<Arc<Published>, Box<dyn std::error::Error + Send + Sync>> {
-                    let resp = api_client.get(format!("{api_base}/api/snapshot")).send()?;
-                    if !resp.status().is_success() {
-                        return Err(format!("HTTP {}", resp.status()).into());
-                    }
-                    let published: Published = resp.json()?;
-                    Ok(Arc::new(published))
-                })();
-
-            match result {
-                Ok(published) => {
-                    let _ = tx.send(published);
-                }
+        let ws_url = api_base.replace("http://", "ws://").replace("https://", "wss://") + "/api/ws";
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Ошибка опроса снимка API: {e}");
+                    eprintln!("Не удалось создать tokio runtime для WS клиента: {e}");
+                    return;
                 }
-            }
-            std::thread::sleep(Duration::from_millis(500));
+            };
+            rt.block_on(async {
+                loop {
+                    match connect_async(&ws_url).await {
+                        Ok((ws_stream, _)) => {
+                            eprintln!("WebSocket подключён: {ws_url}");
+                            let (_, mut read) = ws_stream.split();
+                            while let Some(msg) = read.next().await {
+                                match msg {
+                                    Ok(Message::Text(text)) => {
+                                        if let Ok(published) = from_str::<Published>(&text) {
+                                            let _ = tx.send(Arc::new(published));
+                                        }
+                                    }
+                                    Ok(Message::Binary(bin)) => {
+                                        if let Ok(published) = from_str::<Published>(&String::from_utf8_lossy(&bin)) {
+                                            let _ = tx.send(Arc::new(published));
+                                        }
+                                    }
+                                    Ok(Message::Close(_)) => {
+                                        eprintln!("WebSocket закрыт сервером");
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("WebSocket ошибка: {e}");
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Не удалось подключиться к WebSocket: {e}");
+                        }
+                    }
+                    // Переподключение через секунду при разрыве.
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
         });
     }
 

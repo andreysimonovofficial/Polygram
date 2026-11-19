@@ -14,15 +14,19 @@ pub mod import;
 pub mod mcp;
 pub mod storage;
 pub mod sync;
+pub mod ws;
 
 use polygram_core::{
-    runtime::EngineRuntime, Command, Document, EngineError, Event, ObjectView, Stats,
+    runtime::{EngineRuntime, Published}, Command, Document, EngineError, Event, ObjectView, Stats,
     VirtualInputState,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::broadcast;
+use tokio::time;
 
 use crate::chat::ChatService;
 use crate::storage::{auto_save_path, add_recent_file, ensure_data_dir, load_recent_files, save_recent_files};
@@ -40,6 +44,8 @@ struct ApiServiceInner {
     pub chat: ChatService,
     /// Сервис синхронизации показателей с внешними API.
     pub sync: sync::SyncService,
+    /// Канал放送 снимков состояния для WebSocket-клиентов.
+    pub broadcast_tx: broadcast::Sender<Arc<Published>>,
     /// Путь к файлу автосохранения (None — отключено).
     auto_save_path: Mutex<Option<PathBuf>>,
     /// Список недавних проектов.
@@ -57,11 +63,13 @@ impl ApiService {
         let runtime = EngineRuntime::spawn(engine);
         let handle = runtime.handle();
         let sync = sync::SyncService::new(handle);
+        let (broadcast_tx, _broadcast_rx) = ws::snapshot_broadcast_channel();
         Self {
             inner: Arc::new(ApiServiceInner {
                 runtime,
                 chat: ChatService::new(),
                 sync,
+                broadcast_tx,
                 auto_save_path: Mutex::new(None),
                 recent_files: Mutex::new(load_recent_files()),
                 last_opened_file: Mutex::new(None),
@@ -116,6 +124,29 @@ impl ApiService {
             .handle()
             .query(|e| e.virtual_input().clone())
             .unwrap_or_default()
+    }
+
+    /// Подписаться на трансляцию снимков состояния через broadcast-канал.
+    pub fn subscribe_snapshots(&self) -> Result<broadcast::Receiver<Arc<Published>>, broadcast::error::RecvError> {
+        Ok(self.inner.broadcast_tx.subscribe())
+    }
+
+    /// Запустить фоновую задачу, которая отслеживает изменение rev и рассылает
+    /// новые снимки по broadcast-каналу WebSocket-клиентам.
+    pub fn start_snapshot_broadcast(&self) {
+        let api = self.clone();
+        let mut interval = time::interval(Duration::from_millis(100));
+        tokio::spawn(async move {
+            let mut last_rev = 0u64;
+            loop {
+                interval.tick().await;
+                let published = api.handle().latest();
+                if published.rev > last_rev {
+                    last_rev = published.rev;
+                    let _ = api.inner.broadcast_tx.send(published);
+                }
+            }
+        });
     }
 
     pub fn objects(&self) -> Vec<ObjectView> {
