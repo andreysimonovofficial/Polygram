@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/canvas", "crates/polygram"]
+members = ["crates/core", "crates/canvas", "crates/polygram"]
 
 [workspace.package]
 version = "0.1.0"

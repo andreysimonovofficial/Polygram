@@ -1,12 +1,20 @@
 //! Canvas Polygram: background, dot grid, and objects (processes and departments).
-//! Minimal rendering set: background fill, dot grid with fade on zoom out,
-//! and department frames (container borders with header).
+//! Uses polygram_core::ObjectGeom for object geometry with request/result containers.
 
-mod theme;
+mod icons;
+mod paint;
+mod paint_department;
+pub mod theme;
 
-pub use theme::{StatusCode, Theme};
+pub use icons::paint_lucide;
+pub use paint::{paint_add_row, paint_dashed_rect, paint_process};
+pub use paint_department::paint_department_frame;
+pub use theme::{status_dot_color, status_label_ru, Theme};
+pub use polygram_core::types::{Direction, NodeKind, StatusCode};
+pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
 
-use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Stroke, Vec2};
+use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Vec2};
+use polygram_core::{DynamicState};
 
 /// Camera of the canvas: offset and zoom.
 #[derive(Clone, Copy, Debug, Default)]
@@ -23,26 +31,6 @@ impl Camera {
         Self {
             offset: egui::Vec2::ZERO,
             zoom: 1.0,
-        }
-    }
-}
-
-/// Kind of a canvas object.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ObjectKind {
-    /// Process — a card with metrics and ports.
-    #[default]
-    Process,
-    /// Department — container frame drawn behind child cards.
-    Department,
-}
-
-impl ObjectKind {
-    /// Russian label of the object kind.
-    pub fn label_ru(self) -> &'static str {
-        match self {
-            Self::Process => "Процесс",
-            Self::Department => "Отдел",
         }
     }
 }
@@ -67,25 +55,6 @@ impl ObjectRect {
     }
 }
 
-/// Geometry of a single canvas object.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ObjectGeom {
-    /// Sequential index.
-    pub ix: u32,
-    /// Unique identifier.
-    pub id: String,
-    /// Display name.
-    pub name: String,
-    /// Kind of object (Process or Department).
-    pub kind: ObjectKind,
-    /// Position and size in world coordinates (grid cells).
-    pub rect: ObjectRect,
-    /// Id of the parent department, if nested inside one.
-    pub parent: Option<String>,
-    /// Aggregated status of the department (used for background fill).
-    pub status: StatusCode,
-}
-
 /// Canvas Polygram.
 pub struct Canvas {
     /// Theme of the canvas (colors and geometry).
@@ -96,6 +65,14 @@ pub struct Canvas {
     pub cell_size: f32,
     /// Objects on the canvas (processes and departments).
     pub objects: Vec<ObjectGeom>,
+    /// Горячие зоны добавления показателя (id объекта, направление, экранный rect).
+    pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
+    pub container_menu_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны заголовка контейнера (id объекта, направление, экранный rect шапки).
+    pub container_header_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны строк показателей для перетаскивания (id объекта, направление, имя показателя, экранный rect строки).
+    pub drag_metric_hotspots: Vec<(String, Direction, String, Rect)>,
 }
 
 impl Default for Canvas {
@@ -112,6 +89,10 @@ impl Canvas {
             camera: Camera::new(),
             cell_size: 16.0,
             objects: Vec::new(),
+            add_metric_hotspots: Vec::new(),
+            container_menu_hotspots: Vec::new(),
+            container_header_hotspots: Vec::new(),
+            drag_metric_hotspots: Vec::new(),
         }
     }
 
@@ -140,10 +121,7 @@ impl Canvas {
     }
 
     /// Обработка камеры холста: зум колёсиком мыши к курсору и
-    /// панорамирование правой или средней кнопкой мыши (как в старом приложении).
-    /// Объекты на холсте адаптивно реагируют на изменение камеры при отрисовке
-    /// через [`Canvas::paint`], так как все координаты переводятся через
-    /// `cell_to_screen` с учётом `camera.zoom` и `camera.offset`.
+    /// панорамирование правой или средней кнопкой мыши.
     pub fn handle_camera(
         &mut self,
         ctx: &Context,
@@ -154,7 +132,6 @@ impl Canvas {
             return;
         }
 
-        // Зум колёсиком мыши к курсору: точка под курсором остаётся на месте.
         let scroll = ctx.input(|i| i.smooth_scroll_delta());
         if scroll.y.abs() > 0.001 {
             if let Some(cursor) = ctx.pointer_hover_pos() {
@@ -166,7 +143,6 @@ impl Canvas {
                 let factor = (scroll.y * 0.01).exp();
                 let new_zoom = (old_zoom * factor).clamp(0.1, 10.0);
                 if new_zoom != old_zoom {
-                    // Новое смещение, чтобы та же мировая точка осталась под курсором.
                     self.camera.offset.x = cursor.x / new_zoom - world_cursor.x * self.cell_size;
                     self.camera.offset.y = cursor.y / new_zoom - world_cursor.y * self.cell_size;
                     self.camera.zoom = new_zoom;
@@ -175,7 +151,6 @@ impl Canvas {
             }
         }
 
-        // Панорамирование правой или средней кнопкой мыши.
         if canvas_response.dragged_by(PointerButton::Secondary)
             || canvas_response.dragged_by(PointerButton::Middle)
         {
@@ -187,8 +162,6 @@ impl Canvas {
     }
 
     /// Adds a department at the given grid cell position.
-    /// Default size matches `footprint_for(NodeKind::Department, 0, 0)`:
-    /// width NODE_W=30 cells, height min 30 cells (header + metric rows).
     pub fn add_department(&mut self, cell_x: i32, cell_y: i32, name: impl Into<String>) -> String {
         let id = format!("dept_{}", self.objects.len());
         let name = name.into();
@@ -197,18 +170,39 @@ impl Canvas {
             ix,
             id: id.clone(),
             name,
-            kind: ObjectKind::Department,
-            rect: ObjectRect::new(cell_x, cell_y, 30, 30),
+            kind: NodeKind::Department,
+            rect: polygram_core::layout::Rect::new(cell_x, cell_y, 30, 30),
+            requests: Vec::new(),
+            results: Vec::new(),
             parent: None,
-            status: StatusCode::Ok,
         });
         id
     }
 
-    /// Main render function: background + dot grid + department frames.
+    /// Adds a process at the given grid cell position.
+    pub fn add_process(&mut self, cell_x: i32, cell_y: i32, name: impl Into<String>) -> String {
+        let id = format!("proc_{}", self.objects.len());
+        let name = name.into();
+        let ix = self.objects.len() as u32;
+        self.objects.push(ObjectGeom {
+            ix,
+            id: id.clone(),
+            name,
+            kind: NodeKind::Process,
+            rect: polygram_core::layout::Rect::new(cell_x, cell_y, 16, 16),
+            requests: Vec::new(),
+            results: Vec::new(),
+            parent: None,
+        });
+        id
+    }
+
+    /// Main render function: background + dot grid + department frames + process cards.
     pub fn paint(
         &mut self,
         ui: &mut egui::Ui,
+        dynamic: &DynamicState,
+        hovered_object: Option<&str>,
         selected_objects: &[String],
     ) {
         let painter = ui.painter();
@@ -219,8 +213,12 @@ impl Canvas {
         let grid_color = self.theme.grid_color;
         let dot_radius_world = self.theme.dot_radius_world;
 
-        // Pointer position in screen coordinates (same space as cell_to_screen).
         let pointer_pos = ui.ctx().input(|i| i.pointer.hover_pos());
+
+        self.add_metric_hotspots.clear();
+        self.container_menu_hotspots.clear();
+        self.container_header_hotspots.clear();
+        self.drag_metric_hotspots.clear();
 
         // Canvas background.
         painter.rect_filled(clip_rect, 0.0, self.theme.bg);
@@ -236,7 +234,6 @@ impl Canvas {
                 grid_color.b(),
                 (255.0 * alpha) as u8,
             );
-
             let dot_radius_px = (dot_radius_world * cell_px).max(0.5);
 
             let min_cx = ((clip_rect.min.x / zoom - offset.x) / self.cell_size).floor() as i32;
@@ -255,10 +252,10 @@ impl Canvas {
 
         // Department frames (container borders with header, drawn behind child cards).
         for object in &self.objects {
-            if object.kind != ObjectKind::Department {
+            if object.kind != NodeKind::Department {
                 continue;
             }
-            let r = ObjectRect::new(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
+            let r = &object.rect;
             let rect_px = Rect::from_min_size(
                 self.cell_to_screen(r.x, r.y),
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
@@ -275,114 +272,83 @@ impl Canvas {
                 cell_px,
                 zoom,
                 &self.theme,
-                object.status,
+                StatusCode::Ok,
                 is_highlighted,
             );
         }
-    }
-}
 
-/// Draw a department frame: background fill, outer border, and header with title.
-pub fn paint_department_frame(
-    painter: &egui::Painter,
-    object: &ObjectGeom,
-    rect_px: Rect,
-    cell_px: f32,
-    zoom: f32,
-    theme: &Theme,
-    status: StatusCode,
-    is_highlighted: bool,
-) {
-    // Background fill of the department — color by aggregated status.
-    painter.rect_filled(
-        rect_px,
-        theme.object_corner_radius * zoom,
-        theme.status_fill_color(status),
-    );
-
-    // Outer border — thin white on hover/select, normal color otherwise (as in old app).
-    let border_color = if is_highlighted {
-        theme.text
-    } else {
-        theme.object_border
-    };
-    let border_width = if is_highlighted {
-        theme.object_border_hover_width * zoom
-    } else {
-        theme.object_border_width * zoom
-    };
-    painter.rect_stroke(
-        rect_px,
-        theme.object_corner_radius * zoom,
-        Stroke::new(border_width, border_color),
-        egui::StrokeKind::Middle,
-    );
-
-    // Department header — title text only, no background.
-    let header_h = cell_px * theme.object_header_height_cells;
-    let title = object.name.clone();
-    painter.text(
-        rect_px.min + Vec2::new(12.0 * zoom, header_h / 2.0),
-        egui::Align2::LEFT_CENTER,
-        &title,
-        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
-        theme.text,
-    );
-
-    let id_text = format!("#{}", object.ix);
-    painter.text(
-        Pos2::new(rect_px.max.x - 8.0 * zoom, rect_px.min.y + header_h / 2.0),
-        egui::Align2::RIGHT_CENTER,
-        &id_text,
-        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
-        theme.text_muted,
-    );
-}
-
-/// Вернуть id отдела, под которым находится заданная экранная позиция.
-pub fn object_at<'a>(objects: &'a [ObjectGeom], screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
-    for object in objects {
-        if object.kind != ObjectKind::Department {
-            continue;
-        }
-        let r = &object.rect;
-        let rect_px = egui::Rect::from_min_size(
-            egui::pos2(
-                r.x as f32 * cell_px,
-                r.y as f32 * cell_px,
-            ),
-            egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-        );
-        // NOTE: caller must pass screen_pos already converted to canvas-local space.
-        if rect_px.contains(screen_pos) {
-            return Some(&object.id);
+        // Process cards with containers.
+        for object in &self.objects {
+            if object.kind != NodeKind::Process {
+                continue;
+            }
+            let r = &object.rect;
+            let mut rect_px = Rect::from_min_size(
+                self.cell_to_screen(r.x, r.y),
+                Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+            );
+            // Process always drawn with fixed CSS geometry 256×256px.
+            let card_w = 256.0 * zoom;
+            let card_h = 256.0 * zoom;
+            rect_px = Rect::from_min_size(rect_px.min, Vec2::new(card_w, card_h));
+            if !rect_px.intersects(clip_rect) {
+                continue;
+            }
+            let is_selected = selected_objects.iter().any(|id| id == &object.id);
+            let mouse_pos = pointer_pos;
+            let (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots) = paint_process(
+                ui,
+                painter,
+                object,
+                dynamic,
+                &self.theme,
+                rect_px,
+                cell_px,
+                zoom,
+                mouse_pos,
+                is_selected,
+            );
+            self.add_metric_hotspots.extend(add_hotspots);
+            self.container_menu_hotspots.extend(menu_hotspots);
+            self.drag_metric_hotspots.extend(drag_hotspots);
+            self.container_header_hotspots.extend(header_hotspots);
         }
     }
-    None
-}
 
-/// Вернуть id отдела, чья шапка содержит заданную экранную позицию.
-pub fn header_at<'a>(
-    objects: &'a [ObjectGeom],
-    screen_pos: Pos2,
-    cell_px: f32,
-) -> Option<&'a str> {
-    for object in objects {
-        if object.kind != ObjectKind::Department {
-            continue;
+    /// Вернуть id отдела, под которым находится заданная экранная позиция.
+    pub fn object_at<'a>(&'a self, screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
+        for object in &self.objects {
+            if object.kind != NodeKind::Department {
+                continue;
+            }
+            let r = &object.rect;
+            let rect_px = egui::Rect::from_min_size(
+                egui::pos2(r.x as f32 * cell_px, r.y as f32 * cell_px),
+                egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+            );
+            if rect_px.contains(screen_pos) {
+                return Some(&object.id);
+            }
         }
-        let r = &object.rect;
-        let header_h = cell_px * 1.0;
-        let header_rect = egui::Rect::from_min_size(
-            egui::pos2(
-                r.x as f32 * cell_px,
-                r.y as f32 * cell_px,
-            ),
-            egui::Vec2::new(r.w as f32 * cell_px, header_h),
-        );
-        if header_rect.contains(screen_pos) {
-            return Some(&object.id);
-        }
+        None
     }
-    None
+
+    /// Вернуть id отдела, чья шапка содержит заданную экранную позицию.
+    pub fn header_at<'a>(&'a self, screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
+        for object in &self.objects {
+            if object.kind != NodeKind::Department {
+                continue;
+            }
+            let r = &object.rect;
+            let header_h = cell_px * 1.0;
+            let header_rect = egui::Rect::from_min_size(
+                egui::pos2(r.x as f32 * cell_px, r.y as f32 * cell_px),
+                egui::Vec2::new(r.w as f32 * cell_px, header_h),
+            );
+            if header_rect.contains(screen_pos) {
+                return Some(&object.id);
+            }
+        }
+        None
+    }
 }

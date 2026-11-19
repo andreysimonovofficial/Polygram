@@ -2,6 +2,7 @@
 //! Источник истины для цветов и геометрии холста.
 
 use egui::{Color32, CornerRadius, Margin, epaint::Shadow};
+use polygram_core::types::{Direction, StatusCode};
 
 /// Тёмная тема холста Polygram.
 /// Содержит цвета и размеры, используемые при отрисовке фона и точечной сетки.
@@ -33,6 +34,10 @@ pub struct Theme {
     pub menu_item_bg_fill: Color32,
 
     // ========== Объекты холста (процессы, отделы) ==========
+    /// Заливка фона карточки процесса.
+    pub card_bg: Color32,
+    /// Граница карточки процесса.
+    pub card_border: Color32,
     /// Заливка фона отдела.
     pub object_bg: Color32,
     /// Граница отдела.
@@ -55,6 +60,16 @@ pub struct Theme {
     pub text: Color32,
     /// Цвет приглушённого текста отдела (id).
     pub text_muted: Color32,
+    /// Радиус порта точки сцепления.
+    pub port_radius: f32,
+
+    // ========== Статусы ==========
+    /// Цвет точки статуса «Ок» (зелёный).
+    pub status_ok: Color32,
+    /// Цвет точки статуса «Избыток» (жёлтый).
+    pub status_warning: Color32,
+    /// Цвет точки статуса «В процессе / Ожидается» (красный).
+    pub status_deficit: Color32,
 
     // ========== Заливка фона отдела по агрегированному статусу ==========
     /// Заливка фона отдела со статусом «Ок».
@@ -79,49 +94,37 @@ impl Theme {
             menu_frame_rounding: CornerRadius::same(8),
             menu_item_rounding: CornerRadius::same(2),
             menu_frame_margin: Margin::same(4),
-            menu_frame_fill: Color32::from_rgb(30, 30, 30),     // #1E1E1E
-            menu_frame_stroke_color: Color32::from_rgb(56, 56, 56), // #383838
+            menu_frame_fill: Color32::from_rgb(30, 30, 30),
+            menu_frame_stroke_color: Color32::from_rgb(56, 56, 56),
             menu_frame_stroke_width: 0.5,
-            menu_item_bg_fill: Color32::from_rgb(30, 30, 30),   // #1E1E1E
+            menu_item_bg_fill: Color32::from_rgb(30, 30, 30),
 
-            // ========== Объекты холста (процессы, отделы) ==========
-            object_bg: Color32::from_rgb(28, 28, 34),           // #1C1C22
-            object_border: Color32::from_rgb(60, 60, 72),       // #3C3C48
-            accent: Color32::from_rgb(0, 217, 255),             // #00D9FF
-            accent_secondary: Color32::from_rgb(100, 180, 255), // #64B4FF
+            object_bg: Color32::from_rgb(28, 28, 34),
+            object_border: Color32::from_rgb(60, 60, 72),
+            card_bg: Color32::from_rgb(28, 28, 34),
+            card_border: Color32::from_rgb(60, 60, 72),
+            accent: Color32::from_rgb(0, 217, 255),
+            accent_secondary: Color32::from_rgb(100, 180, 255),
             object_corner_radius: 2.0,
             object_border_width: 1.0,
-            // Толщина границы при наведении/выделении (в клетках).
             object_border_hover_width: 2.0,
             object_header_height_cells: 1.0,
             text_size: 14.0,
-            text: Color32::from_rgb(230, 230, 235),             // #E6E6EB
-            text_muted: Color32::from_rgb(150, 150, 160),       // #9696A0
+            text: Color32::from_rgb(230, 230, 235),
+            text_muted: Color32::from_rgb(150, 150, 160),
+            port_radius: 3.0,
 
-            // Заливка фона отдела по агрегированному статусу (темнее линий связей).
-            status_fill_ok: Color32::from_rgb(15, 80, 25),      // #0F5019
-            status_fill_surplus: Color32::from_rgb(90, 70, 0),  // #5A4600
-            status_fill_inprogress: Color32::from_rgb(100, 45, 0), // #642D00
-            status_fill_expected: Color32::from_rgb(90, 15, 15), // #5A0F0F
+            status_ok: Color32::from_rgb(76, 175, 80),
+            status_warning: Color32::from_rgb(255, 152, 0),
+            status_deficit: Color32::from_rgb(244, 67, 54),
+
+            status_fill_ok: Color32::from_rgb(15, 80, 25),
+            status_fill_surplus: Color32::from_rgb(90, 70, 0),
+            status_fill_inprogress: Color32::from_rgb(100, 45, 0),
+            status_fill_expected: Color32::from_rgb(90, 15, 15),
         }
     }
-}
 
-/// Агрегированный статус отдела (как в старом приложении).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum StatusCode {
-    /// Отдел удовлетворён / обеспечен — самый низкий приоритет.
-    #[default]
-    Ok,
-    /// В избытке: сумма запросов целей меньше результата.
-    Surplus,
-    /// В процессе: сумма запросов целей больше результата.
-    InProgress,
-    /// Ожидается: спрос не покрыт.
-    Expected,
-}
-
-impl Theme {
     /// Заливка фона отдела по агрегированному статусу.
     pub fn status_fill_color(&self, status: StatusCode) -> Color32 {
         match status {
@@ -130,5 +133,32 @@ impl Theme {
             StatusCode::InProgress => self.status_fill_inprogress,
             StatusCode::Expected => self.status_fill_expected,
         }
+    }
+}
+
+/// Цвет точки статуса и линии связи с учётом направления (Запрос / Результат).
+pub fn status_dot_color(status: StatusCode, dir: Direction, theme: &Theme) -> Color32 {
+    use polygram_core::types::Direction;
+    match status {
+        StatusCode::Ok => theme.status_ok,
+        StatusCode::Surplus => match dir {
+            Direction::Request => theme.text_muted,
+            Direction::Result => theme.status_warning,
+        },
+        StatusCode::InProgress | StatusCode::Expected => theme.status_deficit,
+    }
+}
+
+/// Метка статуса по-русски с учётом направления (всегда верхний регистр).
+pub fn status_label_ru(status: StatusCode, dir: Direction) -> &'static str {
+    use polygram_core::types::Direction;
+    match status {
+        StatusCode::Ok => match dir {
+            Direction::Request => "УДОВЛЕТВОРЁН",
+            Direction::Result => "ОБЕСПЕЧЕН",
+        },
+        StatusCode::Surplus => "В ИЗБЫТКЕ",
+        StatusCode::InProgress => "В ПРОЦЕССЕ",
+        StatusCode::Expected => "ОЖИДАЕТСЯ",
     }
 }

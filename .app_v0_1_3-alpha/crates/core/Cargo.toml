@@ -1,0 +1,19 @@
+[package]
+name = "polygram-core"
+description = "Ядро вычислений Polygram: типы показателей, иерархия объектов, контейнеры запросов/результатов, команды."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+
+[lib]
+doctest = false
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

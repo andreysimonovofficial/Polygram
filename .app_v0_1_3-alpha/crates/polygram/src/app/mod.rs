@@ -1,22 +1,25 @@
 //! Состояние приложения Polygram.
-//! Хранит Canvas, отслеживает клики по холсту, выделение объектов,
-//! перетаскивание отделов за шапку и диалог переименования.
-//! Также отвечает за установку загрузчиков изображений egui_extras (включая SVG).
+//! Хранит Canvas, движок ядра, отслеживает клики по холсту, выделение объектов,
+//! перетаскивание отделов за шапку, диалог переименования и диалоги показателей.
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
-use polygram_canvas::{Canvas, ObjectKind};
+use polygram_canvas::Canvas;
+use polygram_core::{Command, Engine, runtime::Published, types::NodeKind};
 
+mod dialogs;
 mod icons;
 mod interaction;
 
 /// Главное состояние приложения Polygram.
 pub struct PolygramApp {
     canvas: Canvas,
+    /// Движок ядра Polygram (иерархия, значения, статусы, команды).
+    engine: Engine,
     /// Экранная позиция последнего правого клика по холсте (открывает контекстное меню).
     right_click: Option<Pos2>,
-    /// Объект, на который был сделан правый клик (если отдел).
+    /// Объект, на который был сделан правый клик (если отдел или процесс).
     right_click_object: Option<String>,
-    /// Установлены ли загрузчики изображений egui_extras (включая SVG-загрузчик).
+    /// Установлены ли загрузчики изображений egui_extras (включая SVG).
     image_loaders_installed: bool,
     /// Меню только что открыто правым кликом — игнорировать close-логику в этом кадре.
     menu_just_opened: bool,
@@ -34,13 +37,16 @@ pub struct PolygramApp {
     pub rename_input: String,
     /// Стартовая позиция выделения рамкой (selection box), если активна.
     pub selection_box_start: Option<Pos2>,
+    /// Состояние диалогов (переименование, добавление показателя, контейнер и др.).
+    pub dialogs: dialogs::DialogState,
 }
 
 impl PolygramApp {
-    /// Создаёт новое состояние приложения с холстом по умолчанию.
+    /// Создаёт новое состояние приложения с холстом и движком по умолчанию.
     pub fn new() -> Self {
         Self {
             canvas: Canvas::new(),
+            engine: Engine::new(),
             right_click: None,
             right_click_object: None,
             image_loaders_installed: false,
@@ -52,6 +58,32 @@ impl PolygramApp {
             rename_target: None,
             rename_input: String::new(),
             selection_box_start: None,
+            dialogs: dialogs::DialogState::new(),
+        }
+    }
+
+    /// Выполнить команду в движке и обновить опубликованное состояние.
+    pub fn apply_cmd(&mut self, cmd: Command) {
+        let _ = self.engine.apply(polygram_core::types::Scope::Root, cmd);
+    }
+
+    /// Выполнить пачку команд в движке.
+    pub fn apply_batch(&mut self, cmds: Vec<Command>) {
+        let _ = self.engine.apply_batch(polygram_core::types::Scope::Root, cmds);
+    }
+
+    /// Последний опубликованный снимок состояния движка.
+    pub fn published(&self) -> Published {
+        let geometry = self.engine.geometry();
+        let dynamic = self.engine.dynamic_state();
+        let metric_defs = self.engine.metric_def_views();
+        Published {
+            rev: self.engine.rev(),
+            dynamic,
+            geometry,
+            metric_defs,
+            camera_fit_requested: self.engine.camera_fit_requested(),
+            auto_screenshot: self.engine.auto_screenshot(),
         }
     }
 
@@ -59,7 +91,7 @@ impl PolygramApp {
     fn object_under(&self, screen_pos: Pos2) -> Option<String> {
         let cell_px = self.canvas.cell_px();
         for object in &self.canvas.objects {
-            if object.kind != ObjectKind::Department {
+            if object.kind != NodeKind::Department {
                 continue;
             }
             let r = &object.rect;
@@ -78,7 +110,7 @@ impl PolygramApp {
     fn header_under(&self, screen_pos: Pos2) -> Option<String> {
         let cell_px = self.canvas.cell_px();
         for object in &self.canvas.objects {
-            if object.kind != ObjectKind::Department {
+            if object.kind != NodeKind::Department {
                 continue;
             }
             let r = &object.rect;
@@ -173,9 +205,21 @@ impl eframe::App for PolygramApp {
             self.image_loaders_installed = true;
         }
 
+        let published = self.published();
+
+        // Если открыт полноэкранный экран показателей — рисуем его вместо холста.
+        if self.dialogs.show_metrics_screen {
+                interaction::container_menu::render_metrics_screen(
+                    self,
+                    ui,
+                    &published,
+                    self.canvas.theme,
+                );
+            ui.ctx().request_repaint();
+            return;
+        }
+
         egui::CentralPanel::default().show(ui, |ui| {
-            // click_and_drag нужен, чтобы одновременно работали клик (выделение)
-            // и перетаскивание отделов за шапку.
             let canvas_response = ui.interact(
                 ui.clip_rect(),
                 ui.scope_id().with("canvas"),
@@ -184,23 +228,45 @@ impl eframe::App for PolygramApp {
 
             self.canvas.handle_camera(ui.ctx(), &canvas_response, ui);
 
-            self.canvas.paint(ui, &self.selected_objects);
+            self.canvas.paint(
+                ui,
+                &published.dynamic,
+                self.right_click_object.as_deref(),
+                &self.selected_objects,
+            );
 
             if !canvas_response.hovered() {
-                // Вне холста ничего не обрабатываем (клики, драги, меню),
-                // но холст уже отрисован выше.
-                interaction::context_menu(self, ui.ctx());
+                interaction::context_menu(self, ui.ctx(), &published, self.canvas.theme);
                 interaction::rename_dialog(self, ui.ctx());
                 ui.ctx().request_repaint();
                 return;
             }
 
-            // ---- ПКМ: контекстное меню на отделе или пустом месте ----
+            // ---- ПКМ: контекстное меню на отделе/процессе или пустом месте ----
             if canvas_response.secondary_clicked() {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     self.selection_box_start = None;
                     self.right_click = Some(pos);
                     self.right_click_object = self.object_under(pos);
+                    if self.right_click_object.is_none() {
+                        // Проверяем, не попали ли в процесс (вне отделов).
+                        for obj in &self.canvas.objects {
+                            if obj.kind == NodeKind::Process {
+                                let r = &obj.rect;
+                                let rect_px = egui::Rect::from_min_size(
+                                    self.canvas.cell_to_screen(r.x, r.y),
+                                    egui::Vec2::new(
+                                        256.0 * self.canvas.camera.zoom,
+                                        256.0 * self.canvas.camera.zoom,
+                                    ),
+                                );
+                                if rect_px.contains(pos) {
+                                    self.right_click_object = Some(obj.id.clone());
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     self.menu_just_opened = true;
                 }
             }
@@ -212,9 +278,30 @@ impl eframe::App for PolygramApp {
                     if let Some(id) = self.header_under(pos) {
                         self.selection_box_start = None;
                         self.toggle_select(id.clone(), ctrl);
-                    } else if let Some(id) = self.object_under(pos) {
-                        self.selection_box_start = None;
-                        self.toggle_select(id, ctrl);
+                    } else {
+                        // Проверяем клик по процессу.
+                        let mut clicked_process = false;
+                        for obj in &self.canvas.objects {
+                            if obj.kind == NodeKind::Process {
+                                let r = &obj.rect;
+                                let rect_px = egui::Rect::from_min_size(
+                                    self.canvas.cell_to_screen(r.x, r.y),
+                                    egui::Vec2::new(
+                                        256.0 * self.canvas.camera.zoom,
+                                        256.0 * self.canvas.camera.zoom,
+                                    ),
+                                );
+                                if rect_px.contains(pos) {
+                                    self.selection_box_start = None;
+                                    self.toggle_select(obj.id.clone(), ctrl);
+                                    clicked_process = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if !clicked_process {
+                            // Клик по пустому месту — ничего не выделяем (или можно сбрасывать выделение).
+                        }
                     }
                 }
             }
@@ -225,26 +312,39 @@ impl eframe::App for PolygramApp {
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if self.header_under(pos).is_some() {
-                        // Клик на шапку отдела — начинаем перетаскивание отдела.
                         if let Some(id) = self.header_under(pos) {
                             self.start_drag_object(id, pos);
                         }
-                    } else if self.object_under(pos).is_none() {
-                        // Клик по пустому месту — начинаем выделение рамкой.
-                        self.selection_box_start = Some(pos);
+                    } else {
+                        // Проверяем клик по процессу — не начинаем драг.
+                        let is_process = self.canvas.objects.iter().any(|obj| {
+                            obj.kind == NodeKind::Process
+                                && {
+                                    let r = &obj.rect;
+                                    let rect_px = egui::Rect::from_min_size(
+                                        self.canvas.cell_to_screen(r.x, r.y),
+                                        egui::Vec2::new(
+                                            256.0 * self.canvas.camera.zoom,
+                                            256.0 * self.canvas.camera.zoom,
+                                        ),
+                                    );
+                                    rect_px.contains(pos)
+                                }
+                        });
+                        if !is_process {
+                            self.selection_box_start = Some(pos);
+                        }
                     }
                 }
             }
 
             // ---- Отрисовка selection box и обновление позиции драга при перетаскивании ----
             if canvas_response.dragged_by(PointerButton::Primary) {
-                // Перетаскивание отдела за шапку.
                 if self.drag_object.is_some() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         self.update_drag_object(cur);
                     }
                 }
-                // Отрисовка selection box.
                 if self.selection_box_start.is_some() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         let start = self.selection_box_start.unwrap();
@@ -291,13 +391,21 @@ impl eframe::App for PolygramApp {
                         let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
                         let mut newly_selected: Vec<String> = Vec::new();
                         for object in &self.canvas.objects {
-                            if object.kind != ObjectKind::Department {
-                                continue;
-                            }
                             let r = &object.rect;
                             let rect_px = Rect::from_min_size(
                                 self.canvas.cell_to_screen(r.x, r.y),
-                                egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                                egui::Vec2::new(
+                                    if object.kind == NodeKind::Process {
+                                        256.0 * self.canvas.camera.zoom / cell_px
+                                    } else {
+                                        r.w as f32 * cell_px
+                                    },
+                                    if object.kind == NodeKind::Process {
+                                        256.0 * self.canvas.camera.zoom / cell_px
+                                    } else {
+                                        r.h as f32 * cell_px
+                                    },
+                                ),
                             );
                             if box_rect.intersects(rect_px) {
                                 newly_selected.push(object.id.clone());
@@ -317,7 +425,7 @@ impl eframe::App for PolygramApp {
             }
         });
 
-        interaction::context_menu(self, ui.ctx());
+        interaction::context_menu(self, ui.ctx(), &published, self.canvas.theme);
         interaction::rename_dialog(self, ui.ctx());
 
         ui.ctx().request_repaint();
