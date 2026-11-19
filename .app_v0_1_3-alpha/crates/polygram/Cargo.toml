@@ -1,0 +1,18 @@
+[package]
+name = "polygram"
+description = "Оболочка egui Polygram: главное окно, меню, холст."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "polygram"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.37"
+egui = "0.37"
+polygram-canvas = { path = "../canvas" }
+
+[lints.rust]
+missing_docs = "warn"
