@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 eframe = "0.37"
 egui = "0.37"
+image = "0.25"
 polygram-canvas = { path = "../canvas" }
 
 [lints.rust]

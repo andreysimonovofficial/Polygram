@@ -5,11 +5,24 @@ mod app;
 
 use app::PolygramApp;
 
+fn load_icon() -> egui::IconData {
+    let img = image::load_from_memory(include_bytes!("../assets/favicon.png"))
+        .expect("Failed to load favicon.png");
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    egui::IconData {
+        rgba: rgba.into_raw(),
+        width,
+        height,
+    }
+}
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("Polygram — чистовик"),
+            .with_title("Polygram — чистовик")
+            .with_icon(load_icon()),
         ..Default::default()
     };
     eframe::run_native(
