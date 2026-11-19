@@ -1,8 +1,9 @@
 //! Контекстное меню по правой кнопке мыши на холсте.
 //! Заглушка: пункты «Создать Процесс» и «Создать Отдел».
 //! Все пункты одинаковой ширины, вычисляемой по самому длинному пункту.
+//! Текст внутри пунктов выровнен по левому краю.
 
-use egui::{Align, Color32, Context, Stroke, TextStyle, Window};
+use egui::{Color32, Context, Stroke, TextStyle, Window};
 
 /// Контекстное меню по правой кнопке на пустом месте холста.
 /// Показывает заглушки «Создать Процесс» и «Создать Отдел» и закрывается по клику на них.
@@ -78,13 +79,16 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 };
                 ui.painter().rect_filled(item_rect, item_rounding, bg);
 
-                // Текст пункта по левому краю (Label вместо Button для контроля выравнивания).
-                let response = ui.add_sized(
-                    [max_width, 0.0],
-                    egui::Label::new(item)
-                        .halign(Align::LEFT)
-                        .sense(egui::Sense::click()),
-                );
+                // Интеракция по всему прямоугольнику пункта.
+                let response = ui.interact(item_rect, ui.scope_id().with(item), egui::Sense::click());
+
+                // Текст пункта по левому краю (рисуем вручную для точного контроля выравнивания).
+                let text_color = Color32::WHITE;
+                let galley = ui.fonts_mut(|f| {
+                    f.layout_no_wrap(item.to_string(), font_id.clone(), text_color)
+                });
+                let text_pos = item_rect.min + egui::vec2(button_padding.x, button_padding.y);
+                ui.painter().galley(text_pos, galley, text_color);
 
                 if response.clicked() {
                     close = true;
