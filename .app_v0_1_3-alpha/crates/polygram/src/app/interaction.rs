@@ -71,12 +71,14 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             });
             let max_width = icon_size + icon_gap + max_text_width + 2.0 * button_padding.x;
 
+            let item_height = (font_id.size + 2.0 * button_padding.y) * 1.5;
+
             for (item, icon) in items {
                 // Рассчитать прямоугольник пункта заранее.
                 let cursor = ui.cursor();
                 let item_rect = egui::Rect::from_min_size(
                     cursor.min,
-                    egui::vec2(max_width, (font_id.size + 2.0 * button_padding.y) * 1.5),
+                    egui::vec2(max_width, item_height),
                 );
 
                 // Фон пункта: базовый или при наведении.
@@ -92,8 +94,9 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 let response = ui.interact(item_rect, ui.scope_id().with(item), egui::Sense::click());
 
                 // Рисуем иконку Lucide слева от текста (векторный SVG), по центру по вертикали.
+                let icon_y = item_rect.min.y + (item_height - icon_size) / 2.0;
                 let icon_rect = egui::Rect::from_min_size(
-                    item_rect.min + egui::vec2(button_padding.x, item_rect.center().y - icon_size / 2.0),
+                    item_rect.min + egui::vec2(button_padding.x, icon_y),
                     egui::vec2(icon_size, icon_size),
                 );
                 paint_lucide_image(ui, icon_rect, icon, Color32::WHITE);
@@ -103,9 +106,10 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 let galley = ui.fonts_mut(|f| {
                     f.layout_no_wrap(item.to_string(), font_id.clone(), text_color)
                 });
+                let text_y = item_rect.min.y + (item_height - galley.size().y) / 2.0;
                 let text_pos = item_rect.min + egui::vec2(
                     button_padding.x + icon_size + icon_gap,
-                    item_rect.center().y - galley.size().y / 2.0,
+                    text_y,
                 );
                 ui.painter().galley(text_pos, galley, text_color);
 
