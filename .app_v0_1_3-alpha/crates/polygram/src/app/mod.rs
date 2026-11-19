@@ -202,7 +202,7 @@ impl eframe::App for PolygramApp {
                 }
             }
 
-            // ---- ЛКМ клик: выделение объекта или начало выделения рамкой ----
+            // ---- ЛКМ клик: выделение объекта ----
             if canvas_response.clicked() {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
@@ -212,21 +212,23 @@ impl eframe::App for PolygramApp {
                     } else if let Some(id) = self.object_under(pos) {
                         self.selection_box_start = None;
                         self.toggle_select(id, ctrl);
-                    } else {
-                        // Пустое место — начинаем выделение рамкой (selection box).
-                        self.selection_box_start = Some(pos);
                     }
                 }
             }
 
-            // ---- Начало перетаскивания отдела за шапку ----
+            // ---- Начало взаимодействия: драг отдела за шапку или selection box ----
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
-                && self.selection_box_start.is_none()
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
-                    if let Some(id) = self.header_under(pos) {
-                        self.start_drag_object(id, pos);
+                    if self.header_under(pos).is_some() {
+                        // Клик на шапку отдела — начинаем перетаскивание отдела.
+                        if let Some(id) = self.header_under(pos) {
+                            self.start_drag_object(id, pos);
+                        }
+                    } else if self.object_under(pos).is_none() {
+                        // Клик по пустому месту — начинаем выделение рамкой.
+                        self.selection_box_start = Some(pos);
                     }
                 }
             }
