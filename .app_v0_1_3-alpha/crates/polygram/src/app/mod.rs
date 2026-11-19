@@ -52,8 +52,7 @@ impl PolygramApp {
         }
     }
 
-    /// Найти объект (отдел) под заданной экранной позицией.
-    /// Возвращает id отдела, если позиция попадает в rect отдела.
+    /// Найти отдел под заданной экранной позицией (внутри rect отдела).
     fn object_under(&self, screen_pos: Pos2) -> Option<String> {
         let cell_px = self.canvas.cell_px();
         for object in &self.canvas.objects {
@@ -111,6 +110,55 @@ impl PolygramApp {
             self.selected_objects = vec![id];
         }
     }
+
+    /// Начать перетаскивание отдела за шапку.
+    fn start_drag_object(&mut self, id: String, screen_pos: Pos2) {
+        self.drag_object = Some(id.clone());
+        self.selected_objects = vec![id.clone()];
+        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+            let screen_min = self.canvas.cell_to_screen(obj.rect.x, obj.rect.y);
+            let click_cell_x = ((screen_pos.x / self.canvas.camera.zoom
+                - self.canvas.camera.offset.x)
+                / self.canvas.cell_size) as f32;
+            let click_cell_y = ((screen_pos.y / self.canvas.camera.zoom
+                - self.canvas.camera.offset.y)
+                / self.canvas.cell_size) as f32;
+            let top_left_cell_x =
+                (screen_min.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
+                    / self.canvas.cell_size;
+            let top_left_cell_y =
+                (screen_min.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
+                    / self.canvas.cell_size;
+            self.drag_offset_cell = (
+                click_cell_x - top_left_cell_x,
+                click_cell_y - top_left_cell_y,
+            );
+        }
+        self.drag_start_screen = Some(screen_pos);
+    }
+
+    /// Применить текущую позицию курсора к перетаскиваемому отделу (привязка к клеткам).
+    fn update_drag_object(&mut self, cursor: Pos2) {
+        let Some(drag_id) = self.drag_object.as_deref() else {
+            return;
+        };
+        let cursor_world_x = (cursor.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
+            / self.canvas.cell_size;
+        let cursor_world_y = (cursor.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
+            / self.canvas.cell_size;
+        let target_x = (cursor_world_x - self.drag_offset_cell.0).round() as i32;
+        let target_y = (cursor_world_y - self.drag_offset_cell.1).round() as i32;
+        if let Some(obj) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+            obj.rect.x = target_x;
+            obj.rect.y = target_y;
+        }
+    }
+
+    /// Завершить перетаскивание отдела.
+    fn end_drag_object(&mut self) {
+        self.drag_object = None;
+        self.drag_start_screen = None;
+    }
 }
 
 impl Default for PolygramApp {
@@ -130,49 +178,41 @@ impl eframe::App for PolygramApp {
         egui::CentralPanel::default().show(ui, |ui| {
             self.canvas.paint(ui, &self.selected_objects);
 
+            // click_and_drag нужен, чтобы одновременно работали клик (выделение)
+            // и перетаскивание отделов за шапку.
             let canvas_response = ui.interact(
                 ui.clip_rect(),
                 ui.scope_id().with("canvas"),
-                egui::Sense::click(),
+                egui::Sense::click_and_drag(),
             );
 
-            // ---- ЛКМ клик: выделение или начало драга ----
+            if !canvas_response.hovered() {
+                // Вне холста ничего не обрабатываем.
+                interaction::context_menu(self, ui.ctx());
+                interaction::rename_dialog(self, ui.ctx());
+                ui.ctx().request_repaint();
+                return;
+            }
+
+            // ---- ПКМ: контекстное меню на отделе или пустом месте ----
+            if canvas_response.secondary_clicked() {
+                if let Some(pos) = canvas_response.interact_pointer_pos() {
+                    self.right_click = Some(pos);
+                    self.right_click_object = self.object_under(pos);
+                    self.menu_just_opened = true;
+                }
+            }
+
+            // ---- ЛКМ клик: выделение объекта (только если не было драга) ----
             if canvas_response.clicked() {
-                    if let Some(pos) = canvas_response.interact_pointer_pos() {
-                        let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
-                        if let Some(id) = self.header_under(pos) {
-                            // Клик на шапку отдела — выделяем отдел (не начинаем драг здесь).
-                            self.toggle_select(id.clone(), ctrl);
-                            self.drag_start_screen = Some(pos);
-                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                                let screen_min = self.canvas.cell_to_screen(obj.rect.x, obj.rect.y);
-                                let click_cell_x = ((pos.x / self.canvas.camera.zoom
-                                    - self.canvas.camera.offset.x)
-                                    / self.canvas.cell_size) as f32;
-                                let click_cell_y = ((pos.y / self.canvas.camera.zoom
-                                    - self.canvas.camera.offset.y)
-                                    / self.canvas.cell_size) as f32;
-                                let top_left_cell_x =
-                                    (screen_min.x / self.canvas.camera.zoom
-                                        - self.canvas.camera.offset.x)
-                                    / self.canvas.cell_size;
-                                let top_left_cell_y =
-                                    (screen_min.y / self.canvas.camera.zoom
-                                        - self.canvas.camera.offset.y)
-                                    / self.canvas.cell_size;
-                                self.drag_offset_cell =
-                                    (click_cell_x - top_left_cell_x, click_cell_y - top_left_cell_y);
-                            }
-                        } else if let Some(id) = self.object_under(pos) {
-                        // Клик на тело отдела — выделяем.
+                if let Some(pos) = canvas_response.interact_pointer_pos() {
+                    let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+                    if let Some(id) = self.header_under(pos) {
+                        self.toggle_select(id.clone(), ctrl);
+                    } else if let Some(id) = self.object_under(pos) {
                         self.toggle_select(id, ctrl);
-                        self.drag_start_screen = None;
-                    } else {
-                        // Клик по пустому месту — снимаем выделение (кроме Ctrl).
-                        if !ctrl {
-                            self.clear_selection();
-                        }
-                        self.drag_start_screen = None;
+                    } else if !ctrl {
+                        self.clear_selection();
                     }
                 }
             }
@@ -183,58 +223,17 @@ impl eframe::App for PolygramApp {
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if let Some(id) = self.header_under(pos) {
-                        self.drag_object = Some(id.clone());
-                        self.selected_objects = vec![id];
-                        if let Some(obj) = self
-                            .canvas
-                            .objects
-                            .iter()
-                            .find(|o| o.id == self.drag_object.as_deref().unwrap())
-                        {
-                            let screen_min = self.canvas.cell_to_screen(obj.rect.x, obj.rect.y);
-                            let click_cell_x = ((pos.x / self.canvas.camera.zoom
-                                - self.canvas.camera.offset.x)
-                                / self.canvas.cell_size) as f32;
-                            let click_cell_y = ((pos.y / self.canvas.camera.zoom
-                                - self.canvas.camera.offset.y)
-                                / self.canvas.cell_size) as f32;
-                            let top_left_cell_x =
-                                (screen_min.x / self.canvas.camera.zoom
-                                    - self.canvas.camera.offset.x)
-                                / self.canvas.cell_size;
-                            let top_left_cell_y =
-                                (screen_min.y / self.canvas.camera.zoom
-                                    - self.canvas.camera.offset.y)
-                                / self.canvas.cell_size;
-                            self.drag_offset_cell =
-                                (click_cell_x - top_left_cell_x, click_cell_y - top_left_cell_y);
-                        }
+                        self.start_drag_object(id, pos);
                     }
                 }
             }
 
             // ---- Обновление позиции при перетаскивании ----
-            if let Some(ref drag_id) = self.drag_object {
-                if canvas_response.dragged_by(PointerButton::Primary) {
-                    if let Some(cur) = canvas_response.interact_pointer_pos() {
-                        let cursor_world_x =
-                            (cur.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
-                                / self.canvas.cell_size;
-                        let cursor_world_y =
-                            (cur.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
-                                / self.canvas.cell_size;
-                        let target_x = (cursor_world_x - self.drag_offset_cell.0).round() as i32;
-                        let target_y = (cursor_world_y - self.drag_offset_cell.1).round() as i32;
-                        if let Some(obj) = self
-                            .canvas
-                            .objects
-                            .iter_mut()
-                            .find(|o| o.id == *drag_id)
-                        {
-                            obj.rect.x = target_x;
-                            obj.rect.y = target_y;
-                        }
-                    }
+            if self.drag_object.is_some()
+                && canvas_response.dragged_by(PointerButton::Primary)
+            {
+                if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    self.update_drag_object(cur);
                 }
             }
 
@@ -242,17 +241,7 @@ impl eframe::App for PolygramApp {
             if self.drag_object.is_some()
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
-                self.drag_object = None;
-                self.drag_start_screen = None;
-            }
-
-            // ---- ПКМ: запомнить объект под курсором для контекстного меню ----
-            if canvas_response.secondary_clicked() {
-                if let Some(pos) = canvas_response.interact_pointer_pos() {
-                    self.right_click = Some(pos);
-                    self.right_click_object = self.object_under(pos);
-                    self.menu_just_opened = true;
-                }
+                self.end_drag_object();
             }
         });
 
