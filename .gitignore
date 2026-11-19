@@ -4,6 +4,7 @@
 
 # Polygram app
 .app/screenshots/
+.app_v0_1_2-alpha/
 
 # Obsidian vault (local UI state)
 .obsidian/
