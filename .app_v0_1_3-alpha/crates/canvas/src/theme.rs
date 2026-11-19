@@ -44,7 +44,7 @@ impl Theme {
             shadow: Shadow::NONE,
             menu_frame_rounding: CornerRadius::same(4),
             menu_item_rounding: CornerRadius::same(2),
-            menu_frame_margin: Margin::same(8),
+            menu_frame_margin: Margin::same(4),
             menu_frame_fill: Color32::from_rgb(30, 30, 30),     // #1E1E1E
             menu_frame_stroke_color: Color32::from_rgb(56, 56, 56), // #383838
             menu_frame_stroke_width: 0.5,
