@@ -20,6 +20,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             egui::Frame::new()
                 .fill(app.canvas.theme.bg)
                 .stroke(Stroke::new(1.0, Color32::from_rgb(80, 80, 80)))
+                .corner_radius(app.canvas.theme.menu_frame_rounding)
                 .shadow(app.canvas.theme.shadow),
         )
         .show(ctx, |ui| {
@@ -27,6 +28,12 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             let style = ui.style_mut();
             style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(60, 60, 70);
             style.visuals.widgets.active.bg_fill = Color32::from_rgb(90, 90, 100);
+            style.visuals.widgets.hovered.corner_radius =
+                app.canvas.theme.menu_item_rounding;
+            style.visuals.widgets.active.corner_radius =
+                app.canvas.theme.menu_item_rounding;
+            style.visuals.widgets.inactive.corner_radius =
+                app.canvas.theme.menu_item_rounding;
 
             if ui.button("Создать Процесс").clicked() {
                 close = true;
