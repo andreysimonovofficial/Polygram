@@ -140,7 +140,8 @@ impl Canvas {
     }
 
     /// Adds a department at the given grid cell position.
-    /// Returns the id of the created department.
+    /// Default size matches `footprint_for(NodeKind::Department, 0, 0)`:
+    /// width NODE_W=30 cells, height min 30 cells (header + metric rows).
     pub fn add_department(&mut self, cell_x: i32, cell_y: i32, name: impl Into<String>) -> String {
         let id = format!("dept_{}", self.objects.len());
         let name = name.into();
@@ -150,7 +151,7 @@ impl Canvas {
             id: id.clone(),
             name,
             kind: ObjectKind::Department,
-            rect: ObjectRect::new(cell_x, cell_y, 6, 4),
+            rect: ObjectRect::new(cell_x, cell_y, 30, 30),
             parent: None,
             status: StatusCode::Ok,
         });
