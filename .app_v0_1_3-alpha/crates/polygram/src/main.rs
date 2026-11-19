@@ -23,6 +23,7 @@ fn main() -> eframe::Result {
             .with_inner_size([1200.0, 800.0])
             .with_title("Polygram v0.1.3-alpha")
             .with_maximized(true)
+            .with_active(true)
             .with_icon(load_icon()),
         ..Default::default()
     };
