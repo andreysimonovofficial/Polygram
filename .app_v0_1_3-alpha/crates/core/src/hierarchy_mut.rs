@@ -122,6 +122,7 @@ impl Hierarchy {
             Direction::Result => obj.results.push(eix),
         }
         self.live_object_metrics += 1;
+        self.ensure();
         Ok(eix)
     }
 

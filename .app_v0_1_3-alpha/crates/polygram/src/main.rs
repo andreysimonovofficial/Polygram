@@ -18,6 +18,22 @@ fn load_icon() -> egui::IconData {
 }
 
 fn main() -> eframe::Result {
+    std::panic::set_hook(Box::new(|info| {
+        use std::io::Write;
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "unknown panic".to_string()
+        };
+        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column())).unwrap_or_default();
+        let _ = std::fs::File::create("panic.log").and_then(|mut f| {
+            f.write_all(format!("PANIC: {}\nLOCATION: {}\nBACKTRACE:\n{:?}\n", msg, location, std::backtrace::Backtrace::force_capture()).as_bytes())
+        });
+        eprintln!("PANIC: {msg}\nLOCATION: {location}");
+    }));
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])

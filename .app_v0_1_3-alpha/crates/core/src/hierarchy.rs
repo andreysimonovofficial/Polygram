@@ -54,6 +54,22 @@ impl Hierarchy {
         }
     }
 
+    /// Обеспечивает достаточное место в векторах first_in / first_out / children
+    /// для всех существующих объектных метрик и объектов.
+    pub fn ensure(&mut self) {
+        let n_metrics = self.object_metrics.len();
+        if self.first_in.len() < n_metrics {
+            self.first_in.resize(n_metrics, NONE);
+        }
+        if self.first_out.len() < n_metrics {
+            self.first_out.resize(n_metrics, NONE);
+        }
+        let n_objects = self.objects.len();
+        if self.children.len() < n_objects {
+            self.children.resize(n_objects, Vec::new());
+        }
+    }
+
     pub fn object_count(&self) -> usize {
         self.live_objects
     }
