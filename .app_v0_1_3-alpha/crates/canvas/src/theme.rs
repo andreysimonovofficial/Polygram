@@ -1,7 +1,7 @@
 //! Единая тёмная тема холста Polygram.
 //! Источник истины для цветов и геометрии холста.
 
-use egui::{Color32, CornerRadius, epaint::Shadow};
+use egui::{Color32, CornerRadius, Margin, epaint::Shadow};
 
 /// Тёмная тема холста Polygram.
 /// Содержит цвета и размеры, используемые при отрисовке фона и точечной сетки.
@@ -21,6 +21,8 @@ pub struct Theme {
     pub menu_frame_rounding: CornerRadius,
     /// Скругление углов пунктов (кнопок) контекстного меню.
     pub menu_item_rounding: CornerRadius,
+    /// Отступ внешней рамки контекстного меню от пунктов внутри.
+    pub menu_frame_margin: Margin,
 }
 
 impl Theme {
@@ -34,6 +36,7 @@ impl Theme {
             shadow: Shadow::NONE,
             menu_frame_rounding: CornerRadius::same(4),
             menu_item_rounding: CornerRadius::same(2),
+            menu_frame_margin: Margin::same(8),
         }
     }
 }

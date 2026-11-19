@@ -21,6 +21,7 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 .fill(app.canvas.theme.bg)
                 .stroke(Stroke::new(1.0, Color32::from_rgb(80, 80, 80)))
                 .corner_radius(app.canvas.theme.menu_frame_rounding)
+                .inner_margin(app.canvas.theme.menu_frame_margin)
                 .shadow(app.canvas.theme.shadow),
         )
         .show(ctx, |ui| {
