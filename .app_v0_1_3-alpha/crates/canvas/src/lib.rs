@@ -4,7 +4,7 @@
 
 mod theme;
 
-pub use theme::Theme;
+pub use theme::{StatusCode, Theme};
 
 use egui::{Color32, Pos2, Rect, Stroke, Vec2};
 
@@ -82,6 +82,8 @@ pub struct ObjectGeom {
     pub rect: ObjectRect,
     /// Id of the parent department, if nested inside one.
     pub parent: Option<String>,
+    /// Aggregated status of the department (used for background fill).
+    pub status: StatusCode,
 }
 
 /// Canvas Polygram.
@@ -150,6 +152,7 @@ impl Canvas {
             kind: ObjectKind::Department,
             rect: ObjectRect::new(cell_x, cell_y, 6, 4),
             parent: None,
+            status: StatusCode::Ok,
         });
         id
     }
@@ -219,12 +222,13 @@ impl Canvas {
                 cell_px,
                 zoom,
                 &self.theme,
+                object.status,
             );
 
-            // Рамка выделения вокруг выделенного отдела.
+            // Рамка выделения вокруг выделенного отдела (как в старом приложении: expand + акцент).
             if selected_objects.iter().any(|id| id == &object.id) {
                 painter.rect_stroke(
-                    rect_px,
+                    rect_px.expand(2.0),
                     0.0,
                     Stroke::new(2.0 * zoom, self.theme.accent),
                     egui::StrokeKind::Middle,
@@ -242,12 +246,13 @@ pub fn paint_department_frame(
     cell_px: f32,
     zoom: f32,
     theme: &Theme,
+    status: StatusCode,
 ) {
-    // Background fill of the department.
+    // Background fill of the department — color by aggregated status.
     painter.rect_filled(
         rect_px,
         theme.object_corner_radius * zoom,
-        theme.object_bg,
+        theme.status_fill_color(status),
     );
 
     // Outer border (aura) of the department.

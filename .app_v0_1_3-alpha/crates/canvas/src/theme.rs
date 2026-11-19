@@ -39,6 +39,8 @@ pub struct Theme {
     pub object_border: Color32,
     /// Акцентный цвет (рамка выделения, активные элементы).
     pub accent: Color32,
+    /// Вторичный акцентный цвет.
+    pub accent_secondary: Color32,
     /// Скругление углов отдела (в клетках).
     pub object_corner_radius: f32,
     /// Толщина границы отдела (в клетках).
@@ -51,6 +53,16 @@ pub struct Theme {
     pub text: Color32,
     /// Цвет приглушённого текста отдела (id).
     pub text_muted: Color32,
+
+    // ========== Заливка фона отдела по агрегированному статусу ==========
+    /// Заливка фона отдела со статусом «Ок».
+    pub status_fill_ok: Color32,
+    /// Заливка фона отдела со статусом «Избыток».
+    pub status_fill_surplus: Color32,
+    /// Заливка фона отдела со статусом «В процессе».
+    pub status_fill_inprogress: Color32,
+    /// Заливка фона отдела со статусом «Ожидается».
+    pub status_fill_expected: Color32,
 }
 
 impl Theme {
@@ -74,12 +86,45 @@ impl Theme {
             object_bg: Color32::from_rgb(28, 28, 34),           // #1C1C22
             object_border: Color32::from_rgb(60, 60, 72),       // #3C3C48
             accent: Color32::from_rgb(0, 217, 255),             // #00D9FF
+            accent_secondary: Color32::from_rgb(100, 180, 255), // #64B4FF
             object_corner_radius: 2.0,
             object_border_width: 1.0,
             object_header_height_cells: 1.0,
             text_size: 14.0,
             text: Color32::from_rgb(230, 230, 235),             // #E6E6EB
             text_muted: Color32::from_rgb(150, 150, 160),       // #9696A0
+
+            // Заливка фона отдела по агрегированному статусу (темнее линий связей).
+            status_fill_ok: Color32::from_rgb(15, 80, 25),      // #0F5019
+            status_fill_surplus: Color32::from_rgb(90, 70, 0),  // #5A4600
+            status_fill_inprogress: Color32::from_rgb(100, 45, 0), // #642D00
+            status_fill_expected: Color32::from_rgb(90, 15, 15), // #5A0F0F
+        }
+    }
+}
+
+/// Агрегированный статус отдела (как в старом приложении).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StatusCode {
+    /// Отдел удовлетворён / обеспечен — самый низкий приоритет.
+    #[default]
+    Ok,
+    /// В избытке: сумма запросов целей меньше результата.
+    Surplus,
+    /// В процессе: сумма запросов целей больше результата.
+    InProgress,
+    /// Ожидается: спрос не покрыт.
+    Expected,
+}
+
+impl Theme {
+    /// Заливка фона отдела по агрегированному статусу.
+    pub fn status_fill_color(&self, status: StatusCode) -> Color32 {
+        match status {
+            StatusCode::Ok => self.status_fill_ok,
+            StatusCode::Surplus => self.status_fill_surplus,
+            StatusCode::InProgress => self.status_fill_inprogress,
+            StatusCode::Expected => self.status_fill_expected,
         }
     }
 }
