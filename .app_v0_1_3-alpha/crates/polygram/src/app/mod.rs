@@ -4,7 +4,7 @@
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::Canvas;
-use polygram_core::{Command, Engine, runtime::Published, types::NodeKind};
+use polygram_core::{Command, Engine, runtime::Published, types::{Direction, NodeKind}};
 
 mod dialogs;
 mod icons;
@@ -31,6 +31,10 @@ pub struct PolygramApp {
     drag_offset_cell: (f32, f32),
     /// Начальная позиция мыши при начале драга (экран).
     drag_start_screen: Option<Pos2>,
+    /// Источник перетаскивания показателя: (id объекта, направление, имя показателя).
+    drag_metric_source: Option<(String, Direction, String)>,
+    /// Начальная позиция перетаскивания показателя (экран).
+    drag_metric_start: Option<Pos2>,
     /// Объект, который сейчас переименовывается.
     pub rename_target: Option<String>,
     /// Введённое новое имя для переименования.
@@ -55,6 +59,8 @@ impl PolygramApp {
             drag_object: None,
             drag_offset_cell: (0.0, 0.0),
             drag_start_screen: None,
+            drag_metric_source: None,
+            drag_metric_start: None,
             rename_target: None,
             rename_input: String::new(),
             selection_box_start: None,
@@ -197,6 +203,16 @@ impl PolygramApp {
         self.drag_object = None;
         self.drag_start_screen = None;
     }
+
+    /// Найти горячую зону показателя под заданной экранной позицией.
+    fn drag_metric_under(&self, pos: Pos2) -> Option<(String, Direction, String)> {
+        for (id, dir, name, rect) in &self.canvas.drag_metric_hotspots {
+            if rect.contains(pos) {
+                return Some((id.clone(), *dir, name.clone()));
+            }
+        }
+        None
+    }
 }
 
 impl Default for PolygramApp {
@@ -314,14 +330,21 @@ impl eframe::App for PolygramApp {
                 }
             }
 
-            // ---- Начало взаимодействия: драг отдела за шапку или selection box ----
+            // ---- Начало взаимодействия: драг отдела за шапку, драг показателя или selection box ----
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
+                && self.drag_metric_source.is_none()
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if self.header_under(pos).is_some() {
                         if let Some(id) = self.header_under(pos) {
                             self.start_drag_object(id, pos);
+                        }
+                    } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
+                        // Начало перетаскивания показателя
+                        if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
+                            self.drag_metric_source = Some((obj_id, dir, name));
+                            self.drag_metric_start = Some(pos);
                         }
                     } else {
                         // Проверяем клик по процессу — не начинаем драг.
@@ -353,6 +376,20 @@ impl eframe::App for PolygramApp {
                         self.update_drag_object(cur);
                     }
                 }
+                if self.drag_metric_source.is_some() {
+                    if let Some(cur) = canvas_response.interact_pointer_pos() {
+                        if let Some((src_id, _, src_name)) = &self.drag_metric_source {
+                            if let Some((_, _, _, src_rect)) = self.canvas.drag_metric_hotspots.iter()
+                                .find(|(id, _, name, _)| id == src_id && name == src_name)
+                            {
+                                ui.painter().line_segment(
+                                    [src_rect.center(), cur],
+                                    egui::Stroke::new(2.0, self.canvas.theme.accent),
+                                );
+                            }
+                        }
+                    }
+                }
                 if self.selection_box_start.is_some() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         let start = self.selection_box_start.unwrap();
@@ -378,6 +415,39 @@ impl eframe::App for PolygramApp {
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
                 self.end_drag_object();
+            }
+
+            // ---- Завершение перетаскивания показателя ----
+            if self.drag_metric_source.is_some()
+                && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
+            {
+                let (src_id, src_dir, src_name) = self.drag_metric_source.take().unwrap();
+                self.drag_metric_start = None;
+                if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    if let Some((dst_id, dst_dir, dst_name)) = self.drag_metric_under(cur) {
+                        if src_id != dst_id {
+                            let valid = (src_dir == Direction::Request && dst_dir == Direction::Result)
+                                || (src_dir == Direction::Result && dst_dir == Direction::Request);
+                            if valid {
+                                let (from_obj, from_entry, to_obj, to_entry) =
+                                    if src_dir == Direction::Request {
+                                        // src.Request -> dst.Result
+                                        (src_id.clone(), src_name.clone(), dst_id.clone(), dst_name.clone())
+                                    } else {
+                                        // src.Result -> dst.Request: edge from dst.Request to src.Result
+                                        (dst_id.clone(), dst_name.clone(), src_id.clone(), src_name.clone())
+                                    };
+                                self.apply_cmd(polygram_core::Command::Connect {
+                                    from_object: from_obj,
+                                    from_entry: from_entry,
+                                    to_object: to_obj,
+                                    to_entry: to_entry,
+                                    throughput: 100.0,
+                                });
+                            }
+                        }
+                    }
+                }
             }
 
             // ---- Завершение выделения рамкой (selection box) ----
