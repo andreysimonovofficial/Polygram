@@ -185,20 +185,21 @@ impl eframe::App for PolygramApp {
                 egui::Sense::click_and_drag(),
             );
 
-            if !canvas_response.hovered() {
-                // Вне холста ничего не обрабатываем.
-                interaction::context_menu(self, ui.ctx());
-                interaction::rename_dialog(self, ui.ctx());
-                ui.ctx().request_repaint();
-                return;
-            }
-
             // Отслеживаем наведение на отдел для подсветки тонким белым контуром.
             let hovered_pos = canvas_response.interact_pointer_pos();
             let hovered_object = hovered_pos.and_then(|pos| self.object_under(pos));
             self.hovered_object = hovered_object.clone();
 
             self.canvas.paint(ui, &self.selected_objects, hovered_object.as_deref());
+
+            if !canvas_response.hovered() {
+                // Вне холста ничего не обрабатываем (клики, драги, меню),
+                // но холст уже отрисован выше.
+                interaction::context_menu(self, ui.ctx());
+                interaction::rename_dialog(self, ui.ctx());
+                ui.ctx().request_repaint();
+                return;
+            }
 
             // ---- ПКМ: контекстное меню на отделе или пустом месте ----
             if canvas_response.secondary_clicked() {
@@ -262,7 +263,7 @@ impl eframe::App for PolygramApp {
                             ui.painter().rect_stroke(
                                 box_rect,
                                 0.0,
-                                egui::Stroke::new(2.0, self.canvas.theme.accent),
+                                egui::Stroke::new(2.0, self.canvas.theme.text),
                                 egui::StrokeKind::Middle,
                             );
                         }
