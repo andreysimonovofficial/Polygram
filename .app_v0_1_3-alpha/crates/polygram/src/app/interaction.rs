@@ -1,7 +1,8 @@
 //! Контекстное меню по правой кнопке мыши на холсте.
 //! Заглушка: пункты «Создать Процесс» и «Создать Отдел».
+//! Все пункты одинаковой ширины, вычисляемой по самому длинному пункту.
 
-use egui::{Color32, Context, Stroke, Window};
+use egui::{Color32, Context, Stroke, TextStyle, Window};
 
 /// Контекстное меню по правой кнопке на пустом месте холста.
 /// Показывает заглушки «Создать Процесс» и «Создать Отдел» и закрывается по клику на них.
@@ -10,7 +11,9 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
         return;
     };
 
+    let items = ["Создать Процесс", "Создать Отдел"];
     let mut close = false;
+
     Window::new("")
         .title_bar(false)
         .default_pos(pos)
@@ -36,11 +39,27 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             style.visuals.widgets.inactive.corner_radius =
                 app.canvas.theme.menu_item_rounding;
 
-            if ui.button("Создать Процесс").clicked() {
-                close = true;
-            }
-            if ui.button("Создать Отдел").clicked() {
-                close = true;
+            // Измерить ширину самого длинного пункта, чтобы все пункты были одинаковой ширины.
+            let font_id = TextStyle::Button.resolve(style);
+            let button_padding = style.spacing.button_padding;
+            let max_text_width = ui.fonts_mut(|f| {
+                items
+                    .iter()
+                    .map(|item| {
+                        let galley = f.layout_no_wrap(item.to_string(), font_id.clone(), Color32::BLACK);
+                        galley.size().x
+                    })
+                    .fold(0.0, f32::max)
+            });
+            let max_width = max_text_width + 2.0 * button_padding.x;
+
+            for item in items {
+                if ui
+                    .add_sized([max_width, 0.0], egui::Button::new(item))
+                    .clicked()
+                {
+                    close = true;
+                }
             }
         });
 
