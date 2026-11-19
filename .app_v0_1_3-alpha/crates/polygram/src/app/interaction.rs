@@ -94,9 +94,9 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 let response = ui.interact(item_rect, ui.scope_id().with(item), egui::Sense::click());
 
                 // Рисуем иконку Lucide слева от текста (векторный SVG), по центру по вертикали.
-                let icon_y = item_rect.min.y + (item_height - icon_size) / 2.0;
+                let icon_y_rel = (item_height - icon_size) / 2.0;
                 let icon_rect = egui::Rect::from_min_size(
-                    item_rect.min + egui::vec2(button_padding.x, icon_y),
+                    item_rect.min + egui::vec2(button_padding.x, icon_y_rel),
                     egui::vec2(icon_size, icon_size),
                 );
                 paint_lucide_image(ui, icon_rect, icon, Color32::WHITE);
@@ -106,10 +106,10 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 let galley = ui.fonts_mut(|f| {
                     f.layout_no_wrap(item.to_string(), font_id.clone(), text_color)
                 });
-                let text_y = item_rect.min.y + (item_height - galley.size().y) / 2.0;
+                let text_y_rel = (item_height - galley.size().y) / 2.0;
                 let text_pos = item_rect.min + egui::vec2(
                     button_padding.x + icon_size + icon_gap,
-                    text_y,
+                    text_y_rel,
                 );
                 ui.painter().galley(text_pos, galley, text_color);
 
