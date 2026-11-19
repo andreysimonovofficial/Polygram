@@ -1,9 +1,10 @@
 //! Контекстное меню по правой кнопке мыши на холсте.
 //! Заглушка: пункты «Создать Процесс» и «Создать Отдел».
 //! Все пункты одинаковой ширины, вычисляемой по самому длинному пункту.
-//! Текст внутри пунктов выровнен по левому краю.
+//! Текст внутри пунктов выровнен по левому краю, иконки Lucide слева от текста.
 
 use egui::{Color32, Context, Stroke, TextStyle, Window};
+use egui_lucide::Lucide;
 
 /// Контекстное меню по правой кнопке на пустом месте холста.
 /// Показывает заглушки «Создать Процесс» и «Создать Отдел» и закрывается по клику на них.
@@ -12,7 +13,10 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
         return;
     };
 
-    let items = ["Создать Процесс", "Создать Отдел"];
+    let items = [
+        ("Создать Процесс", Lucide::SquareEqual),
+        ("Создать Отдел", Lucide::Group),
+    ];
     let mut close = false;
 
     let theme = &app.canvas.theme;
@@ -50,20 +54,23 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
             let hovered_bg_fill = Color32::from_rgb(60, 60, 70);
             let hover_pos = ctx.input(|i| i.pointer.hover_pos());
 
-            // Измерить ширину самого длинного пункта, чтобы все пункты были одинаковой ширины.
+            let icon_size = 16.0;
+            let icon_gap = 8.0;
+
+            // Измерить ширину самого длинного текста, чтобы все пункты были одинаковой ширины.
             let max_text_width = ui.fonts_mut(|f| {
                 items
                     .iter()
-                    .map(|item| {
+                    .map(|(item, _)| {
                         let galley = f.layout_no_wrap(item.to_string(), font_id.clone(), Color32::WHITE);
                         galley.size().x
                     })
                     .fold(0.0, f32::max)
             });
-            let max_width = max_text_width + 2.0 * button_padding.x;
+            let max_width = icon_size + icon_gap + max_text_width + 2.0 * button_padding.x;
 
-            for item in items {
-                // Рассчитать прямоугольник пункта заранее, чтобы нарисовать фон под текстом.
+            for (item, icon) in items {
+                // Рассчитать прямоугольник пункта заранее.
                 let cursor = ui.cursor();
                 let item_rect = egui::Rect::from_min_size(
                     cursor.min,
@@ -82,19 +89,28 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 // Интеракция по всему прямоугольнику пункта.
                 let response = ui.interact(item_rect, ui.scope_id().with(item), egui::Sense::click());
 
-                // Текст пункта по левому краю (рисуем вручную для точного контроля выравнивания).
+                // Рисуем иконку Lucide слева от текста.
+                let icon_rect = egui::Rect::from_min_size(
+                    item_rect.min + egui::vec2(button_padding.x, button_padding.y),
+                    egui::vec2(icon_size, icon_size),
+                );
+                let styled = icon.color(Color32::WHITE);
+                let image = egui::Image::from_bytes(styled.uri().clone(), styled.svg().into_bytes());
+                image.paint_at(ui, icon_rect);
+
+                // Рисуем текст по левому краю после иконки.
                 let text_color = Color32::WHITE;
                 let galley = ui.fonts_mut(|f| {
                     f.layout_no_wrap(item.to_string(), font_id.clone(), text_color)
                 });
-                let text_pos = item_rect.min + egui::vec2(button_padding.x, button_padding.y);
+                let text_pos = item_rect.min + egui::vec2(button_padding.x + icon_size + icon_gap, button_padding.y);
                 ui.painter().galley(text_pos, galley, text_color);
 
                 if response.clicked() {
                     close = true;
                 }
 
-                // Продвинуть курсор вниз, чтобы следующий пункт не накладывался на этот.
+                // Продвинуть курсор вниз, чтобы следующий пункт не накладывался.
                 ui.allocate_space(item_rect.size());
             }
         });
