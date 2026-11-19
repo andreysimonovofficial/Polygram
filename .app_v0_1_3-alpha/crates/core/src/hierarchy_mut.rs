@@ -5,6 +5,7 @@ use crate::{
     types::*,
     Hierarchy, MetricDefData,
 };
+use crate::edges::EdgeData;
 use crate::objects::ObjectData;
 use crate::entries::ObjectMetricData;
 
@@ -155,5 +156,42 @@ impl Hierarchy {
         let e = list.remove(from_ix);
         list.insert(to_ix, e);
         Ok(())
+    }
+
+    pub fn connect(&mut self, from: EntryIx, to: EntryIx, throughput: f64) -> Result<EdgeIx> {
+        let (fm, tm) = (
+            &self.object_metrics[from.idx()],
+            &self.object_metrics[to.idx()],
+        );
+        if fm.direction != Direction::Result || tm.direction != Direction::Request {
+            return Err(crate::error::EngineError::InvalidConnection(
+                "связь идёт только от записи Результата к записи Запроса".to_owned(),
+            ));
+        }
+        if fm.object == tm.object {
+            return Err(crate::error::EngineError::InvalidConnection(
+                "объект нельзя подключить к самому себе".to_owned(),
+            ));
+        }
+        if self.find_edge(from, to).is_some() {
+            return Err(crate::error::EngineError::EdgeExists);
+        }
+        let data = EdgeData {
+            ix: EdgeIx((self.edges.len()) as u32),
+            from,
+            to,
+            throughput,
+            alive: true,
+        };
+        let ix = EdgeIx((self.edges.len()) as u32);
+        self.edges.push(data);
+        self.live_edges += 1;
+        Ok(ix)
+    }
+
+    pub fn remove_edge_internal(&mut self, edge: EdgeIx) {
+        let e = &mut self.edges[edge.idx()];
+        e.alive = false;
+        self.live_edges -= 1;
     }
 }
