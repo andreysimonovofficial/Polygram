@@ -3,7 +3,7 @@
 //! перетаскивание отделов за шапку и диалог переименования.
 //! Также отвечает за установку загрузчиков изображений egui_extras (включая SVG).
 
-use egui::{Pos2, PointerButton};
+use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::{Canvas, ObjectKind};
 
 mod icons;
@@ -32,6 +32,8 @@ pub struct PolygramApp {
     pub rename_target: Option<String>,
     /// Введённое новое имя для переименования.
     pub rename_input: String,
+    /// Стартовая позиция выделения рамкой (selection box), если активна.
+    pub selection_box_start: Option<Pos2>,
 }
 
 impl PolygramApp {
@@ -49,6 +51,7 @@ impl PolygramApp {
             drag_start_screen: None,
             rename_target: None,
             rename_input: String::new(),
+            selection_box_start: None,
         }
     }
 
@@ -91,11 +94,6 @@ impl PolygramApp {
             }
         }
         None
-    }
-
-    /// Снять выделение со всех объектов.
-    pub fn clear_selection(&mut self) {
-        self.selected_objects.clear();
     }
 
     /// Выделить объект (добавить, если уже выделен — убрать при Ctrl).
@@ -197,22 +195,26 @@ impl eframe::App for PolygramApp {
             // ---- ПКМ: контекстное меню на отделе или пустом месте ----
             if canvas_response.secondary_clicked() {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
+                    self.selection_box_start = None;
                     self.right_click = Some(pos);
                     self.right_click_object = self.object_under(pos);
                     self.menu_just_opened = true;
                 }
             }
 
-            // ---- ЛКМ клик: выделение объекта (только если не было драга) ----
+            // ---- ЛКМ клик: выделение объекта или начало выделения рамкой ----
             if canvas_response.clicked() {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
                     if let Some(id) = self.header_under(pos) {
+                        self.selection_box_start = None;
                         self.toggle_select(id.clone(), ctrl);
                     } else if let Some(id) = self.object_under(pos) {
+                        self.selection_box_start = None;
                         self.toggle_select(id, ctrl);
-                    } else if !ctrl {
-                        self.clear_selection();
+                    } else {
+                        // Пустое место — начинаем выделение рамкой (selection box).
+                        self.selection_box_start = Some(pos);
                     }
                 }
             }
@@ -220,6 +222,7 @@ impl eframe::App for PolygramApp {
             // ---- Начало перетаскивания отдела за шапку ----
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
+                && self.selection_box_start.is_none()
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if let Some(id) = self.header_under(pos) {
@@ -228,20 +231,84 @@ impl eframe::App for PolygramApp {
                 }
             }
 
-            // ---- Обновление позиции при перетаскивании ----
-            if self.drag_object.is_some()
-                && canvas_response.dragged_by(PointerButton::Primary)
-            {
-                if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    self.update_drag_object(cur);
+            // ---- Отрисовка selection box и обновление позиции драга при перетаскивании ----
+            if canvas_response.dragged_by(PointerButton::Primary) {
+                // Перетаскивание отдела за шапку.
+                if self.drag_object.is_some() {
+                    if let Some(cur) = canvas_response.interact_pointer_pos() {
+                        self.update_drag_object(cur);
+                    }
+                }
+                // Отрисовка selection box.
+                if self.selection_box_start.is_some() {
+                    if let Some(cur) = canvas_response.interact_pointer_pos() {
+                        let start = self.selection_box_start.unwrap();
+                        let x = start.x.min(cur.x);
+                        let y = start.y.min(cur.y);
+                        let w = (cur.x - start.x).abs();
+                        let h = (cur.y - start.y).abs();
+                        if w > 4.0 && h > 4.0 {
+                            let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
+                            ui.painter().rect_stroke(
+                                box_rect,
+                                0.0,
+                                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 217, 255)),
+                                egui::StrokeKind::Middle,
+                            );
+                        }
+                    }
                 }
             }
 
-            // ---- Завершение перетаскивания ----
+            // ---- Завершение перетаскивания отдела ----
             if self.drag_object.is_some()
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
                 self.end_drag_object();
+            }
+
+            // ---- Завершение выделения рамкой (selection box) ----
+            if self.selection_box_start.is_some()
+                && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
+            {
+                if let (Some(start), Some(end)) = (
+                    self.selection_box_start,
+                    canvas_response.interact_pointer_pos(),
+                ) {
+                    let x = start.x.min(end.x);
+                    let y = start.y.min(end.y);
+                    let w = (end.x - start.x).abs();
+                    let h = (end.y - start.y).abs();
+                    self.selection_box_start = None;
+                    if w > 4.0 && h > 4.0 {
+                        let cell_px = self.canvas.cell_px();
+                        let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
+                        let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+                        let mut newly_selected: Vec<String> = Vec::new();
+                        for object in &self.canvas.objects {
+                            if object.kind != ObjectKind::Department {
+                                continue;
+                            }
+                            let r = &object.rect;
+                            let rect_px = Rect::from_min_size(
+                                self.canvas.cell_to_screen(r.x, r.y),
+                                egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                            );
+                            if box_rect.intersects(rect_px) {
+                                newly_selected.push(object.id.clone());
+                            }
+                        }
+                        if ctrl {
+                            for id in &newly_selected {
+                                if !self.selected_objects.iter().any(|s| s == id) {
+                                    self.selected_objects.push(id.clone());
+                                }
+                            }
+                        } else {
+                            self.selected_objects = newly_selected;
+                        }
+                    }
+                }
             }
         });
 
