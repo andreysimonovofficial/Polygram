@@ -104,9 +104,11 @@ impl Engine {
     }
 
     pub fn sync_sizes(&mut self) {
+        let n_objects = self.hier.object_count();
         let n_metrics = self.hier.object_metric_count();
         let n_edges = self.hier.edge_count();
         self.vals.ensure(n_metrics, n_edges);
+        self.layout.ensure(n_objects);
     }
 
     pub fn plan_refit(&self, _oix: ObjectIx, _n_req: usize, _n_out: usize) -> Result<Option<()>> {
