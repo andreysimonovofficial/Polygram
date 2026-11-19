@@ -65,11 +65,19 @@ impl PolygramApp {
     /// Выполнить команду в движке и обновить опубликованное состояние.
     pub fn apply_cmd(&mut self, cmd: Command) {
         let _ = self.engine.apply(polygram_core::types::Scope::Root, cmd);
+        self.sync_canvas_from_engine();
     }
 
     /// Выполнить пачку команд в движке.
     pub fn apply_batch(&mut self, cmds: Vec<Command>) {
         let _ = self.engine.apply_batch(polygram_core::types::Scope::Root, cmds);
+        self.sync_canvas_from_engine();
+    }
+
+    /// Синхронизировать объекты Canvas с геометрией движка (после применения команд).
+    fn sync_canvas_from_engine(&mut self) {
+        let geometry = self.engine.geometry();
+        self.canvas.objects = geometry.objects;
     }
 
     /// Последний опубликованный снимок состояния движка.

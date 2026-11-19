@@ -164,7 +164,16 @@ pub fn context_menu(
     if create_department {
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
-            app.canvas.add_department(cx, cy, format!("Отдел {}", app.canvas.objects.len() + 1));
+            let id = format!("dept_{}", app.engine.hierarchy().object_count());
+            let name = format!("Отдел {}", app.engine.hierarchy().object_count() + 1);
+            app.apply_cmd(polygram_core::Command::AddObject {
+                id: Some(id.clone()),
+                name,
+                kind: polygram_core::types::NodeKind::Department,
+                at: Some([cx, cy]),
+                parent: None,
+                author: None,
+            });
         }
         app.right_click = None;
     }
@@ -172,7 +181,16 @@ pub fn context_menu(
     if create_process {
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
-            app.canvas.add_process(cx, cy, format!("Процесс {}", app.canvas.objects.len() + 1));
+            let id = format!("proc_{}", app.engine.hierarchy().object_count());
+            let name = format!("Процесс {}", app.engine.hierarchy().object_count() + 1);
+            app.apply_cmd(polygram_core::Command::AddObject {
+                id: Some(id.clone()),
+                name,
+                kind: polygram_core::types::NodeKind::Process,
+                at: Some([cx, cy]),
+                parent: None,
+                author: None,
+            });
         }
         app.right_click = None;
     }
