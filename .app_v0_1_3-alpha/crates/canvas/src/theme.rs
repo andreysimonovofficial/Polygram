@@ -1,0 +1,30 @@
+//! Единая тёмная тема холста Polygram.
+//! Источник истины для цветов и геометрии холста.
+
+use egui::Color32;
+
+/// Тёмная тема холста Polygram.
+/// Содержит цвета и размеры, используемые при отрисовке фона и точечной сетки.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Theme {
+    /// Фон холста.
+    pub bg: Color32,
+    /// Цвет точек сетки.
+    pub grid_color: Color32,
+    /// Размер одной клетки в мировых координатах.
+    pub cell_size: f32,
+    /// Радиус точки сетки в долях от размера клетки.
+    pub dot_radius_world: f32,
+}
+
+impl Theme {
+    /// Создаёт тёмную тему по умолчанию.
+    pub fn dark() -> Self {
+        Self {
+            bg: Color32::from_rgb(18, 18, 22),
+            grid_color: Color32::from_rgb(49, 49, 58),
+            cell_size: 16.0,
+            dot_radius_world: 0.04,
+        }
+    }
+}

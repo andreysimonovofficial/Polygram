@@ -1,0 +1,12 @@
+[package]
+name = "polygram-canvas"
+description = "Холст Polygram: фон, точечная сетка, тема оформления."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+egui = "0.37"
+
+[lints.rust]
+missing_docs = "warn"
