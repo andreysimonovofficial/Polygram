@@ -4,6 +4,7 @@
 //! Текст внутри пунктов выровнен по левому краю, иконки Lucide слева от текста.
 
 use egui::{Color32, Context, Stroke, TextStyle, Window};
+use crate::app::icons::paint_lucide_image;
 use egui_lucide::Lucide;
 
 /// Контекстное меню по правой кнопке на пустом месте холста.
@@ -89,16 +90,12 @@ pub fn context_menu(app: &mut super::PolygramApp, ctx: &Context) {
                 // Интеракция по всему прямоугольнику пункта.
                 let response = ui.interact(item_rect, ui.scope_id().with(item), egui::Sense::click());
 
-                // Рисуем иконку Lucide слева от текста (векторный SVG через egui).
+                // Рисуем иконку Lucide слева от текста (векторный SVG).
                 let icon_rect = egui::Rect::from_min_size(
                     item_rect.min + egui::vec2(button_padding.x, button_padding.y),
                     egui::vec2(icon_size, icon_size),
                 );
-                let styled = icon.color(Color32::WHITE);
-                // Добавляем расширение .svg к URI, иначе egui не распознает SVG и нарисует красную заглушку.
-                let uri = format!("{}.svg", styled.uri());
-                let image = egui::Image::from_bytes(uri, styled.svg().into_bytes());
-                image.paint_at(ui, icon_rect);
+                paint_lucide_image(ui, icon_rect, icon, Color32::WHITE);
 
                 // Рисуем текст по левому краю после иконки.
                 let text_color = Color32::WHITE;

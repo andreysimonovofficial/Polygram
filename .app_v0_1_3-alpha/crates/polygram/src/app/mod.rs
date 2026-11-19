@@ -4,6 +4,7 @@
 use egui::Pos2;
 use polygram_canvas::Canvas;
 
+mod icons;
 mod interaction;
 
 /// Главное состояние приложения Polygram.
