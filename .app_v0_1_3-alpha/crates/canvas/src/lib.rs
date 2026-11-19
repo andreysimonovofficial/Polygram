@@ -273,7 +273,7 @@ pub fn paint_department_frame(
 
     // Department header — title text only, no background.
     let header_h = cell_px * theme.object_header_height_cells;
-    let title = format!("Отдел '{}'", object.name);
+    let title = object.name.clone();
     painter.text(
         rect_px.min + Vec2::new(12.0 * zoom, header_h / 2.0),
         egui::Align2::LEFT_CENTER,
