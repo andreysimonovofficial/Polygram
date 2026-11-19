@@ -45,6 +45,8 @@ pub struct Theme {
     pub object_corner_radius: f32,
     /// Толщина границы отдела (в клетках).
     pub object_border_width: f32,
+    /// Толщина границы отдела при наведении или выделении (в клетках).
+    pub object_border_hover_width: f32,
     /// Высота шапки отдела (в клетках).
     pub object_header_height_cells: f32,
     /// Размер текста отдела.
@@ -89,6 +91,8 @@ impl Theme {
             accent_secondary: Color32::from_rgb(100, 180, 255), // #64B4FF
             object_corner_radius: 2.0,
             object_border_width: 1.0,
+            // Толщина границы при наведении/выделении (в клетках).
+            object_border_hover_width: 2.0,
             object_header_height_cells: 1.0,
             text_size: 14.0,
             text: Color32::from_rgb(230, 230, 235),             // #E6E6EB

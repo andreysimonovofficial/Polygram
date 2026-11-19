@@ -163,6 +163,7 @@ impl Canvas {
         &mut self,
         ui: &mut egui::Ui,
         selected_objects: &[String],
+        hovered_object: Option<&str>,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -216,6 +217,8 @@ impl Canvas {
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
+            let is_selected = selected_objects.iter().any(|id| id == &object.id);
+            let is_highlighted = is_selected || hovered_object == Some(&object.id);
             paint_department_frame(
                 painter,
                 object,
@@ -224,17 +227,8 @@ impl Canvas {
                 zoom,
                 &self.theme,
                 object.status,
+                is_highlighted,
             );
-
-            // Рамка выделения вокруг выделенного отдела (как в старом приложении: expand + акцент).
-            if selected_objects.iter().any(|id| id == &object.id) {
-                painter.rect_stroke(
-                    rect_px.expand(2.0),
-                    0.0,
-                    Stroke::new(2.0 * zoom, self.theme.accent),
-                    egui::StrokeKind::Middle,
-                );
-            }
         }
     }
 }
@@ -248,6 +242,7 @@ pub fn paint_department_frame(
     zoom: f32,
     theme: &Theme,
     status: StatusCode,
+    is_highlighted: bool,
 ) {
     // Background fill of the department — color by aggregated status.
     painter.rect_filled(
@@ -256,11 +251,21 @@ pub fn paint_department_frame(
         theme.status_fill_color(status),
     );
 
-    // Outer border (aura) of the department.
+    // Outer border — thin white on hover/select, normal color otherwise (as in old app).
+    let border_color = if is_highlighted {
+        theme.text
+    } else {
+        theme.object_border
+    };
+    let border_width = if is_highlighted {
+        theme.object_border_hover_width * zoom
+    } else {
+        theme.object_border_width * zoom
+    };
     painter.rect_stroke(
         rect_px,
         theme.object_corner_radius * zoom,
-        Stroke::new(theme.object_border_width * zoom, theme.object_border),
+        Stroke::new(border_width, border_color),
         egui::StrokeKind::Middle,
     );
 

@@ -34,6 +34,8 @@ pub struct PolygramApp {
     pub rename_input: String,
     /// Стартовая позиция выделения рамкой (selection box), если активна.
     pub selection_box_start: Option<Pos2>,
+    /// Объект, над которым сейчас находится курсор (для подсветки при наведении).
+    pub hovered_object: Option<String>,
 }
 
 impl PolygramApp {
@@ -52,6 +54,7 @@ impl PolygramApp {
             rename_target: None,
             rename_input: String::new(),
             selection_box_start: None,
+            hovered_object: None,
         }
     }
 
@@ -174,8 +177,6 @@ impl eframe::App for PolygramApp {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
-            self.canvas.paint(ui, &self.selected_objects);
-
             // click_and_drag нужен, чтобы одновременно работали клик (выделение)
             // и перетаскивание отделов за шапку.
             let canvas_response = ui.interact(
@@ -191,6 +192,13 @@ impl eframe::App for PolygramApp {
                 ui.ctx().request_repaint();
                 return;
             }
+
+            // Отслеживаем наведение на отдел для подсветки тонким белым контуром.
+            let hovered_pos = canvas_response.interact_pointer_pos();
+            let hovered_object = hovered_pos.and_then(|pos| self.object_under(pos));
+            self.hovered_object = hovered_object.clone();
+
+            self.canvas.paint(ui, &self.selected_objects, hovered_object.as_deref());
 
             // ---- ПКМ: контекстное меню на отделе или пустом месте ----
             if canvas_response.secondary_clicked() {
@@ -254,7 +262,7 @@ impl eframe::App for PolygramApp {
                             ui.painter().rect_stroke(
                                 box_rect,
                                 0.0,
-                                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 217, 255)),
+                                egui::Stroke::new(2.0, self.canvas.theme.accent),
                                 egui::StrokeKind::Middle,
                             );
                         }
