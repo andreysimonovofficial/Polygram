@@ -31,6 +31,24 @@ pub struct Theme {
     pub menu_frame_stroke_width: f32,
     /// Фон пунктов контекстного меню.
     pub menu_item_bg_fill: Color32,
+
+    // ========== Объекты холста (процессы, отделы) ==========
+    /// Заливка фона отдела.
+    pub object_bg: Color32,
+    /// Граница отдела.
+    pub object_border: Color32,
+    /// Скругление углов отдела (в клетках).
+    pub object_corner_radius: f32,
+    /// Толщина границы отдела (в клетках).
+    pub object_border_width: f32,
+    /// Высота шапки отдела (в клетках).
+    pub object_header_height_cells: f32,
+    /// Размер текста отдела.
+    pub text_size: f32,
+    /// Цвет основного текста отдела.
+    pub text: Color32,
+    /// Цвет приглушённого текста отдела (id).
+    pub text_muted: Color32,
 }
 
 impl Theme {
@@ -49,6 +67,16 @@ impl Theme {
             menu_frame_stroke_color: Color32::from_rgb(56, 56, 56), // #383838
             menu_frame_stroke_width: 0.5,
             menu_item_bg_fill: Color32::from_rgb(30, 30, 30),   // #1E1E1E
+
+            // ========== Объекты холста (процессы, отделы) ==========
+            object_bg: Color32::from_rgb(28, 28, 34),           // #1C1C22
+            object_border: Color32::from_rgb(60, 60, 72),       // #3C3C48
+            object_corner_radius: 2.0,
+            object_border_width: 1.0,
+            object_header_height_cells: 1.0,
+            text_size: 14.0,
+            text: Color32::from_rgb(230, 230, 235),             // #E6E6EB
+            text_muted: Color32::from_rgb(150, 150, 160),       // #9696A0
         }
     }
 }
