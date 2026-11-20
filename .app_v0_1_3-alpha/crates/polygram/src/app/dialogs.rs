@@ -3,7 +3,7 @@
 //! подтверждений удаления и др.
 
 use chrono::{NaiveDate, NaiveTime};
-use polygram_core::{Direction, MetricKind};
+use polygram_core::{Direction, MetricKind, NodeKind};
 use std::collections::HashMap;
 
 /// API binding settings being edited for a single metric entry.
@@ -29,6 +29,9 @@ pub struct DialogState {
     pub rename_input: String,
     pub edit_target: Option<String>,
     pub edit_input: String,
+    /// Ожидает подтверждения переноса объекта в отдел при дропе
+    /// ("Добавить процесс в отдел?"): (id объекта, id отдела, целевая клетка, стартовая клетка, вид объекта).
+    pub reparent_confirm: Option<(String, String, (i32, i32), (i32, i32), NodeKind)>,
     pub add_metric_target: Option<(String, Direction)>,
     pub add_metric_name: String,
     pub add_metric_kind: MetricKind,
@@ -58,6 +61,7 @@ impl DialogState {
             rename_input: String::new(),
             edit_target: None,
             edit_input: String::new(),
+            reparent_confirm: None,
             add_metric_target: None,
             add_metric_name: String::new(),
             add_metric_kind: MetricKind::Number,

@@ -2,6 +2,8 @@
 
 pub mod add_metric;
 pub mod container_menu;
+pub mod reparent_confirm;
+pub mod rename;
 
 /// Контекстное меню по правой кнопке мыши на холсте.
 pub fn context_menu(
@@ -28,6 +30,7 @@ pub fn context_menu(
                 items.push(("Добавить в Запрос", egui_lucide::Lucide::Plus));
                 items.push(("Добавить в Результат", egui_lucide::Lucide::Plus));
                 items.push(("Показатели", egui_lucide::Lucide::Settings));
+                items.push(("Переименовать", egui_lucide::Lucide::Pencil));
             } else {
                 items.push(("Переименовать", egui_lucide::Lucide::Pencil));
             }
@@ -204,8 +207,18 @@ pub fn context_menu(
                 .find(|o| o.id == *id)
                 .map(|o| o.name.clone())
                 .unwrap_or_default();
-            app.rename_target = Some(id.clone());
-            app.rename_input = current_name;
+            let is_process = app
+                .canvas
+                .objects
+                .iter()
+                .any(|o| o.id == *id && o.kind == polygram_core::types::NodeKind::Process);
+            if is_process {
+                app.dialogs.edit_target = Some(id.clone());
+                app.dialogs.edit_input = current_name;
+            } else {
+                app.rename_target = Some(id.clone());
+                app.rename_input = current_name;
+            }
         }
         app.right_click = None;
     }

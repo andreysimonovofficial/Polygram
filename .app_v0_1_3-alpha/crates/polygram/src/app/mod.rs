@@ -5,6 +5,9 @@
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::Canvas;
 use polygram_core::{Command, Engine, runtime::Published, types::{Direction, NodeKind}};
+use polygram_core::drag_domain::{compute_drag_preview, DragPreviewInput};
+use polygram_core::geometry::Geometry;
+use polygram_core::layout::Rect as CoreRect;
 
 mod dialogs;
 mod icons;
@@ -27,10 +30,16 @@ pub struct PolygramApp {
     pub selected_objects: Vec<String>,
     /// Объект, который сейчас перетаскивается (None — не перетаскивается).
     drag_object: Option<String>,
-    /// Смещение курсора относительно левого верхнего угла отдела в клетках.
+    /// Смещение курсора относительно левого верхнего угла объекта в клетках.
     drag_offset_cell: (f32, f32),
     /// Начальная позиция мыши при начале драга (экран).
     drag_start_screen: Option<Pos2>,
+    /// Стартовая клетка перетаскиваемого объекта (для отмены при возврате на место).
+    drag_start_cell: Option<(i32, i32)>,
+    /// Отдел, над которым нависает перетаскиваемый объект.
+    drag_over: Option<String>,
+    /// Свободная клетка для призрачной копии при перетаскивании процесса.
+    drag_ghost: Option<(i32, i32)>,
     /// Источник перетаскивания показателя: (id объекта, направление, имя показателя).
     drag_metric_source: Option<(String, Direction, String)>,
     /// Начальная позиция перетаскивания показателя (экран).
@@ -59,6 +68,9 @@ impl PolygramApp {
             drag_object: None,
             drag_offset_cell: (0.0, 0.0),
             drag_start_screen: None,
+            drag_start_cell: None,
+            drag_over: None,
+            drag_ghost: None,
             drag_metric_source: None,
             drag_metric_start: None,
             rename_target: None,
@@ -213,6 +225,161 @@ impl PolygramApp {
         }
         None
     }
+
+    /// Найти процесс под экранной позицией (фиксированная CSS-геометрия 256×256px).
+    fn process_under(&self, pos: Pos2) -> Option<String> {
+        let zoom = self.canvas.camera.zoom;
+        for object in &self.canvas.objects {
+            if object.kind != NodeKind::Process {
+                continue;
+            }
+            let r = &object.rect;
+            let rect_px = Rect::from_min_size(
+                self.canvas.cell_to_screen(r.x, r.y),
+                Vec2::new(256.0 * zoom, 256.0 * zoom),
+            );
+            if rect_px.contains(pos) {
+                return Some(object.id.clone());
+            }
+        }
+        None
+    }
+
+    /// Начать перетаскивание процесса.
+    fn start_drag_process(&mut self, id: String, screen_pos: Pos2) {
+        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+        }
+        self.start_drag_object(id.clone(), screen_pos);
+        self.drag_over = None;
+        self.drag_ghost = None;
+    }
+
+    /// Вычислить превью перетаскивания процесса: отдел под курсором и свободная клетка для призрака.
+    fn process_drag_preview(&self, cursor: Pos2) -> (Option<String>, Option<(i32, i32)>) {
+        let Some(drag_id) = self.drag_object.as_deref() else {
+            return (None, None);
+        };
+        let dragged_obj = match self.canvas.objects.iter().find(|o| o.id == drag_id) {
+            Some(o) => o.clone(),
+            None => return (None, None),
+        };
+        let zoom = self.canvas.camera.zoom;
+        let offset = self.canvas.camera.offset;
+        let cell_size = self.canvas.cell_size;
+        let cursor_world_x = (cursor.x / zoom - offset.x) / cell_size;
+        let cursor_world_y = (cursor.y / zoom - offset.y) / cell_size;
+        let cursor_cell = (cursor_world_x.round() as i32, cursor_world_y.round() as i32);
+
+        let geometry = Geometry {
+            rev: 0,
+            objects: self.canvas.objects.clone(),
+            edges: Vec::new(),
+        };
+        let preview = compute_drag_preview(&DragPreviewInput {
+            geometry,
+            dragged_id: drag_id.to_owned(),
+            dragged_size: (16, 16),
+            cursor_cell,
+        });
+        (preview.over, preview.ghost)
+    }
+
+    /// Обновить позицию перетаскиваемого процесса, нарисовать призрачную копию и подсветку отдела.
+    fn update_drag_process(&mut self, ui: &mut egui::Ui, cursor: Pos2, theme: &polygram_canvas::Theme) {
+        self.update_drag_object(cursor);
+        let (over, ghost) = self.process_drag_preview(cursor);
+        self.drag_over = over.clone();
+        self.drag_ghost = ghost;
+
+        let painter = ui.painter();
+        let cell_px = self.canvas.cell_px();
+        let zoom = self.canvas.camera.zoom;
+        let offset = self.canvas.camera.offset;
+
+        // Подсветить отдел, над которым нависает процесс.
+        if let Some(dept_id) = &over {
+            if let Some(dept) = self.canvas.objects.iter().find(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+            {
+                let r = &dept.rect;
+                let rect_px = Rect::from_min_size(
+                    self.canvas.cell_to_screen(r.x, r.y),
+                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                );
+                painter.rect_stroke(
+                    rect_px.expand(2.0),
+                    2.0,
+                    egui::Stroke::new(2.0 * zoom, theme.accent),
+                    egui::StrokeKind::Middle,
+                );
+            }
+        }
+
+        // Нарисовать пустую пунктирную рамку ("призрачную копию") в целевой клетке.
+        if let Some((gx, gy)) = ghost {
+            let rect_px = Rect::from_min_size(
+                Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
+                Vec2::new(16.0 * cell_px, 16.0 * cell_px),
+            );
+            polygram_canvas::paint_dashed_rect(painter, rect_px, zoom, theme.accent);
+        }
+    }
+
+    /// Завершить перетаскивание процесса: перенос в отдел (с подтверждением) или обычное перемещение.
+    fn end_drag_process(&mut self) {
+        let Some(drag_id) = self.drag_object.clone() else {
+            return;
+        };
+        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
+        let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            self.drag_over = None;
+            self.drag_ghost = None;
+            return;
+        };
+
+        // Конечная клетка: призрачная копия, если есть, иначе текущая позиция объекта.
+        let drop_cell = self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y));
+
+        // Если процесс над отделом — открыть модальное подтверждение переноса.
+        if let Some(dept_id) = &self.drag_over {
+            self.dialogs.reparent_confirm = Some((
+                drag_id.clone(),
+                dept_id.clone(),
+                drop_cell,
+                start_cell,
+                NodeKind::Process,
+            ));
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            self.drag_over = None;
+            self.drag_ghost = None;
+            return;
+        }
+
+        // Иначе — обычное перемещение, если позиция изменилась.
+        if drop_cell != start_cell {
+            self.apply_batch(vec![Command::MoveObject {
+                object: drag_id.clone(),
+                at: [drop_cell.0, drop_cell.1],
+            }]);
+        } else {
+            // Вернуть на исходную позицию (отмена).
+            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                o.rect.x = start_cell.0;
+                o.rect.y = start_cell.1;
+            }
+        }
+
+        self.drag_object = None;
+        self.drag_start_screen = None;
+        self.drag_start_cell = None;
+        self.drag_over = None;
+        self.drag_ghost = None;
+    }
 }
 
 impl Default for PolygramApp {
@@ -330,6 +497,29 @@ impl eframe::App for PolygramApp {
                 }
             }
 
+            // ---- Двойной клик по процессу — инлайн-переименование ----
+            if canvas_response.hovered()
+                && ui.ctx().input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary))
+            {
+                if let Some(pos) = canvas_response.interact_pointer_pos() {
+                    if let Some(obj_id) = self.process_under(pos) {
+                        let obj_name = self
+                            .canvas
+                            .objects
+                            .iter()
+                            .find(|o| o.id == obj_id)
+                            .map(|o| o.name.clone())
+                            .unwrap_or_default();
+                        self.dialogs.edit_target = Some(obj_id);
+                        self.dialogs.edit_input = obj_name;
+                        self.selected_objects.clear();
+                        self.drag_object = None;
+                        self.drag_metric_source = None;
+                        self.selection_box_start = None;
+                    }
+                }
+            }
+
             // ---- Начало взаимодействия: драг отдела за шапку, драг показателя или selection box ----
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
@@ -347,22 +537,10 @@ impl eframe::App for PolygramApp {
                             self.drag_metric_start = Some(pos);
                         }
                     } else {
-                        // Проверяем клик по процессу — не начинаем драг.
-                        let is_process = self.canvas.objects.iter().any(|obj| {
-                            obj.kind == NodeKind::Process
-                                && {
-                                    let r = &obj.rect;
-                                    let rect_px = egui::Rect::from_min_size(
-                                        self.canvas.cell_to_screen(r.x, r.y),
-                                        egui::Vec2::new(
-                                            256.0 * self.canvas.camera.zoom,
-                                            256.0 * self.canvas.camera.zoom,
-                                        ),
-                                    );
-                                    rect_px.contains(pos)
-                                }
-                        });
-                        if !is_process {
+                        // Процесс — начинаем его перетаскивание; иначе — выделение рамкой.
+                        if let Some(obj_id) = self.process_under(pos) {
+                            self.start_drag_process(obj_id, pos);
+                        } else {
                             self.selection_box_start = Some(pos);
                         }
                     }
@@ -373,7 +551,18 @@ impl eframe::App for PolygramApp {
             if canvas_response.dragged_by(PointerButton::Primary) {
                 if self.drag_object.is_some() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
-                        self.update_drag_object(cur);
+                        let is_process_drag = self
+                            .canvas
+                            .objects
+                            .iter()
+                            .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
+                                && o.kind == NodeKind::Process);
+                        if is_process_drag {
+                            let theme = self.canvas.theme.clone();
+                            self.update_drag_process(ui, cur, &theme);
+                        } else {
+                            self.update_drag_object(cur);
+                        }
                     }
                 }
                 if self.drag_metric_source.is_some() {
@@ -410,11 +599,21 @@ impl eframe::App for PolygramApp {
                 }
             }
 
-            // ---- Завершение перетаскивания отдела ----
+            // ---- Завершение перетаскивания объекта ----
             if self.drag_object.is_some()
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
-                self.end_drag_object();
+                let is_process_drag = self
+                    .canvas
+                    .objects
+                    .iter()
+                    .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
+                        && o.kind == NodeKind::Process);
+                if is_process_drag {
+                    self.end_drag_process();
+                } else {
+                    self.end_drag_object();
+                }
             }
 
             // ---- Завершение перетаскивания показателя ----
@@ -570,6 +769,8 @@ impl eframe::App for PolygramApp {
 
         interaction::context_menu(self, ui.ctx(), &published, self.canvas.theme);
         interaction::rename_dialog(self, ui.ctx());
+        interaction::rename::inline_rename_editor(self, ui.ctx(), &published);
+        interaction::reparent_confirm::handle_reparent_confirm(self, ui.ctx(), &published);
 
         ui.ctx().request_repaint();
     }
