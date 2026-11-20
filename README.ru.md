@@ -1,5 +1,5 @@
-![[docs/product/app-description|app-description]]
+![[Документация/Продукт/app-description|app-description]]
 
-![[docs/product/stack|stack]]
+![[Документация/Продукт/stack|stack]]
 
-![[docs/product/ux-ui/ux-ui|ux-ui]]
+![[Документация/Продукт/Интерфейс/ux-ui|ux-ui]]
