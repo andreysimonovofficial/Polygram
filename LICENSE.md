@@ -1,102 +1,27 @@
-Polygram Business Source License 1.1
+Polygram Source-Available & Commercial License 1.0
+Copyright (c) 2026 Сімонов Андрій Юрійович (Andrii Simonov) ("Licensor").
 
-Copyright (c) 2026 ФОП Сімонов Андрій Юрійович (PE Simonov Andrii) ("Licensor").
-
-This Polygram Business Source License ("BSL") governs your use of the Polygram software
-(the "Software"), including all source code, object code, documentation, and related
-materials made available under this license by the Licensor.
+This Polygram Source-Available & Commercial License ("License") governs your access to and use of the Polygram repository and materials (collectively, the "Work"), including all application source code, object code, build scripts, architectural specifications, prompts, Markdown documentation acting as executable or generative instructions ("Specifications"), and any related materials made available under this License by the Licensor.
 
 1. Definitions
+1.1. "Commercial Use" means any use of the Work, or any Derivative Work or Generated Application, directly or indirectly intended for commercial advantage or monetary compensation, including but not limited to hosting, operating, or offering a SaaS, PaaS, IaaS, managed service, internal enterprise production deployment, or distributing a product or service to third parties for a fee or as part of a commercial offering.
+1.2. "Competing Product" means any software, platform, service, toolkit, or specification set that offers the same or substantially similar functionality, architecture, or user value as Polygram, or competes with Polygram in the market.
+1.3. "Derivative Work" means any modification, translation, adaptation, refactoring, or extension of the Work (including rewritten, paraphrased, or re-structured Specifications and prompts), as well as any application, codebase, or artifact generated, compiled, or synthesized by an AI agent, LLM, or automated tool using the Specifications or code of the Work ("Generated Application").
+1.4. "License Key" means any cryptographic key, token, or written authorization issued by the Licensor activating Commercial Use rights under Section 4.
+1.5. "You" or "Your" means the individual or legal entity exercising rights under this License.
 
-"License Key" means any key, token, or similar mechanism provided by the Licensor to
-activate commercial rights under Section 4.
+2. Limited Evaluation & Non-Commercial License Grant
+Subject to strict compliance with Section 3, the Licensor grants You a worldwide, non-exclusive, non-transferable, revocable, royalty-free license to:
+a) read, copy, modify, and use the Work (including using the Specifications to generate and build a local instance via an AI agent) solely for Your personal, educational, research, or internal non-commercial evaluation purposes;
+b) distribute verbatim, unmodified copies of the Work solely for non-commercial purposes, provided that every copy includes this License in full and retains all copyright, trademark, and attribution notices.
 
-"Production Use" means use of the Software, or any modified or derivative version of it,
-to provide a service to third parties, including but not limited to hosting, operating,
-or offering a PaaS, IaaS, SaaS, or other cloud-based service, or otherwise making the
-functionality of the Software available to users or customers for a fee or as part of a
-commercial offering.
+3. Restrictions and Prohibitions
+Without a separate written Commercial License Agreement under Section 4, You may NOT:
+a) engage in any Commercial Use of the Work, any Derivative Work, or any Generated Application;
+b) use the Work, Specifications, or prompts to generate, compile, build, or operate a Competing Product, whether offered commercially or free of charge;
+c) use the Specifications or code to train, fine-tune, or prompt-engineer AI models or automated pipelines for the purpose of producing commercial software or Competing Products;
+d) sell, resell, sublicense, rent, lease, publish as a hosted service, or otherwise monetize access to the Work, any Derivative Work, or any Generated Application;
+e) remove, obscure, or alter any copyright, license, trademark, or attribution notice in the Work.
 
-"You" or "Your" means the individual or legal entity exercising rights under this
-license.
-
-2. License Grant
-
-Subject to the limitations in Section 3, the Licensor grants You a worldwide,
-non-exclusive, non-transferable, royalty-free license to:
-
-a) use, reproduce, modify, and prepare derivative works of the Software for Your own
-   internal, non-production purposes;
-
-b) distribute copies of the Software, in source or object code form, to third parties,
-   provided that each copy is accompanied by this license and by all copyright, patent,
-   trademark, and attribution notices present in the Software.
-
-3. Limitations
-
-You may NOT:
-
-a) use the Software for Production Use, including offering it as a hosted or managed
-   service (SaaS), cloud offering, or any other service where the Software's
-   functionality is made available to third parties for value;
-
-b) sell, resell, sublicense, rent, lease, or otherwise commercialize access to the
-   Software or any derivative work as a standalone product or service;
-
-c) remove, obscure, or alter any copyright, license, trademark, or attribution notice
-   in the Software;
-
-d) use the Software, or any part of it, to build a competing product or service that
-   offers the same or substantially similar functionality as Polygram.
-
-These limitations remain in effect indefinitely until the Licensor explicitly
-re-licenses the Software under different terms.
-
-4. Additional Commercial License Grants
-
-If You wish to use the Software for Production Use, resell it, embed it in a commercial
-product or service, or otherwise exceed the rights granted in Section 2, You must obtain
-a separate written commercial license from the Licensor.
-
-Commercial licenses are available exclusively from:
-
-    ФОП Сімонов Андрій Юрійович (PE Simonov Andrii)
-    Email: andreysimonovofficial@gmail.com
-
-Contact the Licensor to request pricing and terms for a commercial license or a License
-Key. Use of the Software under a commercial license is governed by the terms of that
-separate agreement, not by this BSL.
-
-5. No Warranty; Limitation of Liability
-
-The Software is provided "AS IS", without warranty of any kind, express or implied,
-including but not limited to warranties of merchantability, fitness for a particular
-purpose, title, or non-infringement.
-
-In no event shall the Licensor be liable for any claim, damages, or other liability,
-whether in an action of contract, tort, or otherwise, arising from, out of, or in
-connection with the Software or the use or other dealings in the Software.
-
-6. License Duration and Future Re-Licensing
-
-The limitations in Section 3 remain in effect indefinitely, until the Licensor
-explicitly decides to re-license the Software under a different license (such as
-Apache License, Version 2.0 or a similar open source license) and publishes that
-decision in writing. There is no automatic expiration of the commercial
-restrictions, and no automatic transition to another license. Commercial
-monetization of the Software remains reserved to the Licensor until such time as
-the Licensor chooses to change the license terms.
-
-7. Miscellaneous
-
-This license does not grant any trademark rights. "Polygram" and related names and
-logos are trademarks of the Licensor.
-
-This license is governed by the laws of Ukraine, without regard to conflict-of-law
-principles. Any dispute arising under this license shall be resolved in the courts of
-Ukraine.
-
-If any provision of this license is held unenforceable, the remaining provisions remain
-in full force and effect.
-
-— End of Polygram Business Source License 1.1 —
+4. Commercial License, Royalties, and Licensing Terms
+Any Commercial Use, production deployment, monetization, or creation of a Competing Product based on the Work, its Specifications, or Generated Applications requires a separate written Commercial
