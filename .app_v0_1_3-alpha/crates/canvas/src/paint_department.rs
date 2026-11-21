@@ -60,14 +60,32 @@ pub fn paint_department_frame(
         theme.text,
     );
 
-    // #ID отдела (справа).
+    // #ID отдела (справа, до иконок статуса).
+    let id_right = rect_px.max.x - padding - 2.0 * icon_size - 2.0 * gap;
     let id_text = format!("#{}", object.id);
-    let id_right = rect_px.max.x - padding - icon_size - gap;
     painter.text(
         Pos2::new(id_right, header_cy),
         Align2::RIGHT_CENTER,
         &id_text,
         FontId::new(22.0 * zoom, FontFamily::Proportional),
+        theme.text_muted,
+    );
+
+    // Иконка Ожидание (clock-exclamation-point) — перед иконкой избытка.
+    let surplus_cx = rect_px.max.x - padding - icon_size / 2.0;
+    let waiting_cx = surplus_cx - icon_size - gap;
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
+        Lucide::Clock,
+        theme.text_muted,
+    );
+
+    // Иконка Избыток (square-exclamation-point) — крайнюю справа.
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
+        Lucide::SquareExclamationPoint,
         theme.text_muted,
     );
 }
