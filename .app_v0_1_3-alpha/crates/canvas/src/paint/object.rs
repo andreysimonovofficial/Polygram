@@ -8,9 +8,9 @@ use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
 
 use crate::icons::paint_lucide;
 use crate::paint::constants::{
-    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX,
-    ICON_SIZE_PX, MAX_VISIBLE_METRICS, PROCESS_BORDER_RADIUS_PX,
-    PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX, ROW_H_PX, ROW_PADDING_X_PX,
+    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX, MAX_VISIBLE_METRICS,
+    PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX,
+    ROW_H_PX, ROW_PADDING_X_PX,
 };
 use crate::paint::status::worst_status;
 use crate::status_label_ru;
@@ -133,13 +133,31 @@ pub fn paint_process(
         theme.text,
     );
 
-    // #ID процесса (справа).
+    // #ID процесса (справа от названия).
     let id_text = format!("#{}", object.id);
     painter.text(
         Pos2::new(ox + card_w - padding, header_cy),
         Align2::RIGHT_CENTER,
         &id_text,
         FontId::new(20.0 * zoom, FontFamily::Proportional),
+        theme.text_muted,
+    );
+
+    // Иконка Ожидание (clock-exclamation-point) — перед иконкой избытка.
+    let surplus_cx = ox + card_w - padding - icon_size / 2.0;
+    let waiting_cx = surplus_cx - icon_size - gap;
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
+        Lucide::Clock,
+        theme.text_muted,
+    );
+
+    // Иконка Избыток (square-exclamation-point) — крайнюю справа.
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
+        Lucide::SquareExclamationPoint,
         theme.text_muted,
     );
 
@@ -211,7 +229,8 @@ fn paint_metric_container(
     let cx = container_rect.min.x;
     let cy = container_rect.min.y;
     let cw = container_rect.width();
-    let row_radius = ROW_BORDER_RADIUS_PX * zoom;
+    let icon_size = ICON_SIZE_PX * zoom;
+    let row_pad = ROW_PADDING_X_PX * zoom;
 
     // Фон контейнера.
     painter.rect_filled(container_rect, 0.0, theme.card_bg);
@@ -231,8 +250,6 @@ fn paint_metric_container(
     );
     let header_cy = cy + container_header_h / 2.0;
 
-    let icon_size = ICON_SIZE_PX * zoom;
-
     // Иконка типа контейнера (package-check).
     paint_lucide(
         ui,
@@ -250,7 +267,7 @@ fn paint_metric_container(
     let status_text = status_label_ru(status, dir);
     let header_text = format!("{} ({}) {}", label, entries.len(), status_text);
 
-    // Текст шапки (занимает пространство между иконками).
+    // Текст шапки: после иконки типа + gap.
     let header_text_x = cx + padding + icon_size + 8.0 * zoom;
     painter.text(
         Pos2::new(header_text_x, header_cy),
@@ -261,19 +278,20 @@ fn paint_metric_container(
     );
 
     // Иконка Ожидание (clock-exclamation-point) — перед иконкой избытка.
-    let waiting_icon_x = cx + cw - padding - icon_size - icon_size / 2.0 - 8.0 * zoom;
+    // Справа: padding + surplus_icon + gap + waiting_icon + gap
+    let surplus_cx = cx + cw - padding - icon_size / 2.0;
+    let waiting_cx = surplus_cx - icon_size - gap;
     paint_lucide(
         ui,
-        Rect::from_center_size(Pos2::new(waiting_icon_x, header_cy), Vec2::splat(icon_size)),
+        Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::Clock,
         theme.text_muted,
     );
 
     // Иконка Избыток (square-exclamation-point) — крайнюю справа.
-    let surplus_icon_x = cx + cw - padding - icon_size / 2.0;
     paint_lucide(
         ui,
-        Rect::from_center_size(Pos2::new(surplus_icon_x, header_cy), Vec2::splat(icon_size)),
+        Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::SquareExclamationPoint,
         theme.text_muted,
     );
@@ -290,8 +308,11 @@ fn paint_metric_container(
     let mut row_y = cy + padding + container_header_h;
 
     for entry in entries.iter() {
+        // Строка показателя: от container_x + padding, ширина container_w - 2*padding.
+        let row_left = cx + padding;
+        let row_right = cx + cw - padding;
         let row_rect = Rect::from_min_size(
-            Pos2::new(cx + padding, row_y),
+            Pos2::new(row_left, row_y),
             Vec2::new(cw - 2.0 * padding, row_h),
         );
         let row_hovered = mouse_pos.map_or(false, |pos| row_rect.contains(pos));
@@ -305,25 +326,28 @@ fn paint_metric_container(
         let row_border_color = if row_hovered { theme.text } else { theme.card_border };
         painter.rect_stroke(
             row_rect,
-            row_radius,
+            row_border_rad(zoom),
             Stroke::new(1.0 * zoom, row_border_color),
             StrokeKind::Middle,
         );
 
         let cy_row = row_rect.center().y;
-        let row_inner_x = cx + padding + ROW_PADDING_X_PX * zoom;
-        let row_inner_w = cw - 2.0 * padding - 2.0 * ROW_PADDING_X_PX * zoom;
 
-        // Иконка типа показателя (numbers) — слева.
+        // Content area: после left padding (16px) и перед right padding (16px).
+        let content_left = row_left + row_pad;   // +16px от левого края строки
+        let content_right = row_right - row_pad; // -16px от правого края строки
+
+        // Иконка типа показателя — слева, по левому краю контент-зоны.
+        let icon_cx = content_left + icon_size / 2.0;
         paint_lucide(
             ui,
-            Rect::from_center_size(Pos2::new(row_inner_x, cy_row), Vec2::splat(icon_size)),
+            Rect::from_center_size(Pos2::new(icon_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::List,
             theme.text_muted,
         );
 
-        // Имя показателя (flex-grow 1).
-        let name_x = row_inner_x + icon_size + 8.0 * zoom;
+        // Имя показателя — начинается после иконки + gap.
+        let name_x = content_left + icon_size + gap;
         painter.text(
             Pos2::new(name_x, cy_row),
             Align2::LEFT_CENTER,
@@ -332,7 +356,7 @@ fn paint_metric_container(
             if row_hovered { theme.text } else { theme.text_muted },
         );
 
-        // Значение + единица измерения (справа, перед иконками статуса).
+        // Значение + единица — справа, перед иконками статуса.
         let unit = if entry.unit.is_empty() {
             String::new()
         } else {
@@ -344,11 +368,10 @@ fn paint_metric_container(
         };
         let value_text = format!("{:.0}{}", displayed_value, unit);
 
-        // Позиция значения: справа, перед иконками статуса.
-        let status_icons_w = 2.0 * icon_size + 8.0 * zoom;
-        let value_x = row_inner_x + row_inner_w - status_icons_w;
+        // Правый край значения: от content_right отсчитываем surplus+gap+waiting+gap.
+        let value_right = content_right - icon_size - gap - icon_size - gap;
         painter.text(
-            Pos2::new(value_x, cy_row),
+            Pos2::new(value_right, cy_row),
             Align2::RIGHT_CENTER,
             &value_text,
             FontId::new(16.0 * zoom, FontFamily::Proportional),
@@ -356,19 +379,19 @@ fn paint_metric_container(
         );
 
         // Иконка Ожидание (clock-exclamation-point).
-        let waiting_x = row_inner_x + row_inner_w - icon_size - 8.0 * zoom;
+        let waiting_cx = content_right - icon_size - gap - icon_size / 2.0;
         paint_lucide(
             ui,
-            Rect::from_center_size(Pos2::new(waiting_x, cy_row), Vec2::splat(icon_size)),
+            Rect::from_center_size(Pos2::new(waiting_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::Clock,
             theme.text_muted,
         );
 
-        // Иконка Избыток (square-exclamation-point).
-        let surplus_x = row_inner_x + row_inner_w - icon_size / 2.0;
+        // Иконка Избыток (square-exclamation-point) — крайнюю справа.
+        let surplus_cx = content_right - icon_size / 2.0;
         paint_lucide(
             ui,
-            Rect::from_center_size(Pos2::new(surplus_x, cy_row), Vec2::splat(icon_size)),
+            Rect::from_center_size(Pos2::new(surplus_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::SquareExclamationPoint,
             theme.text_muted,
         );
@@ -397,6 +420,10 @@ fn paint_metric_container(
         );
         add_hotspots.push((object.id.clone(), dir, add_rect));
     }
+}
+
+fn row_border_rad(zoom: f32) -> f32 {
+    ROW_BORDER_RADIUS_PX * zoom
 }
 
 /// Пустая пунктирная рамка ("призрачная копия") размером с объект.
