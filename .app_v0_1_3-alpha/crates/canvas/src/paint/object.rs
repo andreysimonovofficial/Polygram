@@ -8,7 +8,7 @@ use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
 
 use crate::icons::paint_lucide;
 use crate::paint::constants::{
-    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX,
+    CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX,
     PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX,
     ROW_H_PX, ROW_PADDING_X_PX,
 };
@@ -52,10 +52,11 @@ pub fn process_total_height(
     padding + header_h + gap + req_container_h + gap + result_container_h + padding
 }
 
-/// Вычислить общую высоту контейнера: шапка + строки показателя + паддинги + gap между строками.
+/// Вычислить общую высоту контейнера: шапка + строки показателя + gap между строками + паддинги.
+/// Для пустого контейнера добавляется строка "+ Добавить показатель" (row_h).
 fn container_total_height(n_entries: usize, header_h: f32, row_h: f32, gap: f32, padding: f32) -> f32 {
     if n_entries == 0 {
-        padding + header_h + padding
+        padding + header_h + row_h + padding
     } else {
         padding + header_h + n_entries as f32 * row_h + (n_entries - 1) as f32 * gap + padding
     }
@@ -133,10 +134,12 @@ pub fn paint_process(
         theme.text,
     );
 
-    // #ID процесса (справа от названия).
+    // #ID процесса (справа, до иконок статуса).
+    // Регуем место справа: padding + surplus_icon + gap + waiting_icon + gap
+    let id_right = ox + card_w - padding - 2.0 * icon_size - 2.0 * gap;
     let id_text = format!("#{}", object.id);
     painter.text(
-        Pos2::new(ox + card_w - padding, header_cy),
+        Pos2::new(id_right, header_cy),
         Align2::RIGHT_CENTER,
         &id_text,
         FontId::new(20.0 * zoom, FontFamily::Proportional),
@@ -233,12 +236,13 @@ fn paint_metric_container(
     let row_pad = ROW_PADDING_X_PX * zoom;
 
     // Фон контейнера.
-    painter.rect_filled(container_rect, 0.0, theme.card_bg);
+    let container_radius = CONTAINER_BORDER_RADIUS_PX * zoom;
+    painter.rect_filled(container_rect, container_radius, theme.card_bg);
 
     // Граница контейнера.
     painter.rect_stroke(
         container_rect,
-        0.0,
+        container_radius,
         Stroke::new(1.0 * zoom, theme.card_border),
         StrokeKind::Middle,
     );
