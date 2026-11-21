@@ -226,17 +226,19 @@ impl PolygramApp {
         None
     }
 
-    /// Найти процесс под экранной позицией (фиксированная CSS-геометрия 256×256px).
-    fn process_under(&self, pos: Pos2) -> Option<String> {
+    /// Найти процесс под экранной позицией (динамическая CSS-геометрия).
+    fn process_under(&self, pos: Pos2, dynamic: &polygram_core::DynamicState) -> Option<String> {
         let zoom = self.canvas.camera.zoom;
         for object in &self.canvas.objects {
             if object.kind != NodeKind::Process {
                 continue;
             }
             let r = &object.rect;
+            let card_w = 512.0 * zoom;
+            let card_h = polygram_canvas::paint::object::process_total_height(object, dynamic, zoom, card_w);
             let rect_px = Rect::from_min_size(
                 self.canvas.cell_to_screen(r.x, r.y),
-                Vec2::new(256.0 * zoom, 256.0 * zoom),
+                Vec2::new(card_w, card_h),
             );
             if rect_px.contains(pos) {
                 return Some(object.id.clone());
@@ -441,21 +443,8 @@ impl eframe::App for PolygramApp {
                     self.right_click_object = self.object_under(pos);
                     if self.right_click_object.is_none() {
                         // Проверяем, не попали ли в процесс (вне отделов).
-                        for obj in &self.canvas.objects {
-                            if obj.kind == NodeKind::Process {
-                                let r = &obj.rect;
-                                let rect_px = egui::Rect::from_min_size(
-                                    self.canvas.cell_to_screen(r.x, r.y),
-                                    egui::Vec2::new(
-                                        256.0 * self.canvas.camera.zoom,
-                                        256.0 * self.canvas.camera.zoom,
-                                    ),
-                                );
-                                if rect_px.contains(pos) {
-                                    self.right_click_object = Some(obj.id.clone());
-                                    break;
-                                }
-                            }
+                        if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
+                            self.right_click_object = Some(obj_id);
                         }
                     }
                     self.menu_just_opened = true;
@@ -472,23 +461,10 @@ impl eframe::App for PolygramApp {
                     } else {
                         // Проверяем клик по процессу.
                         let mut clicked_process = false;
-                        for obj in &self.canvas.objects {
-                            if obj.kind == NodeKind::Process {
-                                let r = &obj.rect;
-                                let rect_px = egui::Rect::from_min_size(
-                                    self.canvas.cell_to_screen(r.x, r.y),
-                                    egui::Vec2::new(
-                                        256.0 * self.canvas.camera.zoom,
-                                        256.0 * self.canvas.camera.zoom,
-                                    ),
-                                );
-                                if rect_px.contains(pos) {
-                                    self.selection_box_start = None;
-                                    self.toggle_select(obj.id.clone(), ctrl);
-                                    clicked_process = true;
-                                    break;
-                                }
-                            }
+                        if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
+                            self.selection_box_start = None;
+                            self.toggle_select(obj_id.clone(), ctrl);
+                            clicked_process = true;
                         }
                         if !clicked_process {
                             // Клик по пустому месту — ничего не выделяем (или можно сбрасывать выделение).
@@ -502,7 +478,7 @@ impl eframe::App for PolygramApp {
                 && ui.ctx().input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary))
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
-                    if let Some(obj_id) = self.process_under(pos) {
+                    if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
                         let obj_name = self
                             .canvas
                             .objects
@@ -538,7 +514,7 @@ impl eframe::App for PolygramApp {
                         }
                     } else {
                         // Процесс — начинаем его перетаскивание; иначе — выделение рамкой.
-                        if let Some(obj_id) = self.process_under(pos) {
+                        if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
                             self.start_drag_process(obj_id, pos);
                         } else {
                             self.selection_box_start = Some(pos);
@@ -653,7 +629,7 @@ impl eframe::App for PolygramApp {
                         }
                     }
                     // Соединение показателя с объектом-целью: ищем любой объект под курсором.
-                    if let Some(dst_id) = self.canvas.object_at_any(cur) {
+                    if let Some(dst_id) = self.canvas.object_at_any(cur, &published.dynamic) {
                         if src_id != dst_id {
                             let geometry = self.engine.geometry();
                             let cmds = polygram_core::drag_domain::compute_metric_drop(
@@ -734,21 +710,25 @@ impl eframe::App for PolygramApp {
                         let mut newly_selected: Vec<String> = Vec::new();
                         for object in &self.canvas.objects {
                             let r = &object.rect;
-                            let rect_px = Rect::from_min_size(
-                                self.canvas.cell_to_screen(r.x, r.y),
-                                egui::Vec2::new(
-                                    if object.kind == NodeKind::Process {
-                                        256.0 * self.canvas.camera.zoom / cell_px
-                                    } else {
-                                        r.w as f32 * cell_px
-                                    },
-                                    if object.kind == NodeKind::Process {
-                                        256.0 * self.canvas.camera.zoom / cell_px
-                                    } else {
-                                        r.h as f32 * cell_px
-                                    },
-                                ),
-                            );
+                            let rect_px = if object.kind == NodeKind::Process {
+                                let zoom = self.canvas.camera.zoom;
+                                let card_w = 512.0 * zoom;
+                                let card_h = polygram_canvas::paint::object::process_total_height(
+                                    object,
+                                    &published.dynamic,
+                                    zoom,
+                                    card_w,
+                                );
+                                Rect::from_min_size(
+                                    self.canvas.cell_to_screen(r.x, r.y),
+                                    egui::Vec2::new(card_w, card_h),
+                                )
+                            } else {
+                                Rect::from_min_size(
+                                    self.canvas.cell_to_screen(r.x, r.y),
+                                    egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                                )
+                            };
                             if box_rect.intersects(rect_px) {
                                 newly_selected.push(object.id.clone());
                             }

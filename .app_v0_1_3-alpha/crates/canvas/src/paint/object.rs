@@ -1,184 +1,193 @@
 //! Рисование объекта "Процесс" и пустой пунктирной рамки ("призрачной копии").
+//! Реализует динамическую геометрию по CSS спецификации:
+//! Процесс растягивается под контейнеры, Контейнер растягивается под показатели.
 
-use egui::{Painter, Pos2, Rect, Stroke, Vec2};
+use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind};
 use polygram_core::types::Direction;
-use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
+use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
 
 use crate::icons::paint_lucide;
-use crate::paint::constants::{MAX_VISIBLE_METRICS, TEXT_X_PAD};
+use crate::paint::constants::{
+    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX,
+    ICON_SIZE_PX, MAX_VISIBLE_METRICS, PROCESS_BORDER_RADIUS_PX,
+    PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX, ROW_H_PX, ROW_PADDING_X_PX,
+};
 use crate::paint::status::worst_status;
-use crate::status_dot_color;
 use crate::status_label_ru;
-use egui_lucide::Lucide;/// Высокопроизводительный процедурный рендер объекта "Процесс" по фиксированной CSS-геометрии.
-/// Карточка 512×280: заголовок (Имя + #ID + ◆) → контейнер Запрос → контейнер Результат.
-/// Каждый контейнер 496×96: шапка (LABEL (N) СТАТУС + ◆) + строки показателя.
-/// Возвращает горячие зоны добавления показателя, горячие зоны меню контейнеров, горячие зоны перетаскивания показателей.
+use egui_lucide::Lucide;
+
+/// Результат отрисовки процесса: общая высота карточки и все горячие зоны.
+pub struct ProcessPaintResult {
+    /// Общая высота карточки процесса в пикселях (при текущем zoom).
+    pub total_height: f32,
+    /// Горячие зоны добавления показателя (id объекта, направление, экранный rect).
+    pub add_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
+    pub menu_hotspots: Vec<(String, Direction, Rect)>,
+    /// Горячие зоны строк показателей для перетаскивания (id объекта, направление, имя показателя, экранный rect строки).
+    pub drag_hotspots: Vec<(String, Direction, String, Rect)>,
+    /// Горячие зоны заголовка контейнера (id объекта, направление, экранный rect шапки).
+    pub header_hotspots: Vec<(String, Direction, Rect)>,
+}
+
+/// Вычислить общую высоту процесса в пикселях (при заданном zoom и ширине карточки).
+pub fn process_total_height(
+    object: &ObjectGeom,
+    _dynamic: &DynamicState,
+    zoom: f32,
+    _card_w: f32,
+) -> f32 {
+    let padding = PROCESS_PADDING_PX * zoom;
+    let gap = GAP_PX * zoom;
+    let header_h = PROCESS_HEADER_H_PX * zoom;
+    let container_header_h = CONTAINER_HEADER_H_PX * zoom;
+    let row_h = ROW_H_PX * zoom;
+    let container_padding = CONTAINER_PADDING_PX * zoom;
+
+    let req_container_h =
+        container_total_height(object.requests.len(), container_header_h, row_h, gap, container_padding);
+    let result_container_h =
+        container_total_height(object.results.len(), container_header_h, row_h, gap, container_padding);
+
+    padding + header_h + gap + req_container_h + gap + result_container_h + padding
+}
+
+/// Вычислить общую высоту контейнера: шапка + строки показателя + паддинги + gap между строками.
+fn container_total_height(n_entries: usize, header_h: f32, row_h: f32, gap: f32, padding: f32) -> f32 {
+    if n_entries == 0 {
+        padding + header_h + padding
+    } else {
+        padding + header_h + n_entries as f32 * row_h + (n_entries - 1) as f32 * gap + padding
+    }
+}
+
+/// Высокопроизводительный процедурный рендер объекта "Процесс" по динамической CSS-геометрии.
+/// Карточка: заголовок (Имя + #ID + ◆) → контейнер Запрос → контейнер Результат.
+/// Каждый контейнер: шапка (LABEL (N) СТАТУС + ◆) + строки показателя.
+/// Процесс растягивается под высоту контейнеров, Контейнер растягивается под количество показателей.
+/// Возвращает общую высоту карточки и все горячие зоны.
 pub fn paint_process(
     ui: &egui::Ui,
     painter: &Painter,
     object: &ObjectGeom,
     dynamic: &DynamicState,
     theme: &crate::Theme,
-    rect_px: Rect,
-    _cell_px: f32,
+    ox: f32,
+    oy: f32,
+    card_w: f32,
     zoom: f32,
     mouse_pos: Option<Pos2>,
     is_selected: bool,
-) -> (
-    Vec<(String, Direction, Rect)>,
-    Vec<(String, Direction, Rect)>,
-    Vec<(String, Direction, String, Rect)>,
-    Vec<(String, Direction, Rect)>,
-) {
+) -> ProcessPaintResult {
     let mut add_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut menu_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut header_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut drag_hotspots: Vec<(String, Direction, String, Rect)> = Vec::new();
 
-    let ox = rect_px.min.x;
-    let oy = rect_px.min.y;
+    // CSS константы (масштабируются под zoom).
+    let padding = PROCESS_PADDING_PX * zoom;
+    let gap = GAP_PX * zoom;
+    let header_h = PROCESS_HEADER_H_PX * zoom;
+    let container_header_h = CONTAINER_HEADER_H_PX * zoom;
+    let row_h = ROW_H_PX * zoom;
+    let icon_size = ICON_SIZE_PX * zoom;
+    let container_padding = CONTAINER_PADDING_PX * zoom;
+    let process_radius = PROCESS_BORDER_RADIUS_PX * zoom;
 
-    // Процесс 512×280 px (CSS спецификация).
-    let card_w = 512.0 * zoom;
-    let card_h = 280.0 * zoom;
-    let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, card_h));
-    painter.rect_filled(card_rect, 0.0, theme.card_bg);
+    let total_height = process_total_height(object, dynamic, zoom, card_w);
 
-    // Контейнер 496×96 px (CSS спецификация).
-    let container_w = 496.0 * zoom;
-    let container_h = 96.0 * zoom;
-    let container_x = ox + 8.0 * zoom;
-    let row_w = 480.0 * zoom;
-    let row_h = 32.0 * zoom;
-    let container_header_h = 48.0 * zoom;
-    let row_offsets: [f32; 4] = [20.0, 60.0, 100.0, 140.0];
+    let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, total_height));
 
-    let mut container_hovered_dir: Option<Direction> = None;
-    let mut row_hovered_rect: Option<Rect> = None;
+    // Фон карточки процесса.
+    painter.rect_filled(card_rect, process_radius, theme.card_bg);
 
-    if let Some(pos) = mouse_pos {
-        for (dir, entries) in [
-            (Direction::Request, &object.requests as &[EntryGeom]),
-            (Direction::Result, &object.results as &[EntryGeom]),
-        ] {
-            let container_top = if dir == Direction::Request {
-                oy + 72.0 * zoom
-            } else {
-                oy + 176.0 * zoom
-            };
-            let visible = entries.len().min(MAX_VISIBLE_METRICS);
-            for i in 0..visible {
-                let row_y = container_top + row_offsets[i] * zoom;
-                let row_x = container_x + 8.0 * zoom;
-                let hit_bottom = if i + 1 < visible {
-                    container_top + row_offsets[i + 1] * zoom
-                } else {
-                    container_top + container_h
-                };
-                let hit_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, hit_bottom - row_y));
-                if hit_rect.contains(pos) {
-                    row_hovered_rect = Some(hit_rect);
-                    break;
-                }
-            }
-            if row_hovered_rect.is_some() {
-                break;
-            }
-        }
-
-        if row_hovered_rect.is_none() {
-            let req_rect = Rect::from_min_size(
-                Pos2::new(container_x, oy + 72.0 * zoom),
-                Vec2::new(container_w, container_h),
-            );
-            let result_rect = Rect::from_min_size(
-                Pos2::new(container_x, oy + 176.0 * zoom),
-                Vec2::new(container_w, container_h),
-            );
-            if req_rect.contains(pos) {
-                container_hovered_dir = Some(Direction::Request);
-            } else if result_rect.contains(pos) {
-                container_hovered_dir = Some(Direction::Result);
-            }
-        }
-    }
-
-    let body_hovered = mouse_pos.map_or(false, |pos| card_rect.contains(pos))
-        && container_hovered_dir.is_none()
-        && row_hovered_rect.is_none();
-    let body_highlighted = body_hovered || is_selected;
-
-    let border_color = if body_highlighted { theme.text } else { theme.card_border };
-    let border_width = if body_highlighted {
-        theme.object_border_hover_width * zoom
-    } else {
-        theme.object_border_width * zoom
-    };
+    // Граница карточки процесса.
+    let border_color = if is_selected { theme.text } else { theme.card_border };
+    let border_width = if is_selected { 2.0 * zoom } else { 1.0 * zoom };
     painter.rect_stroke(
         card_rect,
-        0.0,
+        process_radius,
         Stroke::new(border_width, border_color),
-        egui::StrokeKind::Middle,
+        StrokeKind::Middle,
     );
 
-    let body_text_color = if body_highlighted { theme.text } else { theme.text_muted };
+    // === Шапка процесса ===
+    let header_cy = oy + header_h / 2.0;
 
-    let header_h = 64.0 * zoom;
-    let header_cy = oy + 8.0 * zoom + header_h / 2.0;
+    // Иконка типа процесса (алмаз).
     paint_lucide(
         ui,
-        Rect::from_center_size(Pos2::new(ox + 16.0 * zoom, header_cy), Vec2::splat(16.0 * zoom)),
+        Rect::from_center_size(Pos2::new(ox + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
         Lucide::Diamond,
-        body_text_color,
+        theme.text,
     );
+
+    // Название процесса.
+    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
+    let title_x = ox + padding + icon_size + 8.0 * zoom;
+    painter.text(
+        Pos2::new(title_x, header_cy),
+        Align2::LEFT_CENTER,
+        &title,
+        FontId::new(20.0 * zoom, FontFamily::Proportional),
+        theme.text,
+    );
+
+    // #ID процесса (справа).
     let id_text = format!("#{}", object.id);
     painter.text(
-        Pos2::new(ox + 496.0 * zoom, header_cy),
-        egui::Align2::RIGHT_CENTER,
+        Pos2::new(ox + card_w - padding, header_cy),
+        Align2::RIGHT_CENTER,
         &id_text,
-        egui::FontId::new(20.0 * zoom, egui::FontFamily::Proportional),
-        body_text_color,
-    );
-    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
-    painter.text(
-        Pos2::new(ox + 24.0 * zoom, header_cy),
-        egui::Align2::LEFT_CENTER,
-        &title,
-        egui::FontId::new(20.0 * zoom, egui::FontFamily::Proportional),
-        body_text_color,
+        FontId::new(20.0 * zoom, FontFamily::Proportional),
+        theme.text_muted,
     );
 
+    // === Контейнеры ===
+    let container_x = ox + padding;
+    let container_w = card_w - 2.0 * padding;
+
+    let mut y = oy + padding + header_h + gap;
+
+    // Контейнер ЗАПРОС.
+    let req_container_h =
+        container_total_height(object.requests.len(), container_header_h, row_h, gap, container_padding);
     let req_rect = Rect::from_min_size(
-        Pos2::new(container_x, oy + 72.0 * zoom),
-        Vec2::new(container_w, container_h),
+        Pos2::new(container_x, y),
+        Vec2::new(container_w, req_container_h),
     );
-    let req_hovered = container_hovered_dir == Some(Direction::Request);
     paint_metric_container(
         ui, painter, object, dynamic, theme, zoom,
-        req_hovered,
-        mouse_pos,
-        Direction::Request, &object.requests, req_rect,
-        container_header_h, row_w, row_h, container_x, &row_offsets,
+        mouse_pos, Direction::Request, &object.requests,
+        req_rect, container_header_h, row_h, gap, container_padding,
         &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
     );
+    y += req_container_h + gap;
 
+    // Контейнер РЕЗУЛЬТАТ.
+    let result_container_h =
+        container_total_height(object.results.len(), container_header_h, row_h, gap, container_padding);
     let result_rect = Rect::from_min_size(
-        Pos2::new(container_x, oy + 176.0 * zoom),
-        Vec2::new(container_w, container_h),
+        Pos2::new(container_x, y),
+        Vec2::new(container_w, result_container_h),
     );
-    let result_hovered = container_hovered_dir == Some(Direction::Result);
     paint_metric_container(
         ui, painter, object, dynamic, theme, zoom,
-        result_hovered,
-        mouse_pos,
-        Direction::Result, &object.results, result_rect,
-        container_header_h, row_w, row_h, container_x, &row_offsets,
+        mouse_pos, Direction::Result, &object.results,
+        result_rect, container_header_h, row_h, gap, container_padding,
         &mut add_hotspots, &mut menu_hotspots, &mut header_hotspots, &mut drag_hotspots,
     );
 
-    (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots)
+    ProcessPaintResult {
+        total_height,
+        add_hotspots,
+        menu_hotspots,
+        drag_hotspots,
+        header_hotspots,
+    }
 }
 
+/// Отрисовать контейнер показателей: шапка + строки.
 fn paint_metric_container(
     ui: &egui::Ui,
     painter: &Painter,
@@ -186,16 +195,14 @@ fn paint_metric_container(
     dynamic: &DynamicState,
     theme: &crate::Theme,
     zoom: f32,
-    container_hovered: bool,
     mouse_pos: Option<Pos2>,
     dir: Direction,
     entries: &[EntryGeom],
     container_rect: Rect,
     container_header_h: f32,
-    row_w: f32,
     row_h: f32,
-    _container_x: f32,
-    row_offsets: &[f32; 4],
+    gap: f32,
+    padding: f32,
     add_hotspots: &mut Vec<(String, Direction, Rect)>,
     menu_hotspots: &mut Vec<(String, Direction, Rect)>,
     header_hotspots: &mut Vec<(String, Direction, Rect)>,
@@ -203,112 +210,129 @@ fn paint_metric_container(
 ) {
     let cx = container_rect.min.x;
     let cy = container_rect.min.y;
+    let cw = container_rect.width();
+    let row_radius = ROW_BORDER_RADIUS_PX * zoom;
 
-    let header_rect = Rect::from_min_size(
-        Pos2::new(cx + 0.0 * zoom, cy + 0.0 * zoom),
-        Vec2::new(container_rect.width(), container_header_h),
-    );
-    painter.rect_filled(header_rect, 0.0, theme.card_bg);
+    // Фон контейнера.
+    painter.rect_filled(container_rect, 0.0, theme.card_bg);
 
-    let border_color = if container_hovered { theme.text } else { theme.card_border };
+    // Граница контейнера.
     painter.rect_stroke(
         container_rect,
         0.0,
-        Stroke::new(theme.object_border_width * zoom, border_color),
-        egui::StrokeKind::Middle,
+        Stroke::new(1.0 * zoom, theme.card_border),
+        StrokeKind::Middle,
     );
 
-    let status = worst_status(entries, dynamic);
-    let dot_color = status_dot_color(status, dir, theme);
+    // === Шапка контейнера ===
+    let header_rect = Rect::from_min_size(
+        Pos2::new(cx, cy),
+        Vec2::new(cw, container_header_h),
+    );
+    let header_cy = cy + container_header_h / 2.0;
+
+    let icon_size = ICON_SIZE_PX * zoom;
+
+    // Иконка типа контейнера (package-check).
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(cx + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
+        Lucide::PackageCheck,
+        theme.text,
+    );
+
+    // Текст шапки: "ЗАПРОС (N) СТАТУС" / "РЕЗУЛЬТАТ (N) СТАТУС".
     let label = match dir {
         Direction::Request => "ЗАПРОС",
         Direction::Result => "РЕЗУЛЬТАТ",
     };
+    let status = worst_status(entries, dynamic);
     let status_text = status_label_ru(status, dir);
-    let problem_count = entries.iter().filter(|e| dynamic.status[e.ix as usize] != StatusCode::Ok).count();
-    let status_full = if problem_count > 0 {
-        format!("{} ({})", status_text, problem_count)
-    } else {
-        status_text.to_string()
-    };
-    let header_text_color = if container_hovered { theme.text } else { theme.text_muted };
-    let header_cy = cy + container_header_h / 2.0;
+    let header_text = format!("{} ({}) {}", label, entries.len(), status_text);
 
-    let header_symbol_color = dot_color;
+    // Текст шапки (занимает пространство между иконками).
+    let header_text_x = cx + padding + icon_size + 8.0 * zoom;
+    painter.text(
+        Pos2::new(header_text_x, header_cy),
+        Align2::LEFT_CENTER,
+        &header_text,
+        FontId::new(18.0 * zoom, FontFamily::Proportional),
+        theme.text,
+    );
+
+    // Иконка Ожидание (clock-exclamation-point) — перед иконкой избытка.
+    let waiting_icon_x = cx + cw - padding - icon_size - icon_size / 2.0 - 8.0 * zoom;
     paint_lucide(
         ui,
-        Rect::from_center_size(Pos2::new(cx + 24.0 * zoom, header_cy), Vec2::splat(16.0 * zoom)),
-        Lucide::Diamond,
-        header_symbol_color,
+        Rect::from_center_size(Pos2::new(waiting_icon_x, header_cy), Vec2::splat(icon_size)),
+        Lucide::Clock,
+        theme.text_muted,
     );
 
-    let count_text = format!("{} ({}) {}", label, entries.len(), status_full);
-    painter.text(
-        Pos2::new(cx + 48.0 * zoom, header_cy),
-        egui::Align2::LEFT_CENTER,
-        &count_text,
-        egui::FontId::new(18.0 * zoom, egui::FontFamily::Proportional),
-        header_text_color,
+    // Иконка Избыток (square-exclamation-point) — крайнюю справа.
+    let surplus_icon_x = cx + cw - padding - icon_size / 2.0;
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(surplus_icon_x, header_cy), Vec2::splat(icon_size)),
+        Lucide::SquareExclamationPoint,
+        theme.text_muted,
     );
 
+    // Горячая зона кнопки меню ≡ (слева, поверх иконки типа).
     let menu_rect = Rect::from_min_size(
-        Pos2::new(cx + 8.0 * zoom, cy + 8.0 * zoom),
-        Vec2::new(32.0 * zoom, container_header_h - 16.0 * zoom),
+        Pos2::new(cx + padding, cy + padding),
+        Vec2::new(32.0 * zoom, container_header_h - 2.0 * padding),
     );
     menu_hotspots.push((object.id.clone(), dir, menu_rect));
     header_hotspots.push((object.id.clone(), dir, header_rect));
 
-    let visible = entries.len().min(MAX_VISIBLE_METRICS);
-    let show_add = visible < MAX_VISIBLE_METRICS;
+    // === Показатели (строки) ===
+    let mut row_y = cy + padding + container_header_h;
 
-    let sym_size = (16.0 * zoom).max(10.0 * zoom);
-    let (left_icon, right_icon) = match dir {
-        Direction::Request => (Lucide::ChevronRight, Lucide::ChevronLeft),
-        Direction::Result => (Lucide::ChevronLeft, Lucide::ChevronRight),
-    };
-
-    for (i, entry) in entries.iter().enumerate().take(MAX_VISIBLE_METRICS) {
-        let row_y = cy + row_offsets[i] * zoom;
-        let row_x = cx + 8.0 * zoom;
-        let row_rect = Rect::from_min_size(Pos2::new(row_x, row_y), Vec2::new(row_w, row_h));
+    for entry in entries.iter() {
+        let row_rect = Rect::from_min_size(
+            Pos2::new(cx + padding, row_y),
+            Vec2::new(cw - 2.0 * padding, row_h),
+        );
         let row_hovered = mouse_pos.map_or(false, |pos| row_rect.contains(pos));
+
+        // Фон строки при наведении.
         if row_hovered {
             painter.rect_filled(row_rect, 0.0, theme.card_bg);
         }
+
+        // Граница строки.
         let row_border_color = if row_hovered { theme.text } else { theme.card_border };
         painter.rect_stroke(
             row_rect,
-            0.0,
-            Stroke::new(theme.object_border_width * zoom, row_border_color),
-            egui::StrokeKind::Middle,
+            row_radius,
+            Stroke::new(1.0 * zoom, row_border_color),
+            StrokeKind::Middle,
         );
-        let row_status = dynamic.status[entry.ix as usize];
-        let row_dot_color = status_dot_color(row_status, dir, theme);
-        let cy_row = row_rect.center().y;
 
+        let cy_row = row_rect.center().y;
+        let row_inner_x = cx + padding + ROW_PADDING_X_PX * zoom;
+        let row_inner_w = cw - 2.0 * padding - 2.0 * ROW_PADDING_X_PX * zoom;
+
+        // Иконка типа показателя (numbers) — слева.
         paint_lucide(
             ui,
-            Rect::from_center_size(Pos2::new(cx + 24.0 * zoom, cy_row), Vec2::splat(sym_size)),
-            left_icon,
-            row_dot_color,
+            Rect::from_center_size(Pos2::new(row_inner_x, cy_row), Vec2::splat(icon_size)),
+            Lucide::List,
+            theme.text_muted,
         );
-        paint_lucide(
-            ui,
-            Rect::from_center_size(
-                Pos2::new(row_x + row_w - 24.0 * zoom, cy_row),
-                Vec2::splat(sym_size),
-            ),
-            right_icon,
-            row_dot_color,
-        );
-        let row_text_color = if row_hovered { theme.text } else { theme.text_muted };
+
+        // Имя показателя (flex-grow 1).
+        let name_x = row_inner_x + icon_size + 8.0 * zoom;
         painter.text(
-            Pos2::new(row_x + TEXT_X_PAD * zoom, cy_row),
-            egui::Align2::LEFT_CENTER,
+            Pos2::new(name_x, cy_row),
+            Align2::LEFT_CENTER,
             &entry.name,
-            egui::FontId::new(16.0 * zoom, egui::FontFamily::Proportional),
-            row_text_color,
+            FontId::new(16.0 * zoom, FontFamily::Proportional),
+            if row_hovered { theme.text } else { theme.text_muted },
         );
+
+        // Значение + единица измерения (справа, перед иконками статуса).
         let unit = if entry.unit.is_empty() {
             String::new()
         } else {
@@ -319,27 +343,56 @@ fn paint_metric_container(
             Direction::Result => entry.value.clone(),
         };
         let value_text = format!("{:.0}{}", displayed_value, unit);
+
+        // Позиция значения: справа, перед иконками статуса.
+        let status_icons_w = 2.0 * icon_size + 8.0 * zoom;
+        let value_x = row_inner_x + row_inner_w - status_icons_w;
         painter.text(
-            Pos2::new(row_x + row_w - TEXT_X_PAD * zoom, cy_row),
-            egui::Align2::RIGHT_CENTER,
+            Pos2::new(value_x, cy_row),
+            Align2::RIGHT_CENTER,
             &value_text,
-            egui::FontId::new(16.0 * zoom, egui::FontFamily::Proportional),
-            row_text_color,
+            FontId::new(16.0 * zoom, FontFamily::Proportional),
+            if row_hovered { theme.text } else { theme.text_muted },
         );
 
+        // Иконка Ожидание (clock-exclamation-point).
+        let waiting_x = row_inner_x + row_inner_w - icon_size - 8.0 * zoom;
+        paint_lucide(
+            ui,
+            Rect::from_center_size(Pos2::new(waiting_x, cy_row), Vec2::splat(icon_size)),
+            Lucide::Clock,
+            theme.text_muted,
+        );
+
+        // Иконка Избыток (square-exclamation-point).
+        let surplus_x = row_inner_x + row_inner_w - icon_size / 2.0;
+        paint_lucide(
+            ui,
+            Rect::from_center_size(Pos2::new(surplus_x, cy_row), Vec2::splat(icon_size)),
+            Lucide::SquareExclamationPoint,
+            theme.text_muted,
+        );
+
+        // Горячая зона перетаскивания строки.
         drag_hotspots.push((object.id.clone(), dir, entry.name.clone(), row_rect));
+
+        row_y += row_h + gap;
     }
 
+    // Строка "+ Добавить показатель" если есть свободные слоты.
+    let visible = entries.len().min(MAX_VISIBLE_METRICS);
+    let show_add = visible < MAX_VISIBLE_METRICS;
     if show_add {
-        let add_y = cy + row_offsets[visible] * zoom;
-        let add_rect = Rect::from_min_size(Pos2::new(cx + 8.0 * zoom, add_y), Vec2::new(row_w, row_h));
-        let add_text = "+ Добавить показатель";
-        let add_color = if container_hovered { theme.text } else { theme.text_muted };
+        let add_rect = Rect::from_min_size(
+            Pos2::new(cx + padding, row_y),
+            Vec2::new(cw - 2.0 * padding, row_h),
+        );
+        let add_color = theme.text_muted;
         painter.text(
             add_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            add_text,
-            egui::FontId::new(16.0 * zoom, egui::FontFamily::Proportional),
+            Align2::CENTER_CENTER,
+            "+ Добавить показатель",
+            FontId::new(16.0 * zoom, FontFamily::Proportional),
             add_color,
         );
         add_hotspots.push((object.id.clone(), dir, add_rect));

@@ -2,12 +2,12 @@
 //! Uses polygram_core::ObjectGeom for object geometry with request/result containers.
 
 mod icons;
-mod paint;
+pub mod paint;
 mod paint_department;
 pub mod theme;
 
 pub use icons::paint_lucide;
-pub use paint::{paint_add_row, paint_dashed_rect, paint_process};
+pub use paint::{paint_add_row, paint_dashed_rect, paint_process, ProcessPaintResult};
 pub use paint_department::paint_department_frame;
 pub use theme::{status_dot_color, status_label_ru, Theme};
 pub use polygram_core::types::{Direction, NodeKind, StatusCode};
@@ -285,54 +285,54 @@ impl Canvas {
                 continue;
             }
             let r = &object.rect;
-            let mut rect_px = Rect::from_min_size(
-                self.cell_to_screen(r.x, r.y),
-                Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-            );
-            // Process always drawn with fixed CSS geometry 256×256px.
-            let card_w = 256.0 * zoom;
-            let card_h = 256.0 * zoom;
-            rect_px = Rect::from_min_size(rect_px.min, Vec2::new(card_w, card_h));
+            let screen_pos = self.cell_to_screen(r.x, r.y);
+            // Процесс: ширина фиксирована 512px (CSS спецификация), высота динамическая.
+            let card_w = 512.0 * zoom;
+            let card_h = paint::object::process_total_height(object, dynamic, zoom, card_w);
+            let rect_px = Rect::from_min_size(screen_pos, Vec2::new(card_w, card_h));
             if !rect_px.intersects(clip_rect) {
                 continue;
             }
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
             let mouse_pos = pointer_pos;
-            let (add_hotspots, menu_hotspots, drag_hotspots, header_hotspots) = paint_process(
+            let result = paint_process(
                 ui,
                 painter,
                 object,
                 dynamic,
                 &self.theme,
-                rect_px,
-                cell_px,
+                rect_px.min.x,
+                rect_px.min.y,
+                card_w,
                 zoom,
                 mouse_pos,
                 is_selected,
             );
-            self.add_metric_hotspots.extend(add_hotspots);
-            self.container_menu_hotspots.extend(menu_hotspots);
-            self.drag_metric_hotspots.extend(drag_hotspots);
-            self.container_header_hotspots.extend(header_hotspots);
+            self.add_metric_hotspots.extend(result.add_hotspots);
+            self.container_menu_hotspots.extend(result.menu_hotspots);
+            self.drag_metric_hotspots.extend(result.drag_hotspots);
+            self.container_header_hotspots.extend(result.header_hotspots);
         }
     }
 
     /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.
     /// Сначала проверяются процессы (с фиксированной геометрией 256×256px), затем отделы
     /// (возвращается самый вложенный — с наименьшей площадью rect).
-    pub fn object_at_any<'a>(&'a self, screen_pos: Pos2) -> Option<&'a str> {
+    pub fn object_at_any<'a>(&'a self, screen_pos: Pos2, dynamic: &DynamicState) -> Option<&'a str> {
         let cell_px = self.cell_px();
         let zoom = self.camera.zoom;
 
-        // Сначала процессы (фиксированная CSS-геометрия 256×256px).
+        // Сначала процессы (динамическая CSS-геометрия).
         for object in &self.objects {
             if object.kind != NodeKind::Process {
                 continue;
             }
             let r = &object.rect;
+            let card_w = 512.0 * zoom;
+            let card_h = paint::object::process_total_height(object, dynamic, zoom, card_w);
             let rect_px = Rect::from_min_size(
                 self.cell_to_screen(r.x, r.y),
-                Vec2::new(256.0 * zoom, 256.0 * zoom),
+                Vec2::new(card_w, card_h),
             );
             if rect_px.contains(screen_pos) {
                 return Some(&object.id);

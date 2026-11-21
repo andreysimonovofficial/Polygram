@@ -24,7 +24,7 @@ pub fn inline_rename_editor(app: &mut PolygramApp, ctx: &Context, _published: &P
     // по вертикали — центр шапки (header_h = 28px).
     let header_h = 28.0 * zoom;
     let header_cy = screen_min.y + 4.0 * zoom + header_h / 2.0;
-    let card_w = 256.0 * zoom;
+    let card_w = 512.0 * zoom;
     let edit_rect = Rect::from_min_size(
         Pos2::new(screen_min.x + 24.0 * zoom, header_cy - (10.0 * zoom) / 2.0),
         Vec2::new((card_w - 48.0 * zoom).max(80.0), 14.0 * zoom),

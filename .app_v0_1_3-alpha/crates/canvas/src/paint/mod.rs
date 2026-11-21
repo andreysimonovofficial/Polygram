@@ -12,5 +12,5 @@ pub mod object;
 pub mod row;
 pub mod status;
 
-pub use object::{paint_dashed_rect, paint_process};
+pub use object::{paint_dashed_rect, paint_process, ProcessPaintResult};
 pub use row::paint_add_row;
