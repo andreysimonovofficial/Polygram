@@ -119,7 +119,7 @@ pub fn paint_process(
     paint_lucide(
         ui,
         Rect::from_center_size(Pos2::new(ox + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
-        Lucide::BookOpen,
+        Lucide::BookUp2,
         theme.text,
     );
 

@@ -1,61 +1,79 @@
-use crate::theme::Theme;
-use egui::{Painter, Pos2, Rect, Stroke, Vec2};
-use polygram_core::ObjectGeom;
-use polygram_core::types::StatusCode;
+//! Рисование рамки отдела по CSS спецификации.
+//! Отдел: background #1E1E1E, border #373839, border-radius 8px, padding 8px.
+//! Шапка: высота 80px, иконка graph-hub, шрифт 22px.
 
-/// Нарисовать рамку отдела: заливка фона по агрегированному статусу + внешняя граница + шапка с названием.
+use crate::theme::Theme;
+use crate::icons::paint_lucide;
+use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind, Color32};
+use polygram_core::ObjectGeom;
+use egui_lucide::Lucide;
+
+/// Нарисовать рамку отдела по CSS спецификации.
 pub fn paint_department_frame(
     painter: &Painter,
+    ui: &egui::Ui,
     object: &ObjectGeom,
     rect_px: Rect,
-    cell_px: f32,
     zoom: f32,
     theme: &Theme,
-    status: StatusCode,
     is_highlighted: bool,
+    process_count: usize,
 ) {
-    // Заливка фона отдела цветом его агрегированного статуса.
-    painter.rect_filled(
-        rect_px,
-        theme.object_corner_radius * zoom,
-        theme.status_fill_color(status),
-    );
+    // CSS значения (масштабируются под zoom).
+    let corner_radius = 8.0 * zoom;
+    let border_width = 1.0 * zoom;
+    let header_h = 80.0 * zoom;
+    let icon_size = 16.0 * zoom;
+    let padding = 8.0 * zoom;
+    let gap = 8.0 * zoom;
 
-    // Контур отдела.
+    // Фон отдела #1E1E1E.
+    let bg_color = if is_highlighted { theme.accent } else { Color32::from_rgb(30, 30, 30) };
+    painter.rect_filled(rect_px, corner_radius, bg_color);
+
+    // Контур отдела #373839.
     let border_color = if is_highlighted {
         theme.text
     } else {
-        theme.object_border
-    };
-    let border_width = if is_highlighted {
-        theme.object_border_hover_width * zoom
-    } else {
-        theme.object_border_width * zoom
+        Color32::from_rgb(55, 56, 57)
     };
     painter.rect_stroke(
         rect_px,
-        theme.object_corner_radius * zoom,
+        corner_radius,
         Stroke::new(border_width, border_color),
-        egui::StrokeKind::Middle,
+        StrokeKind::Middle,
     );
 
-    // Шапка отдела — только текст, без заливки фона.
-    let header_h = cell_px * theme.object_header_height_cells;
-    let title = format!("Отдел '{}'", object.name);
-    painter.text(
-        rect_px.min + Vec2::new(12.0 * zoom, header_h / 2.0),
-        egui::Align2::LEFT_CENTER,
-        &title,
-        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+    // === Шапка отдела ===
+    let header_cy = rect_px.min.y + header_h / 2.0;
+
+    // Иконка типа отдела (graph-hub).
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(rect_px.min.x + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
+        Lucide::GraphHub,
         theme.text,
     );
 
-    let id_text = format!("#{}", object.ix);
+    // Название отдела: "{Имя} ({Кол. проц})".
+    let title = format!("'{}' ({})", object.name, process_count);
+    let title_x = rect_px.min.x + padding + icon_size + gap;
     painter.text(
-        Pos2::new(rect_px.max.x - 8.0 * zoom, rect_px.min.y + header_h / 2.0),
-        egui::Align2::RIGHT_CENTER,
+        Pos2::new(title_x, header_cy),
+        Align2::LEFT_CENTER,
+        &title,
+        FontId::new(22.0 * zoom, FontFamily::Proportional),
+        theme.text,
+    );
+
+    // #ID отдела (справа).
+    let id_text = format!("#{}", object.id);
+    let id_right = rect_px.max.x - padding - icon_size - gap;
+    painter.text(
+        Pos2::new(id_right, header_cy),
+        Align2::RIGHT_CENTER,
         &id_text,
-        egui::FontId::new(theme.text_size * zoom, egui::FontFamily::Proportional),
+        FontId::new(22.0 * zoom, FontFamily::Proportional),
         theme.text_muted,
     );
 }

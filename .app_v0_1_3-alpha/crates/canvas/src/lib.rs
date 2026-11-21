@@ -267,15 +267,19 @@ impl Canvas {
             }
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
             let is_highlighted = is_selected || pointer_pos.map_or(false, |p| rect_px.contains(p));
+            // Подсчитать процессы внутри отдела.
+            let process_count = self.objects.iter()
+                .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
+                .count();
             paint_department_frame(
                 painter,
+                ui,
                 object,
                 rect_px,
-                cell_px,
                 zoom,
                 &self.theme,
-                StatusCode::Ok,
                 is_highlighted,
+                process_count,
             );
         }
 
