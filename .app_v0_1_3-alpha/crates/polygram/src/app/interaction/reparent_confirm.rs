@@ -80,6 +80,12 @@ pub fn handle_reparent_confirm(app: &mut PolygramApp, ctx: &Context, published: 
         });
         if overlaps {
             // Поиск свободной клетки рядом с drop_cell внутри целевого отдела.
+            let dept_rect = published
+                .geometry
+                .objects
+                .iter()
+                .find(|o| o.id == dept_id && o.kind == NodeKind::Department)
+                .map(|o| o.rect);
             let mut found = None;
             for r in 1..=12i32 {
                 for dx in -r..=r {
@@ -89,6 +95,16 @@ pub fn handle_reparent_confirm(app: &mut PolygramApp, ctx: &Context, published: 
                         }
                         let cx = final_cell.0 + dx;
                         let cy = final_cell.1 + dy;
+                        // Клетка должна быть внутри внутренней области отдела.
+                        if let Some(dr) = dept_rect {
+                            if cx < dr.x + 1
+                                || cy < dr.y + 2
+                                || cx + object_size.0 > dr.x + dr.w - 1
+                                || cy + object_size.1 > dr.y + dr.h - 1
+                            {
+                                continue;
+                            }
+                        }
                         let r_test = CoreRect::new(cx, cy, object_size.0, object_size.1);
                         let free = !published.geometry.objects.iter().any(|o| {
                             if o.id == object_id {

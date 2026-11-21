@@ -6,13 +6,46 @@ use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::Canvas;
 use polygram_core::{Command, Engine, runtime::Published, types::{Direction, NodeKind}};
 use polygram_core::drag_domain::{compute_drag_preview, DragPreviewInput};
-use polygram_core::geometry::Geometry;
+use polygram_core::geometry::{Geometry, ObjectGeom};
 use polygram_core::layout::Rect as CoreRect;
 
 mod dialogs;
 mod icons;
 mod departments;
 mod interaction;
+
+/// Найти свободную клетку внутри отдела для размещения объекта размером w×h клеток.
+/// Поиск ограничивается внутренней областью отдела (под шапкой, между детьми).
+fn find_free_cell_in_dept(
+    objects: &[ObjectGeom],
+    dept_id: &str,
+    w: i32,
+    h: i32,
+    exclude_id: &str,
+) -> Option<(i32, i32)> {
+    let dept = objects.iter().find(|o| o.id == dept_id && o.kind == NodeKind::Department)?;
+    // Внутренняя область отдела: отступ 1 клетка по бокам, шапка занимает верхнюю строку.
+    let inner_x0 = dept.rect.x + 1;
+    let inner_y0 = dept.rect.y + 2;
+    let inner_x1 = dept.rect.x + dept.rect.w - 1;
+    let inner_y1 = dept.rect.y + dept.rect.h - 1;
+    if inner_x1 < inner_x0 + w || inner_y1 < inner_y0 + h {
+        return None;
+    }
+    // Сначала пробуем клетки рядом с верхним левым углу внутренней области, по строкам.
+    for y in inner_y0..=inner_y1.saturating_sub(h) {
+        for x in inner_x0..=inner_x1.saturating_sub(w) {
+            let r = CoreRect::new(x, y, w, h);
+            let free = objects.iter().all(|o| {
+                o.id == exclude_id || o.id == dept_id || !o.rect.overlaps(&r)
+            });
+            if free {
+                return Some((x, y));
+            }
+        }
+    }
+    None
+}
 
 /// Главное состояние приложения Polygram.
 pub struct PolygramApp {
@@ -295,7 +328,12 @@ impl PolygramApp {
         self.update_drag_object(cursor);
         let (over, ghost) = self.process_drag_preview(cursor);
         self.drag_over = over.clone();
-        self.drag_ghost = ghost;
+        // Призрачную копию не рисуем над отделом — процесс вставляется в отдел при подтверждении дропа,
+        // отдел растянется под него. Призрак только для свободного перемещения вне отделов.
+        let is_over_dept = over.as_ref().map_or(false, |id| {
+            self.canvas.objects.iter().any(|o| o.id == *id && o.kind == NodeKind::Department)
+        });
+        self.drag_ghost = if is_over_dept { None } else { ghost };
 
         let painter = ui.painter();
         let cell_px = self.canvas.cell_px();
@@ -345,8 +383,23 @@ impl PolygramApp {
             return;
         };
 
-        // Конечная клетка: призрачная копия, если есть, иначе текущая позиция объекта.
-        let drop_cell = self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y));
+        // Конечная клетка: для отдела — свободная клетка внутри отдела,
+        // иначе призрачная копия, либо текущая позиция объекта.
+        let drop_cell = if self.drag_over.as_ref().map_or(false, |dept_id| {
+            self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+        }) {
+            let object_size = (obj.rect.w, obj.rect.h);
+            find_free_cell_in_dept(
+                &self.canvas.objects,
+                self.drag_over.as_deref().unwrap(),
+                object_size.0,
+                object_size.1,
+                &drag_id,
+            )
+            .unwrap_or((obj.rect.x, obj.rect.y))
+        } else {
+            self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
+        };
 
         // Если процесс над отделом — открыть модальное подтверждение переноса.
         if let Some(dept_id) = &self.drag_over {
