@@ -2,7 +2,7 @@
 //! Реализует динамическую геометрию по CSS спецификации:
 //! Процесс растягивается под контейнеры, Контейнер растягивается под показатели.
 
-use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind};
+use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind, Color32};
 use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
 
@@ -99,16 +99,15 @@ pub fn paint_process(
 
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, total_height));
 
-    // Фон карточки процесса.
-    painter.rect_filled(card_rect, process_radius, theme.card_bg);
+    // Фон карточки процесса #202020.
+    painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));
 
-    // Граница карточки процесса.
-    let border_color = if is_selected { theme.text } else { theme.card_border };
+    // Граница карточки процесса #373839.
     let border_width = if is_selected { 2.0 * zoom } else { 1.0 * zoom };
     painter.rect_stroke(
         card_rect,
         process_radius,
-        Stroke::new(border_width, border_color),
+        Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
         StrokeKind::Middle,
     );
 
@@ -235,15 +234,15 @@ fn paint_metric_container(
     let icon_size = ICON_SIZE_PX * zoom;
     let row_pad = ROW_PADDING_X_PX * zoom;
 
-    // Фон контейнера.
+    // Фон контейнера #222222.
     let container_radius = CONTAINER_BORDER_RADIUS_PX * zoom;
-    painter.rect_filled(container_rect, container_radius, theme.card_bg);
+    painter.rect_filled(container_rect, container_radius, Color32::from_rgb(34, 34, 34));
 
-    // Граница контейнера.
+    // Граница контейнера #373839.
     painter.rect_stroke(
         container_rect,
         container_radius,
-        Stroke::new(1.0 * zoom, theme.card_border),
+        Stroke::new(1.0 * zoom, Color32::from_rgb(55, 56, 57)),
         StrokeKind::Middle,
     );
 
@@ -321,17 +320,14 @@ fn paint_metric_container(
         );
         let row_hovered = mouse_pos.map_or(false, |pos| row_rect.contains(pos));
 
-        // Фон строки при наведении.
-        if row_hovered {
-            painter.rect_filled(row_rect, 0.0, theme.card_bg);
-        }
+        // Фон строки показателя #252525 (всегда).
+        painter.rect_filled(row_rect, row_border_rad(zoom), Color32::from_rgb(37, 37, 37));
 
-        // Граница строки.
-        let row_border_color = if row_hovered { theme.text } else { theme.card_border };
+        // Граница строки #373839 (всегда).
         painter.rect_stroke(
             row_rect,
             row_border_rad(zoom),
-            Stroke::new(1.0 * zoom, row_border_color),
+            Stroke::new(1.0 * zoom, Color32::from_rgb(55, 56, 57)),
             StrokeKind::Middle,
         );
 
@@ -416,17 +412,14 @@ fn paint_metric_container(
         );
         let add_hovered = mouse_pos.map_or(false, |pos| add_rect.contains(pos));
 
-        // Фон при наведении.
-        if add_hovered {
-            painter.rect_filled(add_rect, 0.0, theme.card_bg);
-        }
+        // Фон строки "+ Добавить показатель" #252525 (всегда).
+        painter.rect_filled(add_rect, row_border_rad(zoom), Color32::from_rgb(37, 37, 37));
 
-        // Граница строки.
-        let add_border_color = if add_hovered { theme.text } else { theme.card_border };
+        // Граница строки #373839 (всегда).
         painter.rect_stroke(
             add_rect,
             row_border_rad(zoom),
-            Stroke::new(1.0 * zoom, add_border_color),
+            Stroke::new(1.0 * zoom, Color32::from_rgb(55, 56, 57)),
             StrokeKind::Middle,
         );
 
