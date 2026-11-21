@@ -115,11 +115,11 @@ pub fn paint_process(
     // === Шапка процесса ===
     let header_cy = oy + header_h / 2.0;
 
-    // Иконка типа процесса (алмаз).
+    // Иконка типа процесса (book-up-2).
     paint_lucide(
         ui,
         Rect::from_center_size(Pos2::new(ox + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
-        Lucide::Diamond,
+        Lucide::BookOpen,
         theme.text,
     );
 
@@ -407,7 +407,7 @@ fn paint_metric_container(
     }
 
     // Строка "+ Добавить показатель" только если контейнер пуст.
-    // Стилизуется как строка показателя: рамка, паддинг, иконка слева, текст слева.
+    // Стилизуется как строка показателя: рамка, паддинг, текст по центру.
     let show_add = entries.is_empty();
     if show_add {
         let add_rect = Rect::from_min_size(
@@ -432,20 +432,10 @@ fn paint_metric_container(
 
         let cy_row = add_rect.center().y;
 
-        // Иконка типа показателя (plus).
-        let content_left = cx + padding + row_pad;
-        let icon_cx = content_left + icon_size / 2.0;
-        paint_lucide(
-            ui,
-            Rect::from_center_size(Pos2::new(icon_cx, cy_row), Vec2::splat(icon_size)),
-            Lucide::Plus,
-            theme.text_muted,
-        );
-
-        // Текст "+ Добавить показатель" — слева, после иконки + gap.
+        // Текст "+ Добавить показатель" — по центру строки.
         painter.text(
-            Pos2::new(content_left + icon_size + gap, cy_row),
-            Align2::LEFT_CENTER,
+            Pos2::new(add_rect.center().x, cy_row),
+            Align2::CENTER_CENTER,
             "+ Добавить показатель",
             FontId::new(16.0 * zoom, FontFamily::Proportional),
             if add_hovered { theme.text } else { theme.text_muted },
