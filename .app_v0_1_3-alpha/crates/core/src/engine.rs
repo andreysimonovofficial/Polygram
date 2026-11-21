@@ -178,44 +178,100 @@ impl Engine {
             .live_objects()
             .map(|oix| {
                 let o = self.hier.object(oix);
-                let requests: Vec<EntryGeom> = o
-                    .requests
-                    .iter()
-                    .filter_map(|&e| {
-                        if self.hier.object_metric(e).alive {
-                            let meta = self.hier.object_metric(e);
-                            let md = self.hier.metric_def(meta.metric_def);
-                            Some(EntryGeom {
-                                ix: e.0,
-                                name: meta.ext_id.clone(),
-                                value: self.vals.value[e.idx()].clone(),
-                                supplied: self.vals.supplied[e.idx()].clone(),
-                                unit: md.unit.clone(),
-                            })
-                        } else {
-                            None
+                // Собираем метрики из дочерних объектов (Container → Metric).
+                let mut requests: Vec<EntryGeom> = Vec::new();
+                let mut results: Vec<EntryGeom> = Vec::new();
+                // Для Процесса: собираем метрики из всех вложенных Контейнеров.
+                // Для Контейнера: собираем метрики из прямых дочерних объектов-метрик.
+                // Для Отдела и Показателя: нет метрик.
+                let metric_children: Vec<ObjectIx> = match o.kind {
+                    NodeKind::Process => o
+                        .children
+                        .iter()
+                        .filter(|&&c| self.hier.objects[c.idx()].kind == NodeKind::Container)
+                        .copied()
+                        .collect(),
+                    NodeKind::Container => o
+                        .children
+                        .iter()
+                        .filter(|&&c| self.hier.objects[c.idx()].kind == NodeKind::Metric)
+                        .copied()
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                for &cix in &metric_children {
+                    let c = self.hier.object(cix);
+                    if c.kind == NodeKind::Container {
+                        // Рекурсивно собираем метрики из контейнера.
+                        for &mc in &c.children {
+                            if self.hier.objects[mc.idx()].kind == NodeKind::Metric {
+                                if let Some(e) = self.hier.objects[mc.idx()].entry_ix {
+                                    if self.hier.object_metric(e).alive {
+                                        let meta = self.hier.object_metric(e);
+                                        let md = self.hier.metric_def(meta.metric_def);
+                                        let geom = EntryGeom {
+                                            ix: e.0,
+                                            name: meta.ext_id.clone(),
+                                            value: self.vals.value[e.idx()].clone(),
+                                            supplied: self.vals.supplied[e.idx()].clone(),
+                                            unit: md.unit.clone(),
+                                        };
+                                        match meta.direction {
+                                            Direction::Request => requests.push(geom),
+                                            Direction::Result => results.push(geom),
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    })
-                    .collect();
-                let results: Vec<EntryGeom> = o
-                    .results
-                    .iter()
-                    .filter_map(|&e| {
-                        if self.hier.object_metric(e).alive {
-                            let meta = self.hier.object_metric(e);
-                            let md = self.hier.metric_def(meta.metric_def);
-                            Some(EntryGeom {
-                                ix: e.0,
-                                name: meta.ext_id.clone(),
-                                value: self.vals.value[e.idx()].clone(),
-                                supplied: self.vals.supplied[e.idx()].clone(),
-                                unit: md.unit.clone(),
-                            })
-                        } else {
-                            None
+                    } else if c.kind == NodeKind::Metric {
+                        // Прямая метрика (обратная совместимость).
+                        if let Some(e) = c.entry_ix {
+                            if self.hier.object_metric(e).alive {
+                                let meta = self.hier.object_metric(e);
+                                let md = self.hier.metric_def(meta.metric_def);
+                                let geom = EntryGeom {
+                                    ix: e.0,
+                                    name: meta.ext_id.clone(),
+                                    value: self.vals.value[e.idx()].clone(),
+                                    supplied: self.vals.supplied[e.idx()].clone(),
+                                    unit: md.unit.clone(),
+                                };
+                                match meta.direction {
+                                    Direction::Request => requests.push(geom),
+                                    Direction::Result => results.push(geom),
+                                }
+                            }
                         }
-                    })
-                    .collect();
+                    }
+                }
+                // Также включаем прямые записи (обратная совместимость с Process/Department).
+                for &e in &o.requests {
+                    if self.hier.object_metric(e).alive {
+                        let meta = self.hier.object_metric(e);
+                        let md = self.hier.metric_def(meta.metric_def);
+                        requests.push(EntryGeom {
+                            ix: e.0,
+                            name: meta.ext_id.clone(),
+                            value: self.vals.value[e.idx()].clone(),
+                            supplied: self.vals.supplied[e.idx()].clone(),
+                            unit: md.unit.clone(),
+                        });
+                    }
+                }
+                for &e in &o.results {
+                    if self.hier.object_metric(e).alive {
+                        let meta = self.hier.object_metric(e);
+                        let md = self.hier.metric_def(meta.metric_def);
+                        results.push(EntryGeom {
+                            ix: e.0,
+                            name: meta.ext_id.clone(),
+                            value: self.vals.value[e.idx()].clone(),
+                            supplied: self.vals.supplied[e.idx()].clone(),
+                            unit: md.unit.clone(),
+                        });
+                    }
+                }
                 let rect = self.layout.rect_of(oix);
                 ObjectGeom {
                     ix: oix.0,
@@ -223,6 +279,7 @@ impl Engine {
                     name: o.name.clone(),
                     kind: o.kind,
                     rect,
+                    direction: o.direction,
                     requests,
                     results,
                     parent: o.parent.map(|p| self.hier.object(p).id.clone()),

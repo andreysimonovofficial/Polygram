@@ -343,6 +343,9 @@ pub fn compute_drag_preview(input: &DragPreviewInput) -> DragPreview {
                         ghost = find_ghost_cell(geometry, under_obj, w, h, 2, dragged_id, None);
                     }
                 }
+                NodeKind::Container | NodeKind::Metric => {
+                    // Контейнер и Показатель не принимают вложенность при драге.
+                }
             }
         }
     }

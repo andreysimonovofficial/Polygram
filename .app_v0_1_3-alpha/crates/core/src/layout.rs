@@ -44,8 +44,10 @@ impl Rect {
 
 pub fn footprint_for(kind: NodeKind, n_req: usize, n_out: usize) -> (u16, u16) {
     match kind {
-        NodeKind::Process => (16, 16),
+        NodeKind::Process => (32, 17), // 512×280 px при cell_size=16px
         NodeKind::Department => (NODE_W, (1 + n_req.max(n_out).max(29)) as u16),
+        NodeKind::Container => (31, 6), // 496×96 px при cell_size=16px
+        NodeKind::Metric => (30, 2),    // 480×32 px при cell_size=16px
     }
 }
 

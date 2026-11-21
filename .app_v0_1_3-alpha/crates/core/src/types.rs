@@ -126,7 +126,7 @@ pub enum Direction {
     Result,
 }
 
-/// Вид объекта: Процесс или Отдел.
+/// Вид узла иерархии: Отдел → Процесс → Контейнер → Показатель.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -134,6 +134,8 @@ pub enum NodeKind {
     #[default]
     Process,
     Department,
+    Container,
+    Metric,
 }
 
 impl NodeKind {
@@ -141,6 +143,40 @@ impl NodeKind {
         match self {
             Self::Process => "Процесс",
             Self::Department => "Отдел",
+            Self::Container => "Контейнер",
+            Self::Metric => "Показатель",
+        }
+    }
+
+    /// Может ли узел иметь дочерние объекты (кроме листового Показателя).
+    pub fn can_have_children(self) -> bool {
+        matches!(self, Self::Department | Self::Process | Self::Container)
+    }
+}
+
+/// Направление контейнера: Запрос (вход) или Результат (выход).
+/// Дублирует Direction для ясности в контексте ObjectData.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ContainerDirection {
+    #[default]
+    Request,
+    Result,
+}
+
+impl ContainerDirection {
+    pub fn label_ru(self) -> &'static str {
+        match self {
+            Self::Request => "Запрос",
+            Self::Result => "Результат",
+        }
+    }
+
+    pub fn into_direction(self) -> Direction {
+        match self {
+            Self::Request => Direction::Request,
+            Self::Result => Direction::Result,
         }
     }
 }

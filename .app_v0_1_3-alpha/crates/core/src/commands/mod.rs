@@ -22,8 +22,14 @@ pub use crate::objects::{
 pub fn exec(engine: &mut Engine, cmd: Command) -> Result<crate::command::Applied> {
     match cmd {
         Command::AddObject {
-            id, name, kind, at, parent, author: _,
-        } => handle_add_object(engine, id, name, kind, at, parent),
+            id,
+            name,
+            kind,
+            at,
+            parent,
+            direction,
+            author: _,
+        } => handle_add_object(engine, id, name, kind, at, parent, direction),
         Command::RemoveObject { object } => handle_remove_object(engine, &object),
         Command::RenameObject { object, name } => handle_rename_object(engine, &object, name),
         Command::SetObjectParent { object, parent } => handle_set_object_parent(engine, &object, parent),

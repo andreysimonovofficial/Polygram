@@ -107,7 +107,21 @@ impl Hierarchy {
         self.by_ext_metric_def.get(ext).copied()
     }
     pub fn find_entry(&self, object: ObjectIx, ext: &str) -> Option<EntryIx> {
-        self.by_ext_entry.get(&(object, ext.to_owned())).copied()
+        // Прямой поиск в by_ext_entry (для Контейнеров и процессов с прямыми записями).
+        if let Some(&e) = self.by_ext_entry.get(&(object, ext.to_owned())) {
+            return Some(e);
+        }
+        // Если объект — Процесс, ищем в его Контейнерах.
+        if self.objects[object.idx()].kind == NodeKind::Process {
+            for &c in &self.objects[object.idx()].children {
+                if self.objects[c.idx()].kind == NodeKind::Container {
+                    if let Some(&e) = self.by_ext_entry.get(&(c, ext.to_owned())) {
+                        return Some(e);
+                    }
+                }
+            }
+        }
+        None
     }
     pub fn find_edge(&self, from: EntryIx, to: EntryIx) -> Option<EdgeIx> {
         self.out_entries(from)
@@ -163,11 +177,24 @@ impl Hierarchy {
     pub fn edges_of_object(&self, object: ObjectIx) -> Vec<EdgeIx> {
         let o = self.object(object);
         let mut out = Vec::new();
+        // Метрики могут быть прямыми записями объекта (для Process/Department)
+        // или дочерними объектами-метриками (для Container).
+        for &e in &o.requests {
+            out.extend(self.in_entries(e));
+        }
         for &e in &o.results {
             out.extend(self.out_entries(e));
         }
-        for &e in &o.requests {
-            out.extend(self.in_entries(e));
+        // Также ищем метрики среди дочерних объектов (для Контейнера).
+        for &c in &o.children {
+            if self.objects[c.idx()].kind == NodeKind::Metric {
+                if let Some(e) = self.objects[c.idx()].entry_ix {
+                    match self.object_metric(e).direction {
+                        Direction::Request => out.extend(self.in_entries(e)),
+                        Direction::Result => out.extend(self.out_entries(e)),
+                    }
+                }
+            }
         }
         out
     }
@@ -175,8 +202,8 @@ impl Hierarchy {
     pub fn parent_of(&self, object: ObjectIx) -> Option<ObjectIx> {
         self.object(object).parent
     }
-    pub fn children_of(&self, dept: ObjectIx) -> Vec<ObjectIx> {
-        self.children[dept.idx()].clone()
+    pub fn children_of(&self, object: ObjectIx) -> Vec<ObjectIx> {
+        self.object(object).children.clone()
     }
     pub fn ancestors_of(&self, object: ObjectIx) -> Vec<ObjectIx> {
         let mut out = Vec::new();

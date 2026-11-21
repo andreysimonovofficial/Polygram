@@ -175,6 +175,7 @@ pub fn context_menu(
                 kind: polygram_core::types::NodeKind::Department,
                 at: Some([cx, cy]),
                 parent: None,
+                direction: None,
                 author: None,
             });
         }
@@ -192,6 +193,7 @@ pub fn context_menu(
                 kind: polygram_core::types::NodeKind::Process,
                 at: Some([cx, cy]),
                 parent: None,
+                direction: None,
                 author: None,
             });
         }

@@ -88,6 +88,7 @@ mod tests {
             name: "Отдел".into(),
             kind: NodeKind::Department,
             rect: Rect::new(0, 0, 10, 10),
+            direction: None,
             requests: vec![],
             results: vec![],
             parent: None,
@@ -101,6 +102,7 @@ mod tests {
             name: "Процесс".into(),
             kind: NodeKind::Process,
             rect: Rect::new(0, 0, 5, 5),
+            direction: None,
             requests: entry_ixes
                 .iter()
                 .map(|&ix| EntryGeom {
@@ -165,6 +167,7 @@ mod tests {
                 name: "Подотдел".into(),
                 kind: NodeKind::Department,
                 rect: Rect::new(0, 0, 5, 5),
+                direction: None,
                 requests: vec![],
                 results: vec![],
                 parent: Some("d".into()),

@@ -16,22 +16,69 @@ pub fn handle_add_metric_entry(
     fact: MetricValue,
 ) -> Result<Applied> {
     let oix = engine.find_object(object)?;
+    // Если цель — Процесс, авто-создаём Контейнер нужного направления.
+    let container_ix = if engine.hier.object(oix).kind == NodeKind::Process {
+        let want = match dir {
+            Direction::Request => ContainerDirection::Request,
+            Direction::Result => ContainerDirection::Result,
+        };
+        let existing = engine
+            .hier
+            .object(oix)
+            .children
+            .iter()
+            .find(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Container && cd.direction == Some(want)
+            })
+            .copied();
+        match existing {
+            Some(cix) => cix,
+            None => engine.hier.add_object(
+                None,
+                format!(
+                    "{} {}",
+                    engine.hier.object(oix).name,
+                    want.label_ru()
+                ),
+                NodeKind::Container,
+                Some(oix),
+                Some(want),
+            )?,
+        }
+    } else if engine.hier.object(oix).kind != NodeKind::Container {
+        return Err(crate::error::EngineError::InvalidConnection(
+            "метрику можно добавить только в Контейнер или Процесс".to_owned(),
+        ));
+    } else {
+        oix
+    };
     let mdix = engine.find_metric_def(metric_def)?;
     let (n_req, n_out) = {
-        let o = engine.hier.object(oix);
+        let o = engine.hier.object(container_ix);
         (
-            o.requests.len() + usize::from(dir == Direction::Request),
-            o.results.len() + usize::from(dir == Direction::Result),
+            o.children.iter().filter(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Metric
+                    && cd.entry_ix.is_some()
+                    && engine.hier.object_metric(cd.entry_ix.unwrap()).direction == Direction::Request
+            }).count(),
+            o.children.iter().filter(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Metric
+                    && cd.entry_ix.is_some()
+                    && engine.hier.object_metric(cd.entry_ix.unwrap()).direction == Direction::Result
+            }).count(),
         )
     };
     let plan = if n_req.max(n_out) <= crate::types::MAX_METRICS_PER_SIDE {
-        engine.plan_refit(oix, n_req, n_out)?
+        engine.plan_refit(container_ix, n_req, n_out)?
     } else {
         None
     };
     let e = engine
         .hier
-        .add_object_metric(oix, dir, id, mdix, name.to_owned())?;
+        .add_object_metric(container_ix, dir, id, mdix, name.to_owned())?;
     engine.sync_sizes();
     engine.vals.reset_metric(e);
     engine.vals.value[e.idx()] = value;
@@ -42,7 +89,7 @@ pub fn handle_add_metric_entry(
     engine
         .pending
         .push(crate::event::EventKind::MetricAdded { metric: e.0 });
-    engine.apply_refit(oix, plan);
+    engine.apply_refit(container_ix, plan);
     Ok(Applied {
         created: Some(engine.hier.object_metric(e).ext_id.clone()),
         ..Applied::default()
@@ -70,7 +117,20 @@ pub fn handle_remove_metric_entry(
         .push(crate::event::EventKind::MetricRemoved { metric: e.0 });
     let (n_req, n_out) = {
         let o = engine.hier.object(oix);
-        (o.requests.len(), o.results.len())
+        (
+            o.children.iter().filter(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Metric
+                    && cd.entry_ix.is_some()
+                    && engine.hier.object_metric(cd.entry_ix.unwrap()).direction == Direction::Request
+            }).count(),
+            o.children.iter().filter(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Metric
+                    && cd.entry_ix.is_some()
+                    && engine.hier.object_metric(cd.entry_ix.unwrap()).direction == Direction::Result
+            }).count(),
+        )
     };
     let plan = engine.plan_refit(oix, n_req, n_out).unwrap_or(None);
     engine.apply_refit(oix, plan);
@@ -167,7 +227,31 @@ pub fn handle_reorder_metric_entry(
     to_ix: usize,
 ) -> Result<Applied> {
     let oix = engine.find_object(object)?;
-    engine.hier.reorder_object_metric(oix, dir, from_ix, to_ix)?;
+    let container_ix = if engine.hier.object(oix).kind == NodeKind::Process {
+        let want = match dir {
+            Direction::Request => ContainerDirection::Request,
+            Direction::Result => ContainerDirection::Result,
+        };
+        engine
+            .hier
+            .object(oix)
+            .children
+            .iter()
+            .find(|&&c| {
+                let cd = &engine.hier.objects[c.idx()];
+                cd.kind == NodeKind::Container && cd.direction == Some(want)
+            })
+            .copied()
+            .ok_or_else(|| {
+                crate::error::EngineError::InvalidConnection(format!(
+                    "контейнер {} не найден в процессе",
+                    want.label_ru()
+                ))
+            })?
+    } else {
+        oix
+    };
+    engine.hier.reorder_object_metric(container_ix, dir, from_ix, to_ix)?;
     engine.sync_sizes();
     engine
         .pending

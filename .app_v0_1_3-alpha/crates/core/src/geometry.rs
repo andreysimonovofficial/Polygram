@@ -1,7 +1,7 @@
 //! Геометрия объектов и записей контейнеров для холста.
 
 use crate::layout::Rect;
-use crate::types::{MetricValue, NodeKind};
+use crate::types::{ContainerDirection, MetricValue, NodeKind};
 
 /// Редко меняющаяся часть для холста: положение карточек и записи контейнеров.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -20,6 +20,7 @@ pub struct ObjectGeom {
     pub name: String,
     pub kind: NodeKind,
     pub rect: Rect,
+    pub direction: Option<ContainerDirection>,
     pub requests: Vec<EntryGeom>,
     pub results: Vec<EntryGeom>,
     pub parent: Option<String>,

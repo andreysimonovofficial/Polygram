@@ -27,6 +27,9 @@ pub enum Command {
         at: Option<[i32; 2]>,
         #[serde(default)]
         parent: Option<String>,
+        /// Направление контейнера (только для kind = Container).
+        #[serde(default)]
+        direction: Option<ContainerDirection>,
     },
     RemoveObject { object: String },
     RenameObject { object: String, name: String },

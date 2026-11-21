@@ -16,6 +16,7 @@ impl Hierarchy {
         name: String,
         kind: NodeKind,
         parent: Option<ObjectIx>,
+        direction: Option<ContainerDirection>,
     ) -> Result<ObjectIx> {
         let ext_id = id.unwrap_or_else(|| format!("obj_{}", self.id_counter));
         self.id_counter += 1;
@@ -29,26 +30,34 @@ impl Hierarchy {
             name,
             kind,
             parent,
+            children: Vec::new(),
+            direction,
             requests: Vec::new(),
             results: Vec::new(),
+            entry_ix: None,
             alive: true,
         });
         self.children.push(Vec::new());
         self.by_ext_object.insert(ext_id, ix);
         self.live_objects += 1;
+        // Добавляем объект в список детей родителя.
+        if let Some(p) = parent {
+            self.objects[p.idx()].children.push(ix);
+        }
         Ok(ix)
     }
 
     pub fn remove_object_slot(&mut self, ix: ObjectIx) {
-        let obj = &mut self.objects[ix.idx()];
-        obj.alive = false;
+        let parent = self.objects[ix.idx()].parent;
+        let id = self.objects[ix.idx()].id.clone();
+        self.objects[ix.idx()].alive = false;
         self.live_objects -= 1;
-        if let Some(p) = obj.parent {
-            if let Some(children) = self.children.get_mut(p.idx()) {
-                children.retain(|&c| c != ix);
+        if let Some(p) = parent {
+            if let Some(parent_obj) = self.objects.get_mut(p.idx()) {
+                parent_obj.children.retain(|&c| c != ix);
             }
         }
-        self.by_ext_object.remove(&obj.id);
+        self.by_ext_object.remove(&id);
     }
 
     pub fn rename_object(&mut self, ix: ObjectIx, name: String) {
@@ -103,8 +112,25 @@ impl Hierarchy {
         dir: Direction,
         id: Option<String>,
         mdix: MetricDefIx,
-        _ext_id: String,
+        name: String,
     ) -> Result<EntryIx> {
+        let obj = &self.objects[oix.idx()];
+        if obj.kind != NodeKind::Container {
+            return Err(crate::error::EngineError::InvalidConnection(
+                "метрику можно добавить только в Контейнер".to_owned(),
+            ));
+        }
+        let count = obj
+            .children
+            .iter()
+            .filter(|&c| self.objects[c.idx()].kind == NodeKind::Metric)
+            .count();
+        if count >= MAX_METRICS_PER_SIDE {
+            return Err(crate::error::EngineError::ObjectNotFound(format!(
+                "среди показов контейнера {} слишком много",
+                obj.id
+            )));
+        }
         let entry_id = id.unwrap_or_else(|| format!("e_{}", self.id_counter));
         self.id_counter += 1;
         let eix = EntryIx(self.object_metrics.len() as u32);
@@ -116,27 +142,61 @@ impl Hierarchy {
             alive: true,
             in_process: false,
         });
-        self.by_ext_entry.insert((oix, entry_id), eix);
-        let obj = &mut self.objects[oix.idx()];
-        match dir {
-            Direction::Request => obj.requests.push(eix),
-            Direction::Result => obj.results.push(eix),
-        }
+        self.by_ext_entry.insert((oix, entry_id.clone()), eix);
+        // Создаём объект-метрику в общем массиве объектов.
+        let metric_ix = ObjectIx(self.objects.len() as u32);
+        self.objects.push(ObjectData {
+            ix: metric_ix,
+            id: entry_id.clone(),
+            name,
+            kind: NodeKind::Metric,
+            parent: Some(oix),
+            children: Vec::new(),
+            direction: None,
+            requests: Vec::new(),
+            results: Vec::new(),
+            entry_ix: Some(eix),
+            alive: true,
+        });
+        self.children.push(Vec::new());
+        self.objects[oix.idx()].children.push(metric_ix);
         self.live_object_metrics += 1;
+        self.live_objects += 1;
         self.ensure();
         Ok(eix)
     }
 
     pub fn remove_object_metric(&mut self, e: EntryIx) {
-        let meta = &mut self.object_metrics[e.idx()];
-        meta.alive = false;
-        self.live_object_metrics -= 1;
-        self.by_ext_entry.remove(&(meta.object, meta.ext_id.clone()));
-        let obj = &mut self.objects[meta.object.idx()];
-        match meta.direction {
-            Direction::Request => obj.requests.retain(|&x| x != e),
-            Direction::Result => obj.results.retain(|&x| x != e),
+        let meta = &self.object_metrics[e.idx()];
+        let container = meta.object;
+        let ext_id = meta.ext_id.clone();
+        // Находим объект-метрику по container+ext_id.
+        let metric_ix = self
+            .objects
+            .iter()
+            .position(|o| {
+                o.alive
+                    && o.kind == NodeKind::Metric
+                    && o.parent == Some(container)
+                    && o.id == ext_id
+            })
+            .map(|i| ObjectIx(i as u32));
+        if let Some(mi) = metric_ix {
+            self.objects[container.idx()]
+                .children
+                .retain(|&c| c != mi);
+            // Помечаем объект-метрику как мёртвый.
+            let m_obj = &mut self.objects[mi.idx()];
+            m_obj.alive = false;
+            m_obj.id = String::new();
+            m_obj.name = String::new();
+            m_obj.entry_ix = None;
+            self.live_objects -= 1;
         }
+        let om = &mut self.object_metrics[e.idx()];
+        om.alive = false;
+        self.live_object_metrics -= 1;
+        self.by_ext_entry.remove(&(container, ext_id));
     }
 
     pub fn reorder_object_metric(
@@ -146,15 +206,33 @@ impl Hierarchy {
         from_ix: usize,
         to_ix: usize,
     ) -> Result<()> {
-        let list = match dir {
-            Direction::Request => &mut self.objects[oix.idx()].requests,
-            Direction::Result => &mut self.objects[oix.idx()].results,
-        };
-        if from_ix >= list.len() || to_ix >= list.len() {
-            return Err(crate::error::EngineError::ObjectNotFound("index out of range".to_owned()));
+        let metric_children: Vec<ObjectIx> = self
+            .objects
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| {
+                o.alive
+                    && o.kind == NodeKind::Metric
+                    && o.parent == Some(oix)
+                    && o.entry_ix.is_some()
+                    && self.object_metrics[o.entry_ix.unwrap().idx()].direction == dir
+            })
+            .map(|(i, _)| ObjectIx(i as u32))
+            .collect();
+        if from_ix >= metric_children.len() || to_ix >= metric_children.len() || from_ix == to_ix {
+            return Ok(());
         }
-        let e = list.remove(from_ix);
-        list.insert(to_ix, e);
+        let children_vec = &mut self.objects[oix.idx()].children;
+        let from_pos = children_vec
+            .iter()
+            .position(|&c| c == metric_children[from_ix])
+            .ok_or_else(|| crate::error::EngineError::ObjectNotFound("from_ix not found".to_owned()))?;
+        let to_pos = children_vec
+            .iter()
+            .position(|&c| c == metric_children[to_ix])
+            .ok_or_else(|| crate::error::EngineError::ObjectNotFound("to_ix not found".to_owned()))?;
+        let entry = children_vec.remove(from_pos);
+        children_vec.insert(to_pos, entry);
         Ok(())
     }
 

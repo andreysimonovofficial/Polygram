@@ -15,6 +15,7 @@ fn obj(id: &str, x: i32, y: i32, w: i32, h: i32, kind: NodeKind) -> ObjectGeom {
         name: id.to_owned(),
         kind,
         rect: Rect::new(x, y, w, h),
+        direction: None,
         requests: vec![],
         results: vec![],
         parent: None,
@@ -81,6 +82,7 @@ fn reorder_metric_entry_moves_within_requests() {
             kind: polygram_core::types::NodeKind::Process,
             at: None,
             parent: None,
+            direction: None,
             author: None,
         },
     )
@@ -150,6 +152,7 @@ fn reorder_metric_entry_moves_within_outputs() {
             kind: polygram_core::types::NodeKind::Process,
             at: None,
             parent: None,
+            direction: None,
             author: None,
         },
     )
@@ -218,6 +221,7 @@ fn reorder_metric_entry_same_index_noop() {
             kind: polygram_core::types::NodeKind::Process,
             at: None,
             parent: None,
+            direction: None,
             author: None,
         },
     )
@@ -503,6 +507,7 @@ fn metric_drop_target_already_has_entry_only_connects() {
             name: "b".to_owned(),
             kind: NodeKind::Process,
             rect: Rect::new(5, 5, 2, 2),
+            direction: None,
             requests: vec![polygram_core::geometry::EntryGeom {
                 ix: 0,
                 name: "energy".to_owned(),

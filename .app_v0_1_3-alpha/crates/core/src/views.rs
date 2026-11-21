@@ -1,6 +1,6 @@
 //! Представления объектов и показателей для вывода.
 
-use crate::types::{Direction, MetricKind, MetricValue, NodeKind, StatusCode};
+use crate::types::{ContainerDirection, Direction, MetricKind, MetricValue, NodeKind, StatusCode};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Stats {
@@ -37,6 +37,7 @@ pub struct ObjectView {
     pub kind: NodeKind,
     pub at: [i32; 2],
     pub size: [i32; 2],
+    pub direction: Option<ContainerDirection>,
     pub requests: Vec<MetricView>,
     pub results: Vec<MetricView>,
 }
