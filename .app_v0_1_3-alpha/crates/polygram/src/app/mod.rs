@@ -11,6 +11,7 @@ use polygram_core::layout::Rect as CoreRect;
 
 mod dialogs;
 mod icons;
+mod departments;
 mod interaction;
 
 /// Главное состояние приложения Polygram.
@@ -94,7 +95,9 @@ impl PolygramApp {
 
     /// Синхронизировать объекты Canvas с геометрией движка (после применения команд).
     fn sync_canvas_from_engine(&mut self) {
-        let geometry = self.engine.geometry();
+        let mut geometry = self.engine.geometry();
+        // Отдел не имеет фиксированного размера: рамка обтягивается под детей.
+        crate::app::departments::fit_departments_to_children(&mut geometry, None);
         self.canvas.objects = geometry.objects;
     }
 
@@ -420,6 +423,11 @@ impl eframe::App for PolygramApp {
             );
 
             self.canvas.handle_camera(ui.ctx(), &canvas_response, ui);
+
+            // Отделы растягиваются под содержимое на каждом кадре, включая
+            // позицию перетаскиваемого объекта (плавно «на лету»).
+            let predicted = self.geometry_with_predictions();
+            self.canvas.objects = predicted.objects;
 
             self.canvas.paint(
                 ui,
