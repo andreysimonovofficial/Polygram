@@ -16,7 +16,7 @@ pub fn paint_department_frame(
     rect_px: Rect,
     zoom: f32,
     theme: &Theme,
-    is_highlighted: bool,
+    _is_highlighted: bool,
     process_count: usize,
 ) {
     // CSS значения (масштабируются под zoom).
@@ -27,20 +27,14 @@ pub fn paint_department_frame(
     let padding = 8.0 * zoom;
     let gap = 8.0 * zoom;
 
-    // Фон отдела #1E1E1E.
-    let bg_color = if is_highlighted { theme.accent } else { Color32::from_rgb(30, 30, 30) };
-    painter.rect_filled(rect_px, corner_radius, bg_color);
+    // Фон отдела #1E1E1E (всегда, без переопределения при наведении).
+    painter.rect_filled(rect_px, corner_radius, Color32::from_rgb(30, 30, 30));
 
-    // Контур отдела #373839.
-    let border_color = if is_highlighted {
-        theme.text
-    } else {
-        Color32::from_rgb(55, 56, 57)
-    };
+    // Контур отдела #373839 (всегда, без переопределения при наведении).
     painter.rect_stroke(
         rect_px,
         corner_radius,
-        Stroke::new(border_width, border_color),
+        Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
         StrokeKind::Middle,
     );
 
