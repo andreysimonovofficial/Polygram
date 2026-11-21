@@ -229,7 +229,8 @@ impl PolygramApp {
         self.drag_start_screen = Some(screen_pos);
     }
 
-    /// Применить текущую позицию курсора к перетаскиваемому отделу (привязка к клеткам).
+    /// Применить текущую позицию курсора к перетаскиваемому объекту (привязка к клеткам).
+    /// Если перетаскивается отдел — тащит все его дочерние объекты вместе с собой (как Group в Figma).
     fn update_drag_object(&mut self, cursor: Pos2) {
         let Some(drag_id) = self.drag_object.as_deref() else {
             return;
@@ -240,16 +241,80 @@ impl PolygramApp {
             / self.canvas.cell_size;
         let target_x = (cursor_world_x - self.drag_offset_cell.0).round() as i32;
         let target_y = (cursor_world_y - self.drag_offset_cell.1).round() as i32;
-        if let Some(obj) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-            obj.rect.x = target_x;
-            obj.rect.y = target_y;
+        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() {
+            let dx = target_x - obj.rect.x;
+            let dy = target_y - obj.rect.y;
+            if let Some(dragged) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                dragged.rect.x = target_x;
+                dragged.rect.y = target_y;
+            }
+            // Отдел тащит всех своих детей вместе с собой.
+            if obj.kind == NodeKind::Department {
+                for child in self
+                    .canvas
+                    .objects
+                    .iter_mut()
+                    .filter(|o| o.parent.as_deref() == Some(drag_id))
+                {
+                    child.rect.x += dx;
+                    child.rect.y += dy;
+                }
+            }
         }
     }
 
     /// Завершить перетаскивание отдела.
+    /// Если перетаскивался отдел — отправляет MoveObject для отдела и всех его детей.
     fn end_drag_object(&mut self) {
+        let Some(drag_id) = self.drag_object.clone() else {
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            return;
+        };
+        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
+        let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            return;
+        };
+
+        // Если позиция не изменилась — отмена, возвращаем на место.
+        if (obj.rect.x, obj.rect.y) == start_cell {
+            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                o.rect.x = start_cell.0;
+                o.rect.y = start_cell.1;
+            }
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            return;
+        }
+
+        let mut cmds: Vec<Command> = vec![Command::MoveObject {
+            object: drag_id.clone(),
+            at: [obj.rect.x, obj.rect.y],
+        }];
+
+        // Отдел перевозит всех потомков с собой.
+        if obj.kind == NodeKind::Department {
+            for child in self
+                .canvas
+                .objects
+                .iter()
+                .filter(|o| o.parent.as_deref() == Some(&drag_id))
+            {
+                cmds.push(Command::MoveObject {
+                    object: child.id.clone(),
+                    at: [child.rect.x, child.rect.y],
+                });
+            }
+        }
+
+        self.apply_batch(cmds);
         self.drag_object = None;
         self.drag_start_screen = None;
+        self.drag_start_cell = None;
     }
 
     /// Найти горячую зону показателя под заданной экранной позицией.
@@ -401,8 +466,33 @@ impl PolygramApp {
             self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
         };
 
-        // Если процесс над отделом — открыть модальное подтверждение переноса.
+        // Если процесс над отделом:
+        // - если процесс уже дочерний этого отдела — просто перемещаем внутри отдела (без модалки);
+        // - иначе — открыть модальное подтверждение переноса.
         if let Some(dept_id) = &self.drag_over {
+            let already_in_dept = self.canvas.objects.iter().any(|o| {
+                o.id == drag_id && o.parent.as_deref() == Some(dept_id)
+            });
+            if already_in_dept {
+                if drop_cell != start_cell {
+                    self.apply_batch(vec![Command::MoveObject {
+                        object: drag_id.clone(),
+                        at: [drop_cell.0, drop_cell.1],
+                    }]);
+                } else {
+                    // Вернуть на исходную позицию (отмена).
+                    if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                        o.rect.x = start_cell.0;
+                        o.rect.y = start_cell.1;
+                    }
+                }
+                self.drag_object = None;
+                self.drag_start_screen = None;
+                self.drag_start_cell = None;
+                self.drag_over = None;
+                self.drag_ghost = None;
+                return;
+            }
             self.dialogs.reparent_confirm = Some((
                 drag_id.clone(),
                 dept_id.clone(),
@@ -580,6 +670,10 @@ impl eframe::App for PolygramApp {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if self.header_under(pos).is_some() {
                         if let Some(id) = self.header_under(pos) {
+                            // Запомнить исходную клетку отдела для перемещения с детьми.
+                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                            }
                             self.start_drag_object(id, pos);
                         }
                     } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {

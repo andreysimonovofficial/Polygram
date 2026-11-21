@@ -5,6 +5,9 @@ use crate::{
     types::*,
 };
 
+/// Высота шапки отдела в клетках (80px / 16px на клетку = 5).
+const DEPT_HEADER_CELLS: i32 = 5;
+
 impl crate::engine::Engine {
     /// Растянуть отдел под всех своих детей (с отступом в одну клетку сетки с каждой стороны,
     /// заголовок в верхней клетке, дети начинаются на строке parent.y + 2).
@@ -35,7 +38,7 @@ impl crate::engine::Engine {
                 max_x = max_x.max(r.x + r.w);
                 max_y = max_y.max(r.y + r.h);
             }
-            let new_y = min_y - 2;
+            let new_y = min_y - DEPT_HEADER_CELLS;
             let new_x = min_x - 1;
             let new_w = (max_x + 1) - new_x;
             let new_h = (max_y + 1) - new_y;
@@ -82,7 +85,7 @@ impl crate::engine::Engine {
                 max_x = max_x.max(r.x + r.w);
                 max_y = max_y.max(r.y + r.h);
             }
-            let new_y = min_y - 2;
+            let new_y = min_y - DEPT_HEADER_CELLS;
             let new_x = min_x - 1;
             let new_w = (max_x + 1) - new_x;
             let new_h = (max_y + 1) - new_y;

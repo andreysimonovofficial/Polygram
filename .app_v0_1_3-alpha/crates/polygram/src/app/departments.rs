@@ -42,6 +42,9 @@ pub fn geometry_with_predictions(
     geometry
 }
 
+/// Высота шапки отдела в клетках (80px / 16px на клетку = 5).
+const DEPT_HEADER_CELLS: i32 = 5;
+
 /// Вычислить rect каждого отдела как обтягивающую рамку его прямых детей.
 /// Отдел не имеет фиксированного размера: рамка следует за содержимым.
 /// Повторный обход нужен, чтобы вложенные отделы уже имели актуальный размер,
@@ -82,7 +85,7 @@ pub fn fit_departments_to_children(geometry: &mut Geometry, exclude_id: Option<&
                 max_y = max_y.max(c.rect.y + c.rect.h);
             }
             let new_x = min_x - 1;
-            let new_y = min_y - 2;
+            let new_y = min_y - DEPT_HEADER_CELLS;
             let new_w = (max_x + 1) - new_x;
             let new_h = (max_y + 1) - new_y;
             let new_rect = Rect::new(new_x, new_y, new_w, new_h);
@@ -135,10 +138,10 @@ pub fn stretch_department_for_drag(geometry: &mut Geometry, dept_id: &str) {
             max_x = max_x.max(obj.rect.x + obj.rect.w);
             max_y = max_y.max(obj.rect.y + obj.rect.h);
         }
-        let new_x = min_x - 1;
-        let new_y = min_y - 2;
-        let new_w = (max_x + 1) - new_x;
-        let new_h = (max_y + 1) - new_y;
+            let new_x = min_x - 1;
+            let new_y = min_y - DEPT_HEADER_CELLS;
+            let new_w = (max_x + 1) - new_x;
+            let new_h = (max_y + 1) - new_y;
         let new_rect = Rect::new(new_x, new_y, new_w, new_h);
         if new_rect == dept.rect {
             break;
@@ -200,9 +203,9 @@ mod tests {
         };
         fit_departments_to_children(&mut geometry, None);
         let d = geometry.objects.iter().find(|o| o.id == "d1").unwrap();
-        // min_x=5-1=4, min_y=5-2=3, max_x=30+16+1=47, max_y=20+16+1=37
-        // w = 47-4=43, h = 37-3=34
-        assert_eq!(d.rect, Rect::new(4, 3, 43, 34));
+        // min_x=5-1=4, min_y=5-5=0, max_x=30+16+1=47, max_y=20+16+1=37
+        // w = 47-4=43, h = 37-0=37
+        assert_eq!(d.rect, Rect::new(4, 0, 43, 37));
     }
 
     #[test]
@@ -221,12 +224,12 @@ mod tests {
         geometry.objects[2].parent = Some("child".to_owned());
         fit_departments_to_children(&mut geometry, None);
         let child = geometry.objects.iter().find(|o| o.id == "child").unwrap();
-        // p1 at (5,5,16,16): min_x=5-1=4, min_y=5-2=3, max_x=21+1=22, max_y=21+1=22
-        assert_eq!(child.rect, Rect::new(4, 3, 18, 19));
+        // p1 at (5,5,16,16): min_x=5-1=4, min_y=5-5=0, max_x=21+1=22, max_y=21+1=22
+        assert_eq!(child.rect, Rect::new(4, 0, 18, 22));
         let root = geometry.objects.iter().find(|o| o.id == "root").unwrap();
-        // child rect now 4,3,18,19 -> root bounds: min_x=4, min_y=3, max_x=22, max_y=22
-        // new_x=4-1=3, new_y=3-2=1, new_w=(22+1)-3=20, new_h=(22+1)-1=22
-        assert_eq!(root.rect, Rect::new(3, 1, 20, 22));
+        // child rect now 4,0,18,22 -> root bounds: min_x=4, min_y=0, max_x=22, max_y=22
+        // new_x=4-1=3, new_y=0-5=-5, new_w=(22+1)-3=20, new_h=(22+1)-(-5)=28
+        assert_eq!(root.rect, Rect::new(3, -5, 20, 28));
     }
 
     #[test]
@@ -242,8 +245,8 @@ mod tests {
         };
         fit_departments_to_children(&mut geometry, Some("dragged"));
         let d = geometry.objects.iter().find(|o| o.id == "d1").unwrap();
-        // dragged excluded -> only p1 counts: min_x=5-1=4, min_y=5-2=3, max_x=21+1=22, max_y=21+1=22
-        assert_eq!(d.rect, Rect::new(4, 3, 18, 19));
+        // dragged excluded -> only p1 counts: min_x=5-1=4, min_y=5-5=0, max_x=21+1=22, max_y=21+1=22
+        assert_eq!(d.rect, Rect::new(4, 0, 18, 22));
     }
 }
 
