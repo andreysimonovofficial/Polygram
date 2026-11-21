@@ -8,7 +8,7 @@ use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
 
 use crate::icons::paint_lucide;
 use crate::paint::constants::{
-    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX, MAX_VISIBLE_METRICS,
+    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX,
     PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX,
     ROW_H_PX, ROW_PADDING_X_PX,
 };
@@ -402,22 +402,51 @@ fn paint_metric_container(
         row_y += row_h + gap;
     }
 
-    // Строка "+ Добавить показатель" если есть свободные слоты.
-    let visible = entries.len().min(MAX_VISIBLE_METRICS);
-    let show_add = visible < MAX_VISIBLE_METRICS;
+    // Строка "+ Добавить показатель" только если контейнер пуст.
+    // Стилизуется как строка показателя: рамка, паддинг, иконка слева, текст слева.
+    let show_add = entries.is_empty();
     if show_add {
         let add_rect = Rect::from_min_size(
             Pos2::new(cx + padding, row_y),
             Vec2::new(cw - 2.0 * padding, row_h),
         );
-        let add_color = theme.text_muted;
+        let add_hovered = mouse_pos.map_or(false, |pos| add_rect.contains(pos));
+
+        // Фон при наведении.
+        if add_hovered {
+            painter.rect_filled(add_rect, 0.0, theme.card_bg);
+        }
+
+        // Граница строки.
+        let add_border_color = if add_hovered { theme.text } else { theme.card_border };
+        painter.rect_stroke(
+            add_rect,
+            row_border_rad(zoom),
+            Stroke::new(1.0 * zoom, add_border_color),
+            StrokeKind::Middle,
+        );
+
+        let cy_row = add_rect.center().y;
+
+        // Иконка типа показателя (plus).
+        let content_left = cx + padding + row_pad;
+        let icon_cx = content_left + icon_size / 2.0;
+        paint_lucide(
+            ui,
+            Rect::from_center_size(Pos2::new(icon_cx, cy_row), Vec2::splat(icon_size)),
+            Lucide::Plus,
+            theme.text_muted,
+        );
+
+        // Текст "+ Добавить показатель" — слева, после иконки + gap.
         painter.text(
-            add_rect.center(),
-            Align2::CENTER_CENTER,
+            Pos2::new(content_left + icon_size + gap, cy_row),
+            Align2::LEFT_CENTER,
             "+ Добавить показатель",
             FontId::new(16.0 * zoom, FontFamily::Proportional),
-            add_color,
+            if add_hovered { theme.text } else { theme.text_muted },
         );
+
         add_hotspots.push((object.id.clone(), dir, add_rect));
     }
 }

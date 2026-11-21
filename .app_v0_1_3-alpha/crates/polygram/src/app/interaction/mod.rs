@@ -262,9 +262,10 @@ pub fn context_menu(
     }
 
     // Обработка диалога добавления показателя (модальное окно).
-    if app.dialogs.add_metric_target.is_some() {
-        add_metric::handle_add_metric_dialog(app, ctx, published);
-    }
+    // Вызывается один раз за кадр в主 цикле UI (см. app/mod.rs).
+    // if app.dialogs.add_metric_target.is_some() {
+    //     add_metric::handle_add_metric_dialog(app, ctx, published);
+    // }
 
     // Закрыть меню по клику вне него.
     if !app.menu_just_opened && ctx.input(|i| i.pointer.any_click()) {

@@ -458,6 +458,21 @@ impl eframe::App for PolygramApp {
                     if let Some(id) = self.header_under(pos) {
                         self.selection_box_start = None;
                         self.toggle_select(id.clone(), ctrl);
+                    } else if let Some((obj_id, dir, _rect)) = self.canvas.add_metric_hotspots.iter()
+                        .find(|(_, _, rect)| rect.contains(pos))
+                    {
+                        // Клик на "+ Добавить показатель" — открыть диалог добавления показателя.
+                        let n = match dir {
+                            Direction::Request => self.canvas.objects.iter()
+                                .find(|o| o.id == *obj_id)
+                                .map(|o| o.requests.len())
+                                .unwrap_or(0),
+                            Direction::Result => self.canvas.objects.iter()
+                                .find(|o| o.id == *obj_id)
+                                .map(|o| o.results.len())
+                                .unwrap_or(0),
+                        };
+                        self.dialogs.add_metric_defaults(obj_id.clone(), *dir, n);
                     } else {
                         // Проверяем клик по процессу.
                         let mut clicked_process = false;
@@ -748,6 +763,7 @@ impl eframe::App for PolygramApp {
         });
 
         interaction::context_menu(self, ui.ctx(), &published, self.canvas.theme);
+        interaction::add_metric::handle_add_metric_dialog(self, ui.ctx(), &published);
         interaction::rename_dialog(self, ui.ctx());
         interaction::rename::inline_rename_editor(self, ui.ctx(), &published);
         interaction::reparent_confirm::handle_reparent_confirm(self, ui.ctx(), &published);
