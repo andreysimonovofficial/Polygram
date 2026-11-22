@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::{Canvas, paint::constants::PROCESS_HEADER_H_PX};
 use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
-use polygram_core::drag_domain::{compute_object_drop_commands, ObjectDropContext};
+use polygram_core::drag_domain::{compute_metric_drop_object, compute_object_drop_commands, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
 use polygram_core::layout::Rect as CoreRect;
 
@@ -945,6 +945,19 @@ impl eframe::App for PolygramApp {
                 let (src_id, src_dir, src_name) = self.drag_metric_source.take().unwrap();
                 self.drag_metric_start = None;
                 if let Some(cur) = canvas_response.interact_pointer_pos() {
+                    let zoom = self.canvas.camera.zoom;
+                    let offset = self.canvas.camera.offset;
+                    let cell_size = self.canvas.cell_size;
+                    let cur_cell = (
+                        ((cur.x / zoom - offset.x) / cell_size).round() as i32,
+                        ((cur.y / zoom - offset.y) / cell_size).round() as i32,
+                    );
+                    let under_any = self.canvas.objects.iter().any(|o| {
+                        o.rect.x <= cur_cell.0
+                            && cur_cell.0 < o.rect.x + o.rect.w
+                            && o.rect.y <= cur_cell.1
+                            && cur_cell.1 < o.rect.y + o.rect.h
+                    });
                     // Реордер строки внутри того же контейнера (ЗАПРОС/РЕЗУЛЬТАТ одного объекта).
                     let hovered_same = self.canvas.drag_metric_hotspots.iter()
                         .find(|(oid, d, name, rect)| {
@@ -1031,6 +1044,44 @@ impl eframe::App for PolygramApp {
                                     }
                                 self.sync_canvas_from_engine();
                             }
+                        } else if !under_any {
+                            // Свободное место: создать Процесс и разместить показатель
+                            // в его контейнере с противоположным направлением (как при дропе Контейнера).
+                            // Определение показателя должно существовать, иначе AddMetricEntry не применится.
+                            if !self.engine.metric_def_views().iter().any(|m| m.name == src_name || m.id == src_name) {
+                                let _ = self.engine.apply_batch(
+                                    polygram_core::types::Scope::Root,
+                                    vec![polygram_core::Command::AddMetricDef {
+                                        id: Some(src_name.clone()),
+                                        name: src_name.clone(),
+                                        kind: polygram_core::types::MetricKind::Number,
+                                        unit: String::new(),
+                                        api: None,
+                                    }],
+                                );
+                            }
+                            let geometry = self.engine.geometry();
+                            let dragged_dir = match src_dir {
+                                Direction::Request => ContainerDirection::Request,
+                                Direction::Result => ContainerDirection::Result,
+                            };
+                            let cmds = polygram_core::drag_domain::compute_metric_drop_object(
+                                &geometry,
+                                &src_name,
+                                dragged_dir,
+                                cur_cell,
+                                cur_cell,
+                                None,
+                                (2, 2),
+                                None,
+                            );
+                            if !cmds.commands.is_empty() {
+                                let _ = self.engine.apply_batch(
+                                    polygram_core::types::Scope::Root,
+                                    cmds.commands,
+                                );
+                            }
+                            self.sync_canvas_from_engine();
                         }
                     }
                 }

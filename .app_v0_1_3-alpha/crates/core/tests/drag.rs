@@ -865,3 +865,177 @@ fn object_drop_same_cell_cancels() {
     });
     assert!(result.commands.is_empty());
 }
+
+#[test]
+fn object_drop_metric_result_on_free_cell_creates_process_and_metric() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![metric_obj("m", 0, 0, 2, 2, ContainerDirection::Result)],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "m".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (10, 10),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    // AddObject(Process) + AddMetricEntry + Connect = 3 commands
+    assert_eq!(result.commands.len(), 3);
+    let process_id = new_process_id(&result.commands, &["m"]);
+    match &result.commands[1] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, &process_id);
+            assert_eq!(*dir, Direction::Request); // источник Result -> цель Request
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+    match &result.commands[2] {
+        Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
+            assert_eq!(from_object, "m");
+            assert_eq!(from_entry, "m");
+            assert_eq!(to_object, &process_id);
+            assert_eq!(to_entry, "m");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_on_metric_connects_only() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            metric_obj("m2", 10, 10, 2, 2, ContainerDirection::Result),
+        ],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "m".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (11, 11),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    // Цель — показатель: только связь, запись не создаётся
+    assert_eq!(result.commands.len(), 1);
+    match &result.commands[0] {
+        Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
+            assert_eq!(from_object, "m");
+            assert_eq!(from_entry, "m");
+            assert_eq!(to_object, "m2");
+            assert_eq!(to_entry, "m");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_request_on_process_adds_entry_and_connects() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            proc_obj("p", 10, 10, 2, 2),
+        ],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "m".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (11, 11),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    // AddMetricEntry + Connect = 2 команды (процесс уже есть)
+    assert_eq!(result.commands.len(), 2);
+    match &result.commands[0] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, "p");
+            assert_eq!(*dir, Direction::Result);
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+    match &result.commands[1] {
+        Command::Connect { from_object, to_object, .. } => {
+            assert_eq!(from_object, "m");
+            assert_eq!(to_object, "p");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_request_on_container_matching_direction() {
+    use polygram_core::types::ContainerDirection;
+    // Источник Запрос -> целевой контейнер Результат (направления противоположны)
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            container_obj("c", 10, 10, 2, 2, ContainerDirection::Result, vec![]),
+        ],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "m".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (11, 11),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    assert_eq!(result.commands.len(), 2);
+    match &result.commands[0] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, "c");
+            assert_eq!(*dir, Direction::Result);
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+    match &result.commands[1] {
+        Command::Connect { from_object, to_object, .. } => {
+            assert_eq!(from_object, "m");
+            assert_eq!(to_object, "c");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_request_on_container_mismatching_direction_cancels() {
+    use polygram_core::types::ContainerDirection;
+    // Источник Запрос -> цель Результат, а контейнер Запрос -> отмена
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            container_obj("c", 10, 10, 2, 2, ContainerDirection::Request, vec![]),
+        ],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "m".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (11, 11),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    assert!(result.commands.is_empty());
+}

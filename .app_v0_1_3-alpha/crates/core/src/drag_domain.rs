@@ -424,7 +424,7 @@ fn compute_container_drop(
 
 /// Рассчитать команды при дропе показателя (Запрос/Результат).
 /// Создаёт Процесс (если нужно), создаёт показатель в контейнере процесса с противоположным направлением, связывает показатели.
-fn compute_metric_drop_object(
+pub fn compute_metric_drop_object(
     geometry: &Geometry,
     dragged_id: &str,
     dragged_dir: ContainerDirection,
@@ -452,6 +452,7 @@ fn compute_metric_drop_object(
 
     let mut commands: Vec<Command> = Vec::new();
     let target_object_id: String;
+    let mut push_entry = true;
 
     // Определяем целевой объект для добавления показателя.
     match target {
@@ -471,9 +472,14 @@ fn compute_metric_drop_object(
             }
             target_object_id = t.id.clone();
         }
+        Some(t) if t.kind == NodeKind::Metric => {
+            // Цель — показатель: только связываем показатели, новую запись не создаём.
+            target_object_id = t.id.clone();
+            push_entry = false;
+        }
         _ => {
             // Отдел (через over_dept) или Свободное место: создаём новый процесс.
-            // Иная цель (показатель, иное) — отмена.
+            // Иная цель (иное) — отмена.
             if let Some(dept_id) = over_dept {
                 if geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department) {
                     commands.push(Command::AddObject {
@@ -520,18 +526,20 @@ fn compute_metric_drop_object(
         }
     }
 
-    // Создать показатель в целевом контейнере с противоположным направлением.
-    commands.push(Command::AddMetricEntry {
-        object: target_object_id.clone(),
-        dir: target_dir.into_direction(),
-        id: Some(dragged_id.to_owned()),
-        metric_def: dragged_id.to_owned(),
-        name: dragged_id.to_owned(),
-        value: MetricValue::Null,
-        required: MetricValue::Null,
-        max: None,
-        fact: MetricValue::Null,
-    });
+    if push_entry {
+        // Создать показатель в целевом контейнере с противоположным направлением.
+        commands.push(Command::AddMetricEntry {
+            object: target_object_id.clone(),
+            dir: target_dir.into_direction(),
+            id: Some(dragged_id.to_owned()),
+            metric_def: dragged_id.to_owned(),
+            name: dragged_id.to_owned(),
+            value: MetricValue::Null,
+            required: MetricValue::Null,
+            max: None,
+            fact: MetricValue::Null,
+        });
+    }
 
     // Связать показатели: источник -> цель.
     commands.push(Command::Connect {
