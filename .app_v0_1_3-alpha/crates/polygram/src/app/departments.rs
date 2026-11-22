@@ -1,5 +1,5 @@
 use crate::app::PolygramApp;
-use polygram_core::{geometry::{Geometry, ObjectGeom}};
+use polygram_core::{geometry::{Geometry, ObjectGeom}, types::NodeKind};
 
 /// Построить геометрию с учётом текущего перетаскивания, чтобы отделы
 /// растягивались под содержимое «на лету» ещё до подтверждения сервером.
@@ -49,6 +49,11 @@ pub fn fit_departments_to_children(geometry: &mut Geometry, exclude_id: Option<&
                 Some(i) => i,
                 None => continue,
             };
+            // Только отделы растягиваются под детей. Процессы и контейнеры
+            // сохраняют свой rect из layout.
+            if geometry.objects[dept_idx].kind != NodeKind::Department {
+                continue;
+            }
             let mut min_x = i32::MAX;
             let mut min_y = i32::MAX;
             let mut max_x = i32::MIN;
