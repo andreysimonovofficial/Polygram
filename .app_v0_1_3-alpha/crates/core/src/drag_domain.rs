@@ -147,6 +147,9 @@ pub struct ObjectDropContext {
     pub drop_cell: (i32, i32),
     pub over_dept: Option<String>,
     pub dragged_size: (i32, i32),
+    /// Направление контейнера при перетаскивании шапки контейнера из карточки процесса.
+    /// Если Some — используется логика контейнера независимо от NodeKind dragged_id.
+    pub dragged_dir: Option<ContainerDirection>,
 }
 
 /// Результат расчёта команд при дропе объекта.
@@ -165,6 +168,7 @@ pub fn compute_object_drop_commands(ctx: &ObjectDropContext) -> ObjectDropResult
         drop_cell,
         over_dept,
         dragged_size,
+        dragged_dir,
     } = ctx;
     let start_cell = *start_cell;
     let drop_cell = *drop_cell;
@@ -181,6 +185,12 @@ pub fn compute_object_drop_commands(ctx: &ObjectDropContext) -> ObjectDropResult
 
     let over_dept_str = over_dept.as_deref();
     let target = target_object_at(geometry, drop_cell.0, drop_cell.1, dragged_id);
+
+    // Если перетаскивается шапка контейнера (из карточки процесса или автономная),
+    // используется логика контейнера независимо от NodeKind dragged_id.
+    if let Some(dir) = dragged_dir {
+        return compute_container_drop(geometry, dragged_id, *dir, start_cell, drop_cell, over_dept_str, dragged_size, target);
+    }
 
     match dragged.kind {
         NodeKind::Department => compute_department_drop(geometry, dragged_id, start_cell, drop_cell, over_dept_str, dragged_size, target),

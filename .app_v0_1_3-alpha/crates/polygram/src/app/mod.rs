@@ -209,15 +209,12 @@ impl PolygramApp {
         None
     }
 
-    /// Найти заголовок автономного контейнера под заданной экранной позицией.
-    /// Пропускает шапки процессов (они обрабатываются в header_under).
+    /// Найти заголовок контейнера под заданной экранной позицией.
+    /// Включает контейнерные шапки внутри карточек процессов
+    /// (у таких записей id = id процесса, direction = направление контейнера).
     fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, ContainerDirection)> {
         for (id, dir, rect) in &self.canvas.container_header_hotspots {
             if rect.contains(screen_pos) {
-                let obj_kind = self.canvas.objects.iter().find(|o| o.id == *id).map(|o| o.kind.clone());
-                if obj_kind != Some(NodeKind::Container) {
-                    continue; // шапка процесса — не контейнер
-                }
                 let container_dir = match dir {
                     polygram_core::types::Direction::Request => ContainerDirection::Request,
                     polygram_core::types::Direction::Result => ContainerDirection::Result,
@@ -707,6 +704,7 @@ impl PolygramApp {
             drop_cell,
             over_dept: self.drag_over.clone(),
             dragged_size: (obj.rect.w, obj.rect.h),
+            dragged_dir: self.drag_object_dir,
         };
         let result = compute_object_drop_commands(&ctx);
 

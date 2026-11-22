@@ -448,6 +448,7 @@ fn object_drop_department_on_free_cell_moves() {
         drop_cell: (10, 10),
         over_dept: None,
         dragged_size: (4, 4),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 1);
     match &result.commands[0] {
@@ -476,6 +477,7 @@ fn object_drop_department_on_department_reparents() {
         drop_cell: (12, 12),
         over_dept: Some("d2".to_owned()),
         dragged_size: (4, 4),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 2);
     assert!(result.reparent_dept.is_some());
@@ -510,6 +512,7 @@ fn object_drop_process_on_free_cell_moves() {
         drop_cell: (10, 10),
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 1);
     match &result.commands[0] {
@@ -538,6 +541,7 @@ fn object_drop_process_on_department_reparents() {
         drop_cell: (12, 12),
         over_dept: Some("d".to_owned()),
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 2);
     assert_eq!(result.reparent_dept.as_deref(), Some("d"));
@@ -573,6 +577,7 @@ fn object_drop_container_request_on_free_cell_creates_process_and_copies_metrics
         drop_cell: (10, 10),
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     // AddObject(Process) + 2x (AddMetricEntry + Connect) = 5 commands
     assert_eq!(result.commands.len(), 5);
@@ -623,6 +628,7 @@ fn object_drop_container_request_on_department_creates_process_and_reparents_dep
         drop_cell: (12, 12),
         over_dept: Some("d".to_owned()),
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 4);
     assert_eq!(result.reparent_dept.as_deref(), Some("d"));
@@ -654,6 +660,7 @@ fn object_drop_container_on_occupied_non_dept_cancels() {
         drop_cell: (10, 10),
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert!(result.commands.is_empty());
 }
@@ -673,6 +680,7 @@ fn object_drop_metric_request_on_free_cell_creates_process_and_metric() {
         drop_cell: (10, 10),
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     // AddObject(Process) + AddMetricEntry + Connect = 3 commands
     assert_eq!(result.commands.len(), 3);
@@ -717,6 +725,7 @@ fn object_drop_metric_request_on_department_creates_process_and_reparents() {
         drop_cell: (12, 12),
         over_dept: Some("d".to_owned()),
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert_eq!(result.commands.len(), 4);
     assert_eq!(result.reparent_dept.as_deref(), Some("d"));
@@ -747,6 +756,7 @@ fn object_drop_container_request_on_process_copies_metrics() {
         drop_cell: (11, 11), // inside process rect
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     // Copy metrics: AddMetricEntry + Connect = 2 commands (no new process)
     assert_eq!(result.commands.len(), 2);
@@ -787,6 +797,7 @@ fn object_drop_container_on_occupied_container_cancels() {
         drop_cell: (11, 11),
         over_dept: None,
         dragged_size: (2, 2),
+            dragged_dir: None,
     });
     assert!(result.commands.is_empty());
 }
@@ -805,6 +816,7 @@ fn object_drop_same_cell_cancels() {
         drop_cell: (0, 0),
         over_dept: None,
         dragged_size: (4, 4),
+            dragged_dir: None,
     });
     assert!(result.commands.is_empty());
 }
