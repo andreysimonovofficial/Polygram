@@ -545,7 +545,8 @@ impl PolygramApp {
                 None
             }
         } else {
-            None
+            // Свободное место — позиция курсора как призрак.
+            Some(cursor_cell)
         };
 
         (over, ghost)
@@ -675,15 +676,11 @@ impl PolygramApp {
             )
             .unwrap_or((obj.rect.x, obj.rect.y))
         } else {
-            (obj.rect.x, obj.rect.y)
+            self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
         };
 
         // Если позиция не изменилась — отмена.
         if drop_cell == start_cell {
-            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-                o.rect.x = start_cell.0;
-                o.rect.y = start_cell.1;
-            }
             self.drag_object = None;
             self.drag_start_screen = None;
             self.drag_start_cell = None;
@@ -712,10 +709,14 @@ impl PolygramApp {
             self.apply_batch(result.commands);
         }
 
-        // Обновить позицию объекта на клиенте для отображения.
-        if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-            o.rect.x = result.final_cell.0;
-            o.rect.y = result.final_cell.1;
+        // Для перетаскивания контейнера/показателя как объекта НЕ перемещаем
+        // исходный объект (доменная логика создаёт новый Процесс и копирует показатели).
+        // Перемещаем только при обычном драге объекта без dragged_dir.
+        if self.drag_object_dir.is_none() {
+            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                o.rect.x = result.final_cell.0;
+                o.rect.y = result.final_cell.1;
+            }
         }
 
         self.drag_object = None;
@@ -906,21 +907,24 @@ impl eframe::App for PolygramApp {
             if canvas_response.dragged_by(PointerButton::Primary) {
                 if self.drag_object.is_some() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
-                        let is_process_drag = self
-                            .canvas
-                            .objects
-                            .iter()
-                            .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
-                                && o.kind == NodeKind::Process);
-                        if is_process_drag {
-                            let theme = self.canvas.theme.clone();
-                            self.update_drag_process(ui, cur, &theme);
-                        } else {
+                        if self.drag_object_dir.is_some() {
+                            // Драг контейнера/показателя как объекта (включая шапку контейнера внутри карточки процесса).
                             self.update_drag_object(cur);
-                            if self.drag_object_dir.is_some() {
-                                let (over, ghost) = self.object_drag_preview(cur);
-                                self.drag_over = over.clone();
-                                self.drag_ghost = ghost;
+                            let (over, ghost) = self.object_drag_preview(cur);
+                            self.drag_over = over.clone();
+                            self.drag_ghost = ghost;
+                        } else {
+                            let is_process_drag = self
+                                .canvas
+                                .objects
+                                .iter()
+                                .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
+                                    && o.kind == NodeKind::Process);
+                            if is_process_drag {
+                                let theme = self.canvas.theme.clone();
+                                self.update_drag_process(ui, cur, &theme);
+                            } else {
+                                self.update_drag_object(cur);
                             }
                         }
                     }
@@ -972,18 +976,21 @@ impl eframe::App for PolygramApp {
                     self.drag_ghost = None;
                     self.drag_object_dir = None;
                 } else {
-                    let is_process_drag = self
-                        .canvas
-                        .objects
-                        .iter()
-                        .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
-                            && o.kind == NodeKind::Process);
-                    if is_process_drag {
-                        self.end_drag_process();
-                    } else if self.drag_object_dir.is_some() {
+                    if self.drag_object_dir.is_some() {
+                        // Драг контейнера/показателя как объекта (включая шапку контейнера внутри карточки процесса).
                         self.end_drag_container_or_metric();
                     } else {
-                        self.end_drag_object();
+                        let is_process_drag = self
+                            .canvas
+                            .objects
+                            .iter()
+                            .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
+                                && o.kind == NodeKind::Process);
+                        if is_process_drag {
+                            self.end_drag_process();
+                        } else {
+                            self.end_drag_object();
+                        }
                     }
                 }
             }
