@@ -3,7 +3,7 @@
 //! перетаскивание отделов за шапку, диалог переименования и диалоги показателей.
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
-use polygram_canvas::Canvas;
+use polygram_canvas::{Canvas, paint::constants::PROCESS_HEADER_H_PX};
 use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
 use polygram_core::drag_domain::{compute_object_drop_commands, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
@@ -174,6 +174,8 @@ impl PolygramApp {
     /// Найти отдел, чья шапка содержит заданную экранную позицию.
     fn header_under(&self, screen_pos: Pos2) -> Option<String> {
         let cell_px = self.canvas.cell_px();
+        let zoom = self.canvas.camera.zoom;
+        // Заголовки отделов.
         for object in &self.canvas.objects {
             if object.kind != NodeKind::Department {
                 continue;
@@ -190,27 +192,37 @@ impl PolygramApp {
                 return Some(object.id.clone());
             }
         }
+        // Заголовки процессов (только верхняя часть карточки).
+        for object in &self.canvas.objects {
+            if object.kind != NodeKind::Process {
+                continue;
+            }
+            let r = &object.rect;
+            let rect_px = self.canvas.cell_to_screen(r.x, r.y);
+            let header_h = PROCESS_HEADER_H_PX * zoom;
+            let header_rect =
+                egui::Rect::from_min_size(rect_px, egui::Vec2::new(512.0 * zoom, header_h));
+            if header_rect.contains(screen_pos) {
+                return Some(object.id.clone());
+            }
+        }
         None
     }
 
-    /// Найти заголовок контейнера или процесса под заданной экранной позицией.
-    /// Возвращает (id, направление), где направление = None для шапки процесса.
-    fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, Option<ContainerDirection>)> {
+    /// Найти заголовок автономного контейнера под заданной экранной позицией.
+    /// Пропускает шапки процессов (они обрабатываются в header_under).
+    fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, ContainerDirection)> {
         for (id, dir, rect) in &self.canvas.container_header_hotspots {
             if rect.contains(screen_pos) {
                 let obj_kind = self.canvas.objects.iter().find(|o| o.id == *id).map(|o| o.kind.clone());
-                match obj_kind {
-                    Some(NodeKind::Process) => return Some((id.clone(), None)),
-                    Some(NodeKind::Container) => {
-                        let container_dir = match dir {
-                            polygram_core::types::Direction::Request => ContainerDirection::Request,
-                            polygram_core::types::Direction::Result => ContainerDirection::Result,
-                            _ => ContainerDirection::Request,
-                        };
-                        return Some((id.clone(), Some(container_dir)));
-                    }
-                    _ => {}
+                if obj_kind != Some(NodeKind::Container) {
+                    continue; // шапка процесса — не контейнер
                 }
+                let container_dir = match dir {
+                    polygram_core::types::Direction::Request => ContainerDirection::Request,
+                    polygram_core::types::Direction::Result => ContainerDirection::Result,
+                };
+                return Some((id.clone(), container_dir));
             }
         }
         None
@@ -864,32 +876,22 @@ impl eframe::App for PolygramApp {
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     // Не начинаем драг, если клик на кнопке "+ Добавить показатель":
-                    // иначе драг перехватит клик и процесс уедет с места.
                     let on_add_metric = self.canvas.add_metric_hotspots.iter()
                         .any(|(_, _, rect)| rect.contains(pos));
                     if on_add_metric {
                         // Пусть клик-обработчик ниже откроет диалог добавления показателя.
-                    } else if let Some((id, dir_opt)) = self.container_header_under(pos) {
-                        // Заголовок контейнера или процесса — драг только из шапки.
-                        if let Some(dir) = dir_opt {
-                            // Контейнер: тащим как объект с направлением.
-                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                            }
-                            self.start_drag_container(id, dir, pos);
-                        } else {
-                            // Процесс: тащим только из шапки.
-                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                            }
-                            self.start_drag_process(id, pos);
-                        }
                     } else if let Some(id) = self.header_under(pos) {
-                        // Заголовок отдела.
+                        // Заголовок отдела или процесса — драг только из шапки.
                         if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
                             self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
                         }
                         self.start_drag_object(id, pos);
+                    } else if let Some((id, dir)) = self.container_header_under(pos) {
+                        // Шапка автономного контейнера.
+                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                        }
+                        self.start_drag_container(id, dir, pos);
                     } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
                         // Начало перетаскивания показателя (соединение/переордер записей).
                         if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
