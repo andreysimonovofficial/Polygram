@@ -95,6 +95,13 @@ pub fn paint_process(
     let container_padding = CONTAINER_PADDING_PX * zoom;
     let process_radius = PROCESS_BORDER_RADIUS_PX * zoom;
 
+    // Добавляем шапку процесса в горячие зоны для hit-testing при драге.
+    let process_header_rect = Rect::from_min_size(
+        Pos2::new(ox, oy),
+        Vec2::new(card_w, header_h),
+    );
+    header_hotspots.push((object.id.clone(), Direction::Request, process_header_rect));
+
     let total_height = process_total_height(object, dynamic, zoom, card_w);
 
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, total_height));

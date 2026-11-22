@@ -193,15 +193,24 @@ impl PolygramApp {
         None
     }
 
-    /// Найти заголовок контейнера под заданной экранной позицией.
-    fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, ContainerDirection)> {
+    /// Найти заголовок контейнера или процесса под заданной экранной позицией.
+    /// Возвращает (id, направление), где направление = None для шапки процесса.
+    fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, Option<ContainerDirection>)> {
         for (id, dir, rect) in &self.canvas.container_header_hotspots {
             if rect.contains(screen_pos) {
-                let container_dir = match dir {
-                    polygram_core::types::Direction::Request => ContainerDirection::Request,
-                    polygram_core::types::Direction::Result => ContainerDirection::Result,
-                };
-                return Some((id.clone(), container_dir));
+                let obj_kind = self.canvas.objects.iter().find(|o| o.id == *id).map(|o| o.kind.clone());
+                match obj_kind {
+                    Some(NodeKind::Process) => return Some((id.clone(), None)),
+                    Some(NodeKind::Container) => {
+                        let container_dir = match dir {
+                            polygram_core::types::Direction::Request => ContainerDirection::Request,
+                            polygram_core::types::Direction::Result => ContainerDirection::Result,
+                            _ => ContainerDirection::Request,
+                        };
+                        return Some((id.clone(), Some(container_dir)));
+                    }
+                    _ => {}
+                }
             }
         }
         None
@@ -860,33 +869,35 @@ impl eframe::App for PolygramApp {
                         .any(|(_, _, rect)| rect.contains(pos));
                     if on_add_metric {
                         // Пусть клик-обработчик ниже откроет диалог добавления показателя.
-                    } else if self.header_under(pos).is_some() {
-                        if let Some(id) = self.header_under(pos) {
-                            // Запомнить исходную клетку отдела для перемещения с детьми.
-                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                            }
-                            self.start_drag_object(id, pos);
-                        }
-                    } else {
-                        // Процесс — начинаем его перетаскивание (включая клик на шапку контейнера внутри процесса).
-                        if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
-                            self.start_drag_process(obj_id, pos);
-                        } else if let Some((id, dir)) = self.container_header_under(pos) {
-                            // Начало перетаскивания автономного контейнера (не внутри процесса).
+                    } else if let Some((id, dir_opt)) = self.container_header_under(pos) {
+                        // Заголовок контейнера или процесса — драг только из шапки.
+                        if let Some(dir) = dir_opt {
+                            // Контейнер: тащим как объект с направлением.
                             if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
                                 self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
                             }
                             self.start_drag_container(id, dir, pos);
-                        } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
-                            // Начало перетаскивания показателя (соединение/переордер записей).
-                            if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
-                                self.drag_metric_source = Some((obj_id, dir, name));
-                                self.drag_metric_start = Some(pos);
-                            }
                         } else {
-                            self.selection_box_start = Some(pos);
+                            // Процесс: тащим только из шапки.
+                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                            }
+                            self.start_drag_process(id, pos);
                         }
+                    } else if let Some(id) = self.header_under(pos) {
+                        // Заголовок отдела.
+                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                        }
+                        self.start_drag_object(id, pos);
+                    } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
+                        // Начало перетаскивания показателя (соединение/переордер записей).
+                        if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
+                            self.drag_metric_source = Some((obj_id, dir, name));
+                            self.drag_metric_start = Some(pos);
+                        }
+                    } else {
+                        self.selection_box_start = Some(pos);
                     }
                 }
             }
