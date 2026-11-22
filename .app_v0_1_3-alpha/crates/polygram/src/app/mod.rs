@@ -275,7 +275,20 @@ impl PolygramApp {
         self.drag_object_dir = None;
     }
 
-    /// Сбросить состояние драга без применения перемещения (используется при открытии диалога).
+    /// Очистить состояние драга без сброса позиций объектов.
+    /// Используется после успешного apply_batch, когда позиции уже применены.
+    fn clear_drag_state(&mut self) {
+        self.drag_objects = Vec::new();
+        self.drag_offsets = Vec::new();
+        self.drag_start_cells = Vec::new();
+        self.drag_start_screen = None;
+        self.drag_over = None;
+        self.drag_ghost = None;
+        self.drag_object_dir = None;
+    }
+
+    /// Сбросить состояние драга и вернуть объекты на исходные позиции
+    /// (используется при отмене драга — открытии диалога или возврате на место).
     fn cancel_drag(&mut self) {
         // Вернуть объекты на исходные позиции, чтобы они не «залипли» на экране.
         for (i, id) in self.drag_objects.iter().enumerate() {
@@ -285,13 +298,7 @@ impl PolygramApp {
                 o.rect.y = start_cell.1;
             }
         }
-        self.drag_objects = Vec::new();
-        self.drag_offsets = Vec::new();
-        self.drag_start_cells = Vec::new();
-        self.drag_start_screen = None;
-        self.drag_over = None;
-        self.drag_ghost = None;
-        self.drag_object_dir = None;
+        self.clear_drag_state();
     }
 
     /// Применить текущую позицию курсора ко всем перетаскиваемым объектам
@@ -429,7 +436,7 @@ impl PolygramApp {
                                         o.rect.y = start_cell.1;
                                     }
                                 }
-                                self.cancel_drag();
+                                self.clear_drag_state();
                                 return;
                             }
                             self.dialogs.reparent_confirm = Some((
@@ -487,7 +494,7 @@ impl PolygramApp {
         } else {
             self.apply_batch(cmds);
         }
-        self.cancel_drag();
+        self.clear_drag_state();
     }
 
     /// Найти горячую зону показателя под заданной экранной позицией.
