@@ -853,22 +853,22 @@ impl eframe::App for PolygramApp {
                             }
                             self.start_drag_object(id, pos);
                         }
-                    } else if let Some((id, dir)) = self.container_header_under(pos) {
-                        // Начало перетаскивания контейнера как объекта.
-                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                        }
-                        self.start_drag_container(id, dir, pos);
-                    } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
-                        // Начало перетаскивания показателя (соединение/переордер записей).
-                        if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
-                            self.drag_metric_source = Some((obj_id, dir, name));
-                            self.drag_metric_start = Some(pos);
-                        }
                     } else {
-                        // Процесс — начинаем его перетаскивание; иначе — выделение рамкой.
+                        // Процесс — начинаем его перетаскивание (включая клик на шапку контейнера внутри процесса).
                         if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
                             self.start_drag_process(obj_id, pos);
+                        } else if let Some((id, dir)) = self.container_header_under(pos) {
+                            // Начало перетаскивания автономного контейнера (не внутри процесса).
+                            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                                self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                            }
+                            self.start_drag_container(id, dir, pos);
+                        } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
+                            // Начало перетаскивания показателя (соединение/переордер записей).
+                            if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
+                                self.drag_metric_source = Some((obj_id, dir, name));
+                                self.drag_metric_start = Some(pos);
+                            }
                         } else {
                             self.selection_box_start = Some(pos);
                         }
