@@ -846,7 +846,13 @@ impl eframe::App for PolygramApp {
                 && self.dialogs.add_metric_target.is_none()
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
-                    if self.header_under(pos).is_some() {
+                    // Не начинаем драг, если клик на кнопке "+ Добавить показатель":
+                    // иначе драг перехватит клик и процесс уедет с места.
+                    let on_add_metric = self.canvas.add_metric_hotspots.iter()
+                        .any(|(_, _, rect)| rect.contains(pos));
+                    if on_add_metric {
+                        // Пусть клик-обработчик ниже откроет диалог добавления показателя.
+                    } else if self.header_under(pos).is_some() {
                         if let Some(id) = self.header_under(pos) {
                             // Запомнить исходную клетку отдела для перемещения с детьми.
                             if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
