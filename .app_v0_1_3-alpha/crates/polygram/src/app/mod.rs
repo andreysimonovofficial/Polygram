@@ -843,6 +843,7 @@ impl eframe::App for PolygramApp {
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
                 && self.drag_metric_source.is_none()
+                && self.dialogs.add_metric_target.is_none()
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     if self.header_under(pos).is_some() {
