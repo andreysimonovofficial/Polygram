@@ -801,6 +801,14 @@ impl eframe::App for PolygramApp {
                                 .unwrap_or(0),
                         };
                         self.dialogs.add_metric_defaults(obj_id.clone(), *dir, n);
+                        // Сбрасываем любое состояние драга, чтобы клик на '+'
+                        // не затащил объект за собой.
+                        self.drag_object = None;
+                        self.drag_start_screen = None;
+                        self.drag_start_cell = None;
+                        self.drag_over = None;
+                        self.drag_ghost = None;
+                        self.drag_object_dir = None;
                     } else {
                         // Проверяем клик по процессу.
                         let mut clicked_process = false;
@@ -944,18 +952,28 @@ impl eframe::App for PolygramApp {
             if self.drag_object.is_some()
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
-                let is_process_drag = self
-                    .canvas
-                    .objects
-                    .iter()
-                    .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
-                        && o.kind == NodeKind::Process);
-                if is_process_drag {
-                    self.end_drag_process();
-                } else if self.drag_object_dir.is_some() {
-                    self.end_drag_container_or_metric();
+                // Если открыт диалог — отменяем драг без перемещения объекта.
+                if self.dialogs.add_metric_target.is_some() || self.right_click_object.is_some() {
+                    self.drag_object = None;
+                    self.drag_start_screen = None;
+                    self.drag_start_cell = None;
+                    self.drag_over = None;
+                    self.drag_ghost = None;
+                    self.drag_object_dir = None;
                 } else {
-                    self.end_drag_object();
+                    let is_process_drag = self
+                        .canvas
+                        .objects
+                        .iter()
+                        .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
+                            && o.kind == NodeKind::Process);
+                    if is_process_drag {
+                        self.end_drag_process();
+                    } else if self.drag_object_dir.is_some() {
+                        self.end_drag_container_or_metric();
+                    } else {
+                        self.end_drag_object();
+                    }
                 }
             }
 
