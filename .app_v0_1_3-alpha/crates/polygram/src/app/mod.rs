@@ -798,7 +798,8 @@ impl eframe::App for PolygramApp {
                             clicked_process = true;
                         }
                         if !clicked_process {
-                            // Клик по пустому месту — ничего не выделяем (или можно сбрасывать выделение).
+                            // Клик по пустому месту — сбрасываем выделение.
+                            self.selected_objects.clear();
                         }
                     }
                 }
