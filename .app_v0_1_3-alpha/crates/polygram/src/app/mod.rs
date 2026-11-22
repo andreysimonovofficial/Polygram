@@ -2,6 +2,8 @@
 //! Хранит Canvas, движок ядра, отслеживает клики по холсту, выделение объектов,
 //! перетаскивание отделов за шапку, диалог переименования и диалоги показателей.
 
+use std::collections::HashSet;
+
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::{Canvas, paint::constants::PROCESS_HEADER_H_PX};
 use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
@@ -62,14 +64,14 @@ pub struct PolygramApp {
     menu_just_opened: bool,
     /// Выделенные объекты.
     pub selected_objects: Vec<String>,
-    /// Объект, который сейчас перетаскивается (None — не перетаскивается).
-    drag_object: Option<String>,
-    /// Смещение курсора относительно левого верхнего угла объекта в клетках.
-    drag_offset_cell: (f32, f32),
+    /// Объекты, которые сейчас перетаскиваются (один или группа выделенных).
+    drag_objects: Vec<String>,
+    /// Смещение курсора относительно левого верхнего угла каждого объекта в клетках.
+    drag_offsets: Vec<(f32, f32)>,
     /// Начальная позиция мыши при начале драга (экран).
     drag_start_screen: Option<Pos2>,
-    /// Стартовая клетка перетаскиваемого объекта (для отмены при возврате на место).
-    drag_start_cell: Option<(i32, i32)>,
+    /// Стартовые клетки перетаскиваемых объектов (для отмены при возврате на место).
+    drag_start_cells: Vec<(i32, i32)>,
     /// Отдел, над которым нависает перетаскиваемый объект.
     drag_over: Option<String>,
     /// Свободная клетка для призрачной копии при перетаскивании объекта в отдел.
@@ -101,10 +103,10 @@ impl PolygramApp {
             image_loaders_installed: false,
             menu_just_opened: false,
             selected_objects: Vec::new(),
-            drag_object: None,
-            drag_offset_cell: (0.0, 0.0),
+            drag_objects: Vec::new(),
+            drag_offsets: Vec::new(),
             drag_start_screen: None,
-            drag_start_cell: None,
+            drag_start_cells: Vec::new(),
             drag_over: None,
             drag_ghost: None,
             drag_object_dir: None,
@@ -238,118 +240,254 @@ impl PolygramApp {
         }
     }
 
-    /// Начать перетаскивание отдела за шапку.
-    fn start_drag_object(&mut self, id: String, screen_pos: Pos2) {
-        self.drag_object = Some(id.clone());
-        self.selected_objects = vec![id.clone()];
-        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-            let screen_min = self.canvas.cell_to_screen(obj.rect.x, obj.rect.y);
-            let click_cell_x = ((screen_pos.x / self.canvas.camera.zoom
-                - self.canvas.camera.offset.x)
-                / self.canvas.cell_size) as f32;
-            let click_cell_y = ((screen_pos.y / self.canvas.camera.zoom
-                - self.canvas.camera.offset.y)
-                / self.canvas.cell_size) as f32;
-            let top_left_cell_x =
-                (screen_min.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
-                    / self.canvas.cell_size;
-            let top_left_cell_y =
-                (screen_min.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
-                    / self.canvas.cell_size;
-            self.drag_offset_cell = (
-                click_cell_x - top_left_cell_x,
-                click_cell_y - top_left_cell_y,
-            );
+    /// Начать перетаскивание одного объекта или группы выделенных объектов.
+    /// Если кликнутый объект уже в выделении — тащит всю группу (как в Figma),
+    /// иначе — только этот объект.
+    fn start_drag_objects(&mut self, ids: Vec<String>, screen_pos: Pos2) {
+        self.drag_objects = ids.clone();
+        self.drag_offsets = Vec::new();
+        self.drag_start_cells = Vec::new();
+        for id in &ids {
+            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == *id) {
+                let screen_min = self.canvas.cell_to_screen(obj.rect.x, obj.rect.y);
+                let click_cell_x = ((screen_pos.x / self.canvas.camera.zoom
+                    - self.canvas.camera.offset.x)
+                    / self.canvas.cell_size) as f32;
+                let click_cell_y = ((screen_pos.y / self.canvas.camera.zoom
+                    - self.canvas.camera.offset.y)
+                    / self.canvas.cell_size) as f32;
+                let top_left_cell_x =
+                    (screen_min.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
+                        / self.canvas.cell_size;
+                let top_left_cell_y =
+                    (screen_min.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
+                        / self.canvas.cell_size;
+                self.drag_offsets.push((
+                    click_cell_x - top_left_cell_x,
+                    click_cell_y - top_left_cell_y,
+                ));
+                self.drag_start_cells.push((obj.rect.x, obj.rect.y));
+            }
         }
         self.drag_start_screen = Some(screen_pos);
+        self.drag_over = None;
+        self.drag_ghost = None;
+        self.drag_object_dir = None;
     }
 
-    /// Применить текущую позицию курсора к перетаскиваемому объекту (привязка к клеткам).
-    /// Если перетаскивается отдел — тащит все его дочерние объекты вместе с собой (как Group в Figma).
-    fn update_drag_object(&mut self, cursor: Pos2) {
-        let Some(drag_id) = self.drag_object.as_deref() else {
+    /// Сбросить состояние драга без применения перемещения (используется при открытии диалога).
+    fn cancel_drag(&mut self) {
+        // Вернуть объекты на исходные позиции, чтобы они не «залипли» на экране.
+        for (i, id) in self.drag_objects.iter().enumerate() {
+            let start_cell = self.drag_start_cells.get(i).copied().unwrap_or((0, 0));
+            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == *id) {
+                o.rect.x = start_cell.0;
+                o.rect.y = start_cell.1;
+            }
+        }
+        self.drag_objects = Vec::new();
+        self.drag_offsets = Vec::new();
+        self.drag_start_cells = Vec::new();
+        self.drag_start_screen = None;
+        self.drag_over = None;
+        self.drag_ghost = None;
+        self.drag_object_dir = None;
+    }
+
+    /// Применить текущую позицию курсора ко всем перетаскиваемым объектам
+    /// (привязка к клеткам). Отдел тащит своих детей, не входящих в группу.
+    /// Также подсвечивает отдел под курсором.
+    fn update_drag_objects(&mut self, ui: &mut egui::Ui, cursor: Pos2) {
+        if self.drag_objects.is_empty() {
             return;
-        };
+        }
         let cursor_world_x = (cursor.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
             / self.canvas.cell_size;
         let cursor_world_y = (cursor.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
             / self.canvas.cell_size;
-        let target_x = (cursor_world_x - self.drag_offset_cell.0).round() as i32;
-        let target_y = (cursor_world_y - self.drag_offset_cell.1).round() as i32;
-        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() {
-            let dx = target_x - obj.rect.x;
-            let dy = target_y - obj.rect.y;
-            if let Some(dragged) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+        let drag_set: HashSet<&str> =
+            self.drag_objects.iter().map(|s| s.as_str()).collect();
+        let mut over_dept: Option<String> = None;
+        // Определить отдел под курсором (исключая перетаскиваемые).
+        if let Some(under_id) = self.canvas.objects.iter().find(|o| {
+            let cx = (cursor.x / self.canvas.camera.zoom - self.canvas.camera.offset.x)
+                / self.canvas.cell_size;
+            let cy = (cursor.y / self.canvas.camera.zoom - self.canvas.camera.offset.y)
+                / self.canvas.cell_size;
+            let cursor_cell = (cx.round() as i32, cy.round() as i32);
+            o.id != self.drag_objects.first().map(|s| s.as_str()).unwrap_or("")
+                && !drag_set.contains(o.id.as_str())
+                && cursor_cell.0 >= o.rect.x && cursor_cell.0 < o.rect.x + o.rect.w
+                && cursor_cell.1 >= o.rect.y && cursor_cell.1 < o.rect.y + o.rect.h
+        }).map(|o| o.id.clone()) {
+            if let Some(under_obj) = self.canvas.objects.iter().find(|o| o.id == under_id) {
+                match under_obj.kind {
+                    NodeKind::Department => {
+                        over_dept = Some(under_id);
+                    }
+                    NodeKind::Process => {
+                        if let Some(dept_id) = &under_obj.parent {
+                            if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+                            {
+                                over_dept = Some(dept_id.clone());
+                            } else {
+                                over_dept = Some(under_id);
+                            }
+                        } else {
+                            over_dept = Some(under_id);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.drag_over = over_dept.clone();
+
+        // Переместить каждый объект группы, сохраняя относительные позиции.
+        for (i, id) in self.drag_objects.iter().enumerate() {
+            let target_x = (cursor_world_x - self.drag_offsets[i].0).round() as i32;
+            let target_y = (cursor_world_y - self.drag_offsets[i].1).round() as i32;
+            if let Some(dragged) = self.canvas.objects.iter_mut().find(|o| o.id == *id) {
+                let dx = target_x - dragged.rect.x;
+                let dy = target_y - dragged.rect.y;
                 dragged.rect.x = target_x;
                 dragged.rect.y = target_y;
-            }
-            // Отдел тащит всех своих детей вместе с собой.
-            if obj.kind == NodeKind::Department {
-                for child in self
-                    .canvas
-                    .objects
-                    .iter_mut()
-                    .filter(|o| o.parent.as_deref() == Some(drag_id))
-                {
-                    child.rect.x += dx;
-                    child.rect.y += dy;
+                // Отдел тащит всех своих прямых детей, кроме тех, что в группе перетаскивания.
+                if dragged.kind == NodeKind::Department {
+                    for child in self.canvas.objects.iter_mut().filter(|o| {
+                        o.parent.as_deref() == Some(id) && !drag_set.contains(o.id.as_str())
+                    }) {
+                        child.rect.x += dx;
+                        child.rect.y += dy;
+                    }
                 }
+            }
+        }
+
+        let painter = ui.painter();
+        let cell_px = self.canvas.cell_px();
+        // Подсветить отдел, над которым нависает группа.
+        if let Some(dept_id) = &over_dept {
+            if let Some(dept) = self.canvas.objects.iter().find(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+            {
+                let r = &dept.rect;
+                let rect_px = Rect::from_min_size(
+                    self.canvas.cell_to_screen(r.x, r.y),
+                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+                );
+                painter.rect_stroke(
+                    rect_px.expand(2.0),
+                    2.0,
+                    egui::Stroke::new(2.0 * self.canvas.camera.zoom, self.canvas.theme.accent),
+                    egui::StrokeKind::Middle,
+                );
             }
         }
     }
 
-    /// Завершить перетаскивание отдела.
-    /// Если перетаскивался отдел — отправляет MoveObject для отдела и всех его детей.
-    fn end_drag_object(&mut self) {
-        let Some(drag_id) = self.drag_object.clone() else {
+    /// Завершить перетаскивание группы объектов: применить MoveObject для каждого,
+    /// чья позиция изменилась. Отдел перевозит детей, не входящих в группу.
+    /// Для одного Процесса, брошенного в другой отдел — открыть диалог подтверждения
+    /// переноса (сохранение старого поведения).
+    fn end_drag_objects(&mut self) {
+        if self.drag_objects.is_empty() {
             self.drag_start_screen = None;
-            self.drag_start_cell = None;
-            return;
-        };
-        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
-        let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
-            self.drag_object = None;
-            self.drag_start_screen = None;
-            self.drag_start_cell = None;
-            return;
-        };
-
-        // Если позиция не изменилась — отмена, возвращаем на место.
-        if (obj.rect.x, obj.rect.y) == start_cell {
-            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-                o.rect.x = start_cell.0;
-                o.rect.y = start_cell.1;
-            }
-            self.drag_object = None;
-            self.drag_start_screen = None;
-            self.drag_start_cell = None;
             return;
         }
+        let drag_set: HashSet<&str> =
+            self.drag_objects.iter().map(|s| s.as_str()).collect();
 
-        let mut cmds: Vec<Command> = vec![Command::MoveObject {
-            object: drag_id.clone(),
-            at: [obj.rect.x, obj.rect.y],
-        }];
-
-        // Отдел перевозит всех потомков с собой.
-        if obj.kind == NodeKind::Department {
-            for child in self
-                .canvas
-                .objects
-                .iter()
-                .filter(|o| o.parent.as_deref() == Some(&drag_id))
-            {
-                cmds.push(Command::MoveObject {
-                    object: child.id.clone(),
-                    at: [child.rect.x, child.rect.y],
-                });
+        // Один Процесс над отделом — диалог подтверждения переноса (как раньше).
+        if self.drag_objects.len() == 1 {
+            let id = self.drag_objects[0].clone();
+            if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                if obj.kind == NodeKind::Process {
+                    if let Some(dept_id) = &self.drag_over {
+                        if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
+                            let start_cell = self.drag_start_cells.get(0).copied().unwrap_or((0, 0));
+                            let object_size = (obj.rect.w, obj.rect.h);
+                            let drop_cell = find_free_cell_in_dept(
+                                &self.canvas.objects,
+                                dept_id,
+                                object_size.0,
+                                object_size.1,
+                                &id,
+                            )
+                            .unwrap_or((obj.rect.x, obj.rect.y));
+                            let already_in_dept = self.canvas.objects.iter().any(|o| {
+                                o.id == id && o.parent.as_deref() == Some(dept_id)
+                            });
+                            if already_in_dept {
+                                if drop_cell != start_cell {
+                                    self.apply_batch(vec![Command::MoveObject {
+                                        object: id.clone(),
+                                        at: [drop_cell.0, drop_cell.1],
+                                    }]);
+                                } else {
+                                    if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == id) {
+                                        o.rect.x = start_cell.0;
+                                        o.rect.y = start_cell.1;
+                                    }
+                                }
+                                self.cancel_drag();
+                                return;
+                            }
+                            self.dialogs.reparent_confirm = Some((
+                                id.clone(),
+                                dept_id.clone(),
+                                drop_cell,
+                                start_cell,
+                                NodeKind::Process,
+                            ));
+                            self.cancel_drag();
+                            return;
+                        }
+                    }
+                }
             }
         }
 
-        self.apply_batch(cmds);
-        self.drag_object = None;
-        self.drag_start_screen = None;
-        self.drag_start_cell = None;
+        // Свободное место: переместить все объекты группы, сохраняя относительные позиции.
+        let mut cmds: Vec<Command> = Vec::new();
+        let mut any_moved = false;
+        for (i, id) in self.drag_objects.iter().enumerate() {
+            let start_cell = self.drag_start_cells.get(i).copied().unwrap_or((0, 0));
+            let Some(obj) = self.canvas.objects.iter().find(|o| o.id == *id).cloned() else {
+                continue;
+            };
+            if (obj.rect.x, obj.rect.y) == start_cell {
+                continue;
+            }
+            any_moved = true;
+            cmds.push(Command::MoveObject {
+                object: id.clone(),
+                at: [obj.rect.x, obj.rect.y],
+            });
+            // Отдел перевозит детей, не входящих в группу.
+            if obj.kind == NodeKind::Department {
+                for child in self.canvas.objects.iter().filter(|o| {
+                    o.parent.as_deref() == Some(id) && !drag_set.contains(o.id.as_str())
+                }) {
+                    cmds.push(Command::MoveObject {
+                        object: child.id.clone(),
+                        at: [child.rect.x, child.rect.y],
+                    });
+                }
+            }
+        }
+        if !any_moved {
+            // Вернуть на исходные позиции (отмена).
+            for (i, id) in self.drag_objects.iter().enumerate() {
+                let start_cell = self.drag_start_cells.get(i).copied().unwrap_or((0, 0));
+                if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == *id) {
+                    o.rect.x = start_cell.0;
+                    o.rect.y = start_cell.1;
+                }
+            }
+        } else {
+            self.apply_batch(cmds);
+        }
+        self.cancel_drag();
     }
 
     /// Найти горячую зону показателя под заданной экранной позицией.
@@ -383,110 +521,25 @@ impl PolygramApp {
         None
     }
 
-    /// Начать перетаскивание процесса.
-    fn start_drag_process(&mut self, id: String, screen_pos: Pos2) {
-        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-        }
-        self.start_drag_object(id.clone(), screen_pos);
-        self.drag_over = None;
-        self.drag_ghost = None;
-        self.drag_object_dir = None;
-    }
-
-    /// Начать перетаскивание контейнера как объекта.
+    /// Начать перетаскивание контейнера как объекта (единичная операция).
     fn start_drag_container(&mut self, id: String, dir: ContainerDirection, screen_pos: Pos2) {
-        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-        }
-        self.start_drag_object(id.clone(), screen_pos);
+        self.start_drag_objects(vec![id.clone()], screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
         self.drag_ghost = None;
     }
 
-    /// Начать перетаскивание показателя как объекта.
+    /// Начать перетаскивание показателя как объекта (единичная операция).
     fn start_drag_metric_object(&mut self, id: String, dir: ContainerDirection, screen_pos: Pos2) {
-        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-        }
-        self.start_drag_object(id.clone(), screen_pos);
+        self.start_drag_objects(vec![id.clone()], screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
         self.drag_ghost = None;
-    }
-
-    /// Обновить позицию перетаскиваемого процесса и подсветить отдел под курсором.
-    fn update_drag_process(&mut self, ui: &mut egui::Ui, cursor: Pos2, theme: &polygram_canvas::Theme) {
-        self.update_drag_object(cursor);
-
-        let Some(drag_id) = self.drag_object.as_deref() else {
-            return;
-        };
-        let zoom = self.canvas.camera.zoom;
-        let offset = self.canvas.camera.offset;
-        let cell_size = self.canvas.cell_size;
-        let cursor_world_x = (cursor.x / zoom - offset.x) / cell_size;
-        let cursor_world_y = (cursor.y / zoom - offset.y) / cell_size;
-        let cursor_cell = (cursor_world_x.round() as i32, cursor_world_y.round() as i32);
-
-        // Найти объект под курсором (исключая перетаскиваемый), определить отдел для подсветки.
-        let mut over: Option<String> = None;
-        if let Some(under_id) = self.canvas.objects.iter().find(|o| {
-            o.id != drag_id
-                && cursor_cell.0 >= o.rect.x && cursor_cell.0 < o.rect.x + o.rect.w
-                && cursor_cell.1 >= o.rect.y && cursor_cell.1 < o.rect.y + o.rect.h
-        }).map(|o| o.id.clone()) {
-            if let Some(under_obj) = self.canvas.objects.iter().find(|o| o.id == under_id) {
-                match under_obj.kind {
-                    NodeKind::Department => {
-                        over = Some(under_id);
-                    }
-                    NodeKind::Process => {
-                        if let Some(dept_id) = &under_obj.parent {
-                            if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
-                            {
-                                over = Some(dept_id.clone());
-                            } else {
-                                over = Some(under_id);
-                            }
-                        } else {
-                            over = Some(under_id);
-                        }
-                    }
-                    NodeKind::Container | NodeKind::Metric => {}
-                    _ => {}
-                }
-            }
-        }
-
-        self.drag_over = over.clone();
-
-        let painter = ui.painter();
-        let cell_px = self.canvas.cell_px();
-
-        // Подсветить отдел, над которым нависает процесс.
-        if let Some(dept_id) = &over {
-            if let Some(dept) = self.canvas.objects.iter().find(|o| o.id == *dept_id && o.kind == NodeKind::Department)
-            {
-                let r = &dept.rect;
-                let rect_px = Rect::from_min_size(
-                    self.canvas.cell_to_screen(r.x, r.y),
-                    Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-                );
-                painter.rect_stroke(
-                    rect_px.expand(2.0),
-                    2.0,
-                    egui::Stroke::new(2.0 * zoom, theme.accent),
-                    egui::StrokeKind::Middle,
-                );
-            }
-        }
     }
 
     /// Вычислить отдел под курсором для перетаскиваемого объекта (контейнер/показатель).
     fn object_drag_preview(&self, cursor: Pos2) -> (Option<String>, Option<(i32, i32)>) {
-        let Some(drag_id) = self.drag_object.as_deref() else {
+        let Some(drag_id) = self.drag_objects.first().map(|s| s.as_str()) else {
             return (None, None);
         };
         let dragged_obj = match self.canvas.objects.iter().find(|o| o.id == drag_id) {
@@ -533,7 +586,7 @@ impl PolygramApp {
         let ghost = if over.is_some() {
             // Над отделом — ищем свободную клетку внутри отдела для призрака.
             let dept_id = over.as_deref().unwrap();
-            if let Some(dept) = self.canvas.objects.iter().find(|o| o.id == dept_id && o.kind == NodeKind::Department) {
+            if let Some(_dept) = self.canvas.objects.iter().find(|o| o.id == dept_id && o.kind == NodeKind::Department) {
                 find_free_cell_in_dept(
                     &self.canvas.objects,
                     dept_id,
@@ -551,113 +604,21 @@ impl PolygramApp {
 
         (over, ghost)
     }
-
-    /// Завершить перетаскивание процесса: перенос в отдел (с подтверждением) или обычное перемещение.
-    fn end_drag_process(&mut self) {
-        let Some(drag_id) = self.drag_object.clone() else {
-            return;
-        };
-        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
-        let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
-            self.drag_object = None;
-            self.drag_start_screen = None;
-            self.drag_start_cell = None;
-            self.drag_over = None;
-            return;
-        };
-
-        // Конечная клетка: для отдела — свободная клетка внутри отдела,
-        // иначе текущая позиция объекта.
-        let drop_cell = if self.drag_over.as_ref().map_or(false, |dept_id| {
-            self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
-        }) {
-            let object_size = (obj.rect.w, obj.rect.h);
-            find_free_cell_in_dept(
-                &self.canvas.objects,
-                self.drag_over.as_deref().unwrap(),
-                object_size.0,
-                object_size.1,
-                &drag_id,
-            )
-            .unwrap_or((obj.rect.x, obj.rect.y))
-        } else {
-            (obj.rect.x, obj.rect.y)
-        };
-
-        // Если процесс над отделом:
-        // - если процесс уже дочерний этого отдела — просто перемещаем внутри отдела (без модалки);
-        // - иначе — открыть модальное подтверждение переноса.
-        if let Some(dept_id) = &self.drag_over {
-            let already_in_dept = self.canvas.objects.iter().any(|o| {
-                o.id == drag_id && o.parent.as_deref() == Some(dept_id)
-            });
-            if already_in_dept {
-                if drop_cell != start_cell {
-                    self.apply_batch(vec![Command::MoveObject {
-                        object: drag_id.clone(),
-                        at: [drop_cell.0, drop_cell.1],
-                    }]);
-                } else {
-                    // Вернуть на исходную позицию (отмена).
-                    if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-                        o.rect.x = start_cell.0;
-                        o.rect.y = start_cell.1;
-                    }
-                }
-                self.drag_object = None;
-                self.drag_start_screen = None;
-                self.drag_start_cell = None;
-                self.drag_over = None;
-                    return;
-            }
-            self.dialogs.reparent_confirm = Some((
-                drag_id.clone(),
-                dept_id.clone(),
-                drop_cell,
-                start_cell,
-                NodeKind::Process,
-            ));
-            self.drag_object = None;
-            self.drag_start_screen = None;
-            self.drag_start_cell = None;
-            self.drag_over = None;
-            return;
-        }
-
-        // Иначе — обычное перемещение, если позиция изменилась.
-        if drop_cell != start_cell {
-            self.apply_batch(vec![Command::MoveObject {
-                object: drag_id.clone(),
-                at: [drop_cell.0, drop_cell.1],
-            }]);
-        } else {
-            // Вернуть на исходную позицию (отмена).
-            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
-                o.rect.x = start_cell.0;
-                o.rect.y = start_cell.1;
-            }
-        }
-
-        self.drag_object = None;
-        self.drag_start_screen = None;
-        self.drag_start_cell = None;
-        self.drag_over = None;
-        self.drag_object_dir = None;
-    }
-
     /// Завершить перетаскивание контейнера или показателя как объекта.
     /// Вычисляет команды через доменную логику и применяет их.
     fn end_drag_container_or_metric(&mut self) {
-        let Some(drag_id) = self.drag_object.clone() else {
+        let Some(drag_id) = self.drag_objects.first().cloned() else {
             self.drag_object_dir = None;
             return;
         };
-        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
+        let start_cell = self.drag_start_cells.get(0).copied().unwrap_or((0, 0));
         let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
-            self.drag_object = None;
+            self.drag_objects = Vec::new();
+            self.drag_offsets = Vec::new();
+            self.drag_start_cells = Vec::new();
             self.drag_start_screen = None;
-            self.drag_start_cell = None;
             self.drag_over = None;
+            self.drag_ghost = None;
             self.drag_object_dir = None;
             return;
         };
@@ -681,10 +642,12 @@ impl PolygramApp {
 
         // Если позиция не изменилась — отмена.
         if drop_cell == start_cell {
-            self.drag_object = None;
+            self.drag_objects = Vec::new();
+            self.drag_offsets = Vec::new();
+            self.drag_start_cells = Vec::new();
             self.drag_start_screen = None;
-            self.drag_start_cell = None;
             self.drag_over = None;
+            self.drag_ghost = None;
             self.drag_object_dir = None;
             return;
         }
@@ -719,10 +682,12 @@ impl PolygramApp {
             }
         }
 
-        self.drag_object = None;
+        self.drag_objects = Vec::new();
+        self.drag_offsets = Vec::new();
+        self.drag_start_cells = Vec::new();
         self.drag_start_screen = None;
-        self.drag_start_cell = None;
         self.drag_over = None;
+        self.drag_ghost = None;
         self.drag_object_dir = None;
     }
 }
@@ -823,12 +788,7 @@ impl eframe::App for PolygramApp {
                         self.dialogs.add_metric_defaults(obj_id.clone(), *dir, n);
                         // Сбрасываем любое состояние драга, чтобы клик на '+'
                         // не затащил объект за собой.
-                        self.drag_object = None;
-                        self.drag_start_screen = None;
-                        self.drag_start_cell = None;
-                        self.drag_over = None;
-                        self.drag_ghost = None;
-                        self.drag_object_dir = None;
+                        self.cancel_drag();
                     } else {
                         // Проверяем клик по процессу.
                         let mut clicked_process = false;
@@ -860,16 +820,16 @@ impl eframe::App for PolygramApp {
                         self.dialogs.edit_target = Some(obj_id);
                         self.dialogs.edit_input = obj_name;
                         self.selected_objects.clear();
-                        self.drag_object = None;
+                        self.cancel_drag();
                         self.drag_metric_source = None;
                         self.selection_box_start = None;
                     }
                 }
             }
 
-            // ---- Начало взаимодействия: драг отдела за шапку, драг контейнера, драг показателя или selection box ----
+            // ---- Начало взаимодействия: драг отдела/процесса за шапку, драг контейнера, драг показателя или selection box ----
             if canvas_response.drag_started_by(PointerButton::Primary)
-                && self.drag_object.is_none()
+                && self.drag_objects.is_empty()
                 && self.drag_metric_source.is_none()
                 && self.dialogs.add_metric_target.is_none()
             {
@@ -881,16 +841,16 @@ impl eframe::App for PolygramApp {
                         // Пусть клик-обработчик ниже откроет диалог добавления показателя.
                     } else if let Some((id, dir)) = self.container_header_under(pos) {
                         // Шапка контейнера (включая шапку внутри карточки процесса) — драг контейнера.
-                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                        }
                         self.start_drag_container(id, dir, pos);
                     } else if let Some(id) = self.header_under(pos) {
                         // Заголовок отдела или процесса — драг только из шапки.
-                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                        // Если объект уже выделен — тащим всю группу (как в Figma), иначе только его.
+                        let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
+                        let already_selected = self.selected_objects.contains(&id);
+                        if !ctrl && !already_selected {
+                            self.selected_objects = vec![id.clone()];
                         }
-                        self.start_drag_object(id, pos);
+                        self.start_drag_objects(self.selected_objects.clone(), pos);
                     } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
                         // Начало перетаскивания показателя (соединение/переордер записей).
                         if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
@@ -905,7 +865,7 @@ impl eframe::App for PolygramApp {
 
             // ---- Отрисовка selection box и обновление позиции драга при перетаскивании ----
             if canvas_response.dragged_by(PointerButton::Primary) {
-                if self.drag_object.is_some() {
+                if !self.drag_objects.is_empty() {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         if self.drag_object_dir.is_some() {
                             // Драг контейнера/показателя как объекта (включая шапку контейнера внутри карточки процесса).
@@ -915,18 +875,7 @@ impl eframe::App for PolygramApp {
                             self.drag_over = over.clone();
                             self.drag_ghost = ghost;
                         } else {
-                            let is_process_drag = self
-                                .canvas
-                                .objects
-                                .iter()
-                                .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
-                                    && o.kind == NodeKind::Process);
-                            if is_process_drag {
-                                let theme = self.canvas.theme.clone();
-                                self.update_drag_process(ui, cur, &theme);
-                            } else {
-                                self.update_drag_object(cur);
-                            }
+                            self.update_drag_objects(ui, cur);
                         }
                     }
                 }
@@ -965,33 +914,18 @@ impl eframe::App for PolygramApp {
             }
 
             // ---- Завершение перетаскивания объекта ----
-            if self.drag_object.is_some()
+            if !self.drag_objects.is_empty()
                 && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
             {
                 // Если открыт диалог — отменяем драг без перемещения объекта.
                 if self.dialogs.add_metric_target.is_some() || self.right_click_object.is_some() {
-                    self.drag_object = None;
-                    self.drag_start_screen = None;
-                    self.drag_start_cell = None;
-                    self.drag_over = None;
-                    self.drag_ghost = None;
-                    self.drag_object_dir = None;
+                    self.cancel_drag();
                 } else {
                     if self.drag_object_dir.is_some() {
                         // Драг контейнера/показателя как объекта (включая шапку контейнера внутри карточки процесса).
                         self.end_drag_container_or_metric();
                     } else {
-                        let is_process_drag = self
-                            .canvas
-                            .objects
-                            .iter()
-                            .any(|o| o.id == self.drag_object.as_deref().unwrap_or("")
-                                && o.kind == NodeKind::Process);
-                        if is_process_drag {
-                            self.end_drag_process();
-                        } else {
-                            self.end_drag_object();
-                        }
+                        self.end_drag_objects();
                     }
                 }
             }

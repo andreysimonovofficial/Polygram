@@ -238,7 +238,7 @@ impl PolygramApp {
     pub fn geometry_with_predictions(&self) -> Geometry {
         crate::app::departments::geometry_with_predictions(
             &self.canvas.objects,
-            self.drag_object.as_deref(),
+            self.drag_objects.first().map(|s| s.as_str()),
             self.drag_over.as_deref(),
         )
     }
