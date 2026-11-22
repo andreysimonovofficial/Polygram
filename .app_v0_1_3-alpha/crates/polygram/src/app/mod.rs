@@ -879,18 +879,18 @@ impl eframe::App for PolygramApp {
                         .any(|(_, _, rect)| rect.contains(pos));
                     if on_add_metric {
                         // Пусть клик-обработчик ниже откроет диалог добавления показателя.
+                    } else if let Some((id, dir)) = self.container_header_under(pos) {
+                        // Шапка контейнера (включая шапку внутри карточки процесса) — драг контейнера.
+                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                        }
+                        self.start_drag_container(id, dir, pos);
                     } else if let Some(id) = self.header_under(pos) {
                         // Заголовок отдела или процесса — драг только из шапки.
                         if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
                             self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
                         }
                         self.start_drag_object(id, pos);
-                    } else if let Some((id, dir)) = self.container_header_under(pos) {
-                        // Шапка автономного контейнера.
-                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
-                        }
-                        self.start_drag_container(id, dir, pos);
                     } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
                         // Начало перетаскивания показателя (соединение/переордер записей).
                         if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
