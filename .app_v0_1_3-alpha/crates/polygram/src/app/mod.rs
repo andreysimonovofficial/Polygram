@@ -4,8 +4,8 @@
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::Canvas;
-use polygram_core::{Command, Engine, runtime::Published, types::{Direction, NodeKind}};
-use polygram_core::drag_domain::{compute_drag_preview, DragPreviewInput};
+use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
+use polygram_core::drag_domain::{compute_drag_preview, compute_object_drop_commands, DragPreviewInput, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
 use polygram_core::layout::Rect as CoreRect;
 
@@ -74,6 +74,8 @@ pub struct PolygramApp {
     drag_over: Option<String>,
     /// Свободная клетка для призрачной копии при перетаскивании процесса.
     drag_ghost: Option<(i32, i32)>,
+    /// Направление контейнера перетаскиваемого объекта (для Контейнера/Показателя).
+    drag_object_dir: Option<ContainerDirection>,
     /// Источник перетаскивания показателя: (id объекта, направление, имя показателя).
     drag_metric_source: Option<(String, Direction, String)>,
     /// Начальная позиция перетаскивания показателя (экран).
@@ -105,6 +107,7 @@ impl PolygramApp {
             drag_start_cell: None,
             drag_over: None,
             drag_ghost: None,
+            drag_object_dir: None,
             drag_metric_source: None,
             drag_metric_start: None,
             rename_target: None,
@@ -185,6 +188,20 @@ impl PolygramApp {
                 egui::Rect::from_min_size(rect_px.min, egui::Vec2::new(rect_px.width(), header_h));
             if header_rect.contains(screen_pos) {
                 return Some(object.id.clone());
+            }
+        }
+        None
+    }
+
+    /// Найти заголовок контейнера под заданной экранной позицией.
+    fn container_header_under(&self, screen_pos: Pos2) -> Option<(String, ContainerDirection)> {
+        for (id, dir, rect) in &self.canvas.container_header_hotspots {
+            if rect.contains(screen_pos) {
+                let container_dir = match dir {
+                    polygram_core::types::Direction::Request => ContainerDirection::Request,
+                    polygram_core::types::Direction::Result => ContainerDirection::Result,
+                };
+                return Some((id.clone(), container_dir));
             }
         }
         None
@@ -358,6 +375,28 @@ impl PolygramApp {
         self.drag_ghost = None;
     }
 
+    /// Начать перетаскивание контейнера как объекта.
+    fn start_drag_container(&mut self, id: String, dir: ContainerDirection, screen_pos: Pos2) {
+        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+        }
+        self.start_drag_object(id.clone(), screen_pos);
+        self.drag_object_dir = Some(dir);
+        self.drag_over = None;
+        self.drag_ghost = None;
+    }
+
+    /// Начать перетаскивание показателя как объекта.
+    fn start_drag_metric_object(&mut self, id: String, dir: ContainerDirection, screen_pos: Pos2) {
+        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+        }
+        self.start_drag_object(id.clone(), screen_pos);
+        self.drag_object_dir = Some(dir);
+        self.drag_over = None;
+        self.drag_ghost = None;
+    }
+
     /// Вычислить превью перетаскивания процесса: отдел под курсором и свободная клетка для призрака.
     fn process_drag_preview(&self, cursor: Pos2) -> (Option<String>, Option<(i32, i32)>) {
         let Some(drag_id) = self.drag_object.as_deref() else {
@@ -527,6 +566,90 @@ impl PolygramApp {
         self.drag_start_cell = None;
         self.drag_over = None;
         self.drag_ghost = None;
+        self.drag_object_dir = None;
+    }
+
+    /// Завершить перетаскивание контейнера или показателя как объекта.
+    /// Вычисляет команды через доменную логику и применяет их.
+    fn end_drag_container_or_metric(&mut self) {
+        let Some(drag_id) = self.drag_object.clone() else {
+            self.drag_object_dir = None;
+            return;
+        };
+        let start_cell = self.drag_start_cell.unwrap_or((0, 0));
+        let Some(obj) = self.canvas.objects.iter().find(|o| o.id == drag_id).cloned() else {
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            self.drag_over = None;
+            self.drag_ghost = None;
+            self.drag_object_dir = None;
+            return;
+        };
+
+        // Конечная клетка.
+        let drop_cell = if self.drag_over.as_ref().map_or(false, |dept_id| {
+            self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+        }) {
+            let object_size = (obj.rect.w, obj.rect.h);
+            find_free_cell_in_dept(
+                &self.canvas.objects,
+                self.drag_over.as_deref().unwrap(),
+                object_size.0,
+                object_size.1,
+                &drag_id,
+            )
+            .unwrap_or((obj.rect.x, obj.rect.y))
+        } else {
+            self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
+        };
+
+        // Если позиция не изменилась — отмена.
+        if drop_cell == start_cell {
+            if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+                o.rect.x = start_cell.0;
+                o.rect.y = start_cell.1;
+            }
+            self.drag_object = None;
+            self.drag_start_screen = None;
+            self.drag_start_cell = None;
+            self.drag_over = None;
+            self.drag_ghost = None;
+            self.drag_object_dir = None;
+            return;
+        }
+
+        let geometry = Geometry {
+            rev: 0,
+            objects: self.canvas.objects.clone(),
+            edges: Vec::new(),
+        };
+        let ctx = ObjectDropContext {
+            geometry,
+            dragged_id: drag_id.clone(),
+            start_cell,
+            drop_cell,
+            over_dept: self.drag_over.clone(),
+            dragged_size: (obj.rect.w, obj.rect.h),
+        };
+        let result = compute_object_drop_commands(&ctx);
+
+        if !result.commands.is_empty() {
+            self.apply_batch(result.commands);
+        }
+
+        // Обновить позицию объекта на клиенте для отображения.
+        if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == drag_id) {
+            o.rect.x = result.final_cell.0;
+            o.rect.y = result.final_cell.1;
+        }
+
+        self.drag_object = None;
+        self.drag_start_screen = None;
+        self.drag_start_cell = None;
+        self.drag_over = None;
+        self.drag_ghost = None;
+        self.drag_object_dir = None;
     }
 }
 
@@ -662,7 +785,7 @@ impl eframe::App for PolygramApp {
                 }
             }
 
-            // ---- Начало взаимодействия: драг отдела за шапку, драг показателя или selection box ----
+            // ---- Начало взаимодействия: драг отдела за шапку, драг контейнера, драг показателя или selection box ----
             if canvas_response.drag_started_by(PointerButton::Primary)
                 && self.drag_object.is_none()
                 && self.drag_metric_source.is_none()
@@ -676,8 +799,14 @@ impl eframe::App for PolygramApp {
                             }
                             self.start_drag_object(id, pos);
                         }
+                    } else if let Some((id, dir)) = self.container_header_under(pos) {
+                        // Начало перетаскивания контейнера как объекта.
+                        if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
+                            self.drag_start_cell = Some((obj.rect.x, obj.rect.y));
+                        }
+                        self.start_drag_container(id, dir, pos);
                     } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
-                        // Начало перетаскивания показателя
+                        // Начало перетаскивания показателя (соединение/переордер записей).
                         if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == NodeKind::Process) {
                             self.drag_metric_source = Some((obj_id, dir, name));
                             self.drag_metric_start = Some(pos);
@@ -757,6 +886,8 @@ impl eframe::App for PolygramApp {
                         && o.kind == NodeKind::Process);
                 if is_process_drag {
                     self.end_drag_process();
+                } else if self.drag_object_dir.is_some() {
+                    self.end_drag_container_or_metric();
                 } else {
                     self.end_drag_object();
                 }
