@@ -72,6 +72,8 @@ pub struct PolygramApp {
     drag_start_cell: Option<(i32, i32)>,
     /// Отдел, над которым нависает перетаскиваемый объект.
     drag_over: Option<String>,
+    /// Свободная клетка для призрачной копии при перетаскивании объекта в отдел.
+    drag_ghost: Option<(i32, i32)>,
     /// Направление контейнера перетаскиваемого объекта (для Контейнера/Показателя).
     drag_object_dir: Option<ContainerDirection>,
     /// Источник перетаскивания показателя: (id объекта, направление, имя показателя).
@@ -104,6 +106,7 @@ impl PolygramApp {
             drag_start_screen: None,
             drag_start_cell: None,
             drag_over: None,
+            drag_ghost: None,
             drag_object_dir: None,
             drag_metric_source: None,
             drag_metric_start: None,
@@ -369,6 +372,8 @@ impl PolygramApp {
         }
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_over = None;
+        self.drag_ghost = None;
+        self.drag_object_dir = None;
     }
 
     /// Начать перетаскивание контейнера как объекта.
@@ -379,6 +384,7 @@ impl PolygramApp {
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
+        self.drag_ghost = None;
     }
 
     /// Начать перетаскивание показателя как объекта.
@@ -389,6 +395,7 @@ impl PolygramApp {
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
+        self.drag_ghost = None;
     }
 
     /// Обновить позицию перетаскиваемого процесса и подсветить отдел под курсором.
@@ -457,6 +464,73 @@ impl PolygramApp {
                 );
             }
         }
+    }
+
+    /// Вычислить отдел под курсором для перетаскиваемого объекта (контейнер/показатель).
+    fn object_drag_preview(&self, cursor: Pos2) -> (Option<String>, Option<(i32, i32)>) {
+        let Some(drag_id) = self.drag_object.as_deref() else {
+            return (None, None);
+        };
+        let dragged_obj = match self.canvas.objects.iter().find(|o| o.id == drag_id) {
+            Some(o) => o.clone(),
+            None => return (None, None),
+        };
+        let zoom = self.canvas.camera.zoom;
+        let offset = self.canvas.camera.offset;
+        let cell_size = self.canvas.cell_size;
+        let cursor_world_x = (cursor.x / zoom - offset.x) / cell_size;
+        let cursor_world_y = (cursor.y / zoom - offset.y) / cell_size;
+        let cursor_cell = (cursor_world_x.round() as i32, cursor_world_y.round() as i32);
+
+        // Найти объект под курсором (исключая перетаскиваемый), определить отдел для подсветки.
+        let mut over: Option<String> = None;
+        if let Some(under_id) = self.canvas.objects.iter().find(|o| {
+            o.id != drag_id
+                && cursor_cell.0 >= o.rect.x && cursor_cell.0 < o.rect.x + o.rect.w
+                && cursor_cell.1 >= o.rect.y && cursor_cell.1 < o.rect.y + o.rect.h
+        }).map(|o| o.id.clone()) {
+            if let Some(under_obj) = self.canvas.objects.iter().find(|o| o.id == under_id) {
+                match under_obj.kind {
+                    NodeKind::Department => {
+                        over = Some(under_id);
+                    }
+                    NodeKind::Process => {
+                        if let Some(dept_id) = &under_obj.parent {
+                            if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+                            {
+                                over = Some(dept_id.clone());
+                            } else {
+                                over = Some(under_id);
+                            }
+                        } else {
+                            over = Some(under_id);
+                        }
+                    }
+                    NodeKind::Container | NodeKind::Metric => {}
+                    _ => {}
+                }
+            }
+        }
+
+        let ghost = if over.is_some() {
+            // Над отделом — ищем свободную клетку внутри отдела для призрака.
+            let dept_id = over.as_deref().unwrap();
+            if let Some(dept) = self.canvas.objects.iter().find(|o| o.id == dept_id && o.kind == NodeKind::Department) {
+                find_free_cell_in_dept(
+                    &self.canvas.objects,
+                    dept_id,
+                    dragged_obj.rect.w,
+                    dragged_obj.rect.h,
+                    drag_id,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        (over, ghost)
     }
 
     /// Завершить перетаскивание процесса: перенос в отдел (с подтверждением) или обычное перемещение.
@@ -817,6 +891,11 @@ impl eframe::App for PolygramApp {
                             self.update_drag_process(ui, cur, &theme);
                         } else {
                             self.update_drag_object(cur);
+                            if self.drag_object_dir.is_some() {
+                                let (over, ghost) = self.object_drag_preview(cur);
+                                self.drag_over = over.clone();
+                                self.drag_ghost = ghost;
+                            }
                         }
                     }
                 }
