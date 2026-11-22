@@ -1,4 +1,4 @@
-![[Документация/Продукт/app-description|app-description]]
+![[Документация/Продукт/Polygram это...|Polygram это...]]
 
 ![[Документация/Продукт/stack|stack]]
 
