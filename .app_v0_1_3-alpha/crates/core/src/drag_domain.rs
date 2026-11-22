@@ -2,6 +2,7 @@
 //! Без egui, без окна, без сети. Только входное состояние и чистый результат.
 
 use crate::geometry::Geometry;
+use crate::id_allocator::allocate_id;
 use crate::layout::Rect;
 use crate::types::{ContainerDirection, Direction, NodeKind};
 use crate::{Command, MetricValue};
@@ -306,7 +307,8 @@ fn compute_container_drop(
     target: Option<&crate::geometry::ObjectGeom>,
 ) -> ObjectDropResult {
     let target_dir = opposite_dir(dragged_dir);
-    let process_id = format!("proc_from_{}", dragged_id);
+    let existing_ids: Vec<String> = geometry.objects.iter().map(|o| o.id.clone()).collect();
+    let process_id = allocate_id(&existing_ids);
 
     // Определяем целевую клетку для нового процесса.
     let final_cell = if let Some(dept_id) = over_dept {
@@ -423,7 +425,8 @@ fn compute_metric_drop_object(
     target: Option<&crate::geometry::ObjectGeom>,
 ) -> ObjectDropResult {
     let target_dir = opposite_dir(dragged_dir);
-    let process_id = format!("proc_from_{}", dragged_id);
+    let existing_ids: Vec<String> = geometry.objects.iter().map(|o| o.id.clone()).collect();
+    let process_id = allocate_id(&existing_ids);
 
     // Определяем целевую клетку.
     let final_cell = if let Some(dept_id) = over_dept {

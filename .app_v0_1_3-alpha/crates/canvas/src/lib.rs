@@ -14,7 +14,7 @@ pub use polygram_core::types::{Direction, NodeKind, StatusCode};
 pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
 
 use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Vec2};
-use polygram_core::{DynamicState};
+use polygram_core::{DynamicState, id_allocator::allocate_id};
 
 /// Camera of the canvas: offset and zoom.
 #[derive(Clone, Copy, Debug, Default)]
@@ -163,7 +163,8 @@ impl Canvas {
 
     /// Adds a department at the given grid cell position.
     pub fn add_department(&mut self, cell_x: i32, cell_y: i32, name: impl Into<String>) -> String {
-        let id = format!("dept_{}", self.objects.len());
+        let existing_ids: Vec<String> = self.objects.iter().map(|o| o.id.clone()).collect();
+        let id = allocate_id(&existing_ids);
         let name = name.into();
         let ix = self.objects.len() as u32;
         self.objects.push(ObjectGeom {
@@ -182,7 +183,8 @@ impl Canvas {
 
     /// Adds a process at the given grid cell position.
     pub fn add_process(&mut self, cell_x: i32, cell_y: i32, name: impl Into<String>) -> String {
-        let id = format!("proc_{}", self.objects.len());
+        let existing_ids: Vec<String> = self.objects.iter().map(|o| o.id.clone()).collect();
+        let id = allocate_id(&existing_ids);
         let name = name.into();
         let ix = self.objects.len() as u32;
         self.objects.push(ObjectGeom {

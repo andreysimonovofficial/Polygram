@@ -17,6 +17,7 @@ pub mod error;
 pub mod geometry;
 pub mod hierarchy;
 pub mod hierarchy_mut;
+pub mod id_allocator;
 pub mod layout;
 pub mod metric_defs;
 pub mod objects;

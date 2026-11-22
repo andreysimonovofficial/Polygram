@@ -5,6 +5,8 @@ pub mod container_menu;
 pub mod reparent_confirm;
 pub mod rename;
 
+use polygram_core::id_allocator::allocate_id;
+
 /// Контекстное меню по правой кнопке мыши на холсте.
 pub fn context_menu(
     app: &mut super::PolygramApp,
@@ -167,7 +169,8 @@ pub fn context_menu(
     if create_department {
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
-            let id = format!("dept_{}", app.engine.hierarchy().object_count());
+            let existing_ids: Vec<String> = app.canvas.objects.iter().map(|o| o.id.clone()).collect();
+            let id = allocate_id(&existing_ids);
             let name = format!("Отдел {}", app.engine.hierarchy().object_count() + 1);
             app.apply_cmd(polygram_core::Command::AddObject {
                 id: Some(id.clone()),
@@ -185,7 +188,8 @@ pub fn context_menu(
     if create_process {
         if let Some(pos) = app.right_click {
             let (cx, cy) = app.canvas.screen_to_cell(pos);
-            let id = format!("proc_{}", app.engine.hierarchy().object_count());
+            let existing_ids: Vec<String> = app.canvas.objects.iter().map(|o| o.id.clone()).collect();
+            let id = allocate_id(&existing_ids);
             let name = format!("Процесс {}", app.engine.hierarchy().object_count() + 1);
             app.apply_cmd(polygram_core::Command::AddObject {
                 id: Some(id.clone()),

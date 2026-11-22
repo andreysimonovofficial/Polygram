@@ -29,6 +29,27 @@ fn geometry_with(objects: Vec<ObjectGeom>) -> Geometry {
     }
 }
 
+/// Извлечь ID только что созданного Процесса из первой команды AddObject.
+/// ID должен быть числом и не дублировать nenhum из существующих `existing`.
+fn new_process_id(commands: &[Command], existing: &[&str]) -> String {
+    match &commands[0] {
+        Command::AddObject { id, kind, .. } => {
+            assert_eq!(*kind, NodeKind::Process);
+            let id = id.clone().expect("AddObject processes must have an id");
+            assert!(
+                id.chars().all(char::is_numeric),
+                "ID процесса должен быть числом, получен: {id}"
+            );
+            assert!(
+                !existing.iter().any(|e| *e == id),
+                "ID процесса не должен дублировать существующий объект: {id}"
+            );
+            id
+        }
+        other => panic!("expected AddObject, got {:?}", other),
+    }
+}
+
 #[test]
 fn reorder_metric_entry_moves_within_requests() {
     let mut e = Engine::new();
@@ -581,18 +602,15 @@ fn object_drop_container_request_on_free_cell_creates_process_and_copies_metrics
     });
     // AddObject(Process) + 2x (AddMetricEntry + Connect) = 5 commands
     assert_eq!(result.commands.len(), 5);
+    let process_id = new_process_id(&result.commands, &["c"]);
     match &result.commands[0] {
-        Command::AddObject { kind, name, at, .. } => {
-            assert_eq!(*kind, NodeKind::Process);
-            assert_eq!(name, "proc_from_c");
-            assert_eq!(*at, Some([10, 10]));
-        }
+        Command::AddObject { at, .. } => assert_eq!(*at, Some([10, 10])),
         other => panic!("expected AddObject, got {:?}", other),
     }
     // First metric entry: AddMetricEntry to process container (Result dir)
     match &result.commands[1] {
         Command::AddMetricEntry { object, dir, name, .. } => {
-            assert_eq!(object, "proc_from_c");
+            assert_eq!(object, &process_id);
             assert_eq!(*dir, Direction::Result);
             assert_eq!(name, "m1");
         }
@@ -603,7 +621,7 @@ fn object_drop_container_request_on_free_cell_creates_process_and_copies_metrics
         Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
             assert_eq!(from_object, "c");
             assert_eq!(from_entry, "m1");
-            assert_eq!(to_object, "proc_from_c");
+            assert_eq!(to_object, &process_id);
             assert_eq!(to_entry, "m1");
         }
         other => panic!("expected Connect, got {:?}", other),
@@ -632,11 +650,12 @@ fn object_drop_container_request_on_department_creates_process_and_reparents_dep
     });
     assert_eq!(result.commands.len(), 4);
     assert_eq!(result.reparent_dept.as_deref(), Some("d"));
+    let process_id = new_process_id(&result.commands, &["c", "d"]);
     // SetObjectParent: department → process (not process → container!)
     match &result.commands[1] {
         Command::SetObjectParent { object, parent } => {
             assert_eq!(object, "d");
-            assert_eq!(parent.as_deref(), Some("proc_from_c"));
+            assert_eq!(parent.as_deref(), Some(process_id.as_str()));
         }
         other => panic!("expected SetObjectParent, got {:?}", other),
     }
@@ -684,13 +703,10 @@ fn object_drop_metric_request_on_free_cell_creates_process_and_metric() {
     });
     // AddObject(Process) + AddMetricEntry + Connect = 3 commands
     assert_eq!(result.commands.len(), 3);
-    match &result.commands[0] {
-        Command::AddObject { kind, .. } => assert_eq!(*kind, NodeKind::Process),
-        other => panic!("expected AddObject, got {:?}", other),
-    }
+    let process_id = new_process_id(&result.commands, &["m"]);
     match &result.commands[1] {
         Command::AddMetricEntry { object, dir, name, .. } => {
-            assert_eq!(object, "proc_from_m");
+            assert_eq!(object, &process_id);
             assert_eq!(*dir, Direction::Result);
             assert_eq!(name, "m");
         }
@@ -700,7 +716,7 @@ fn object_drop_metric_request_on_free_cell_creates_process_and_metric() {
         Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
             assert_eq!(from_object, "m");
             assert_eq!(from_entry, "m");
-            assert_eq!(to_object, "proc_from_m");
+            assert_eq!(to_object, &process_id);
             assert_eq!(to_entry, "m");
         }
         other => panic!("expected Connect, got {:?}", other),
@@ -729,10 +745,11 @@ fn object_drop_metric_request_on_department_creates_process_and_reparents() {
     });
     assert_eq!(result.commands.len(), 4);
     assert_eq!(result.reparent_dept.as_deref(), Some("d"));
+    let process_id = new_process_id(&result.commands, &["m", "d"]);
     match &result.commands[1] {
         Command::SetObjectParent { object, parent } => {
             assert_eq!(object, "d");
-            assert_eq!(parent.as_deref(), Some("proc_from_m"));
+            assert_eq!(parent.as_deref(), Some(process_id.as_str()));
         }
         other => panic!("expected SetObjectParent, got {:?}", other),
     }
