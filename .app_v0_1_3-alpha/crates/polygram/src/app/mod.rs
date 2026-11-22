@@ -909,7 +909,8 @@ impl eframe::App for PolygramApp {
                     if let Some(cur) = canvas_response.interact_pointer_pos() {
                         if self.drag_object_dir.is_some() {
                             // Драг контейнера/показателя как объекта (включая шапку контейнера внутри карточки процесса).
-                            self.update_drag_object(cur);
+                            // Исходный объект НЕ перемещается — доменная логика создаёт новые объекты.
+                            // Вычисляем только отделы под курсором и призрака.
                             let (over, ghost) = self.object_drag_preview(cur);
                             self.drag_over = over.clone();
                             self.drag_ghost = ghost;
