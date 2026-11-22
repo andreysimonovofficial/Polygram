@@ -7,7 +7,7 @@ mod paint_department;
 pub mod theme;
 
 pub use icons::paint_lucide;
-pub use paint::{paint_add_row, paint_dashed_rect, paint_process, ProcessPaintResult};
+pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
 pub use paint_department::paint_department_frame;
 pub use theme::{status_dot_color, status_label_ru, Theme};
 pub use polygram_core::types::{Direction, NodeKind, StatusCode};

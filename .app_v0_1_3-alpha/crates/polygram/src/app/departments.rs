@@ -1,44 +1,20 @@
 use crate::app::PolygramApp;
-use polygram_core::{geometry::{Geometry, ObjectGeom}, types::NodeKind};
+use polygram_core::{geometry::{Geometry, ObjectGeom}};
 
 /// Построить геометрию с учётом текущего перетаскивания, чтобы отделы
 /// растягивались под содержимое «на лету» ещё до подтверждения сервером.
 /// Используется для hit-testing и отрисовки.
 pub fn geometry_with_predictions(
     objects: &[ObjectGeom],
-    drag_object: Option<&str>,
-    drag_over: Option<&str>,
-    drag_ghost: Option<(i32, i32)>,
+    _drag_object: Option<&str>,
+    _drag_over: Option<&str>,
 ) -> Geometry {
     let mut geometry = Geometry {
         rev: 0,
         objects: objects.to_vec(),
         edges: Vec::new(),
     };
-    // Если нависаем над отделом и есть призрачная копия — временно считаем объект
-    // ребёнком отдела в позиции копии, чтобы fit_departments_to_children растянул
-    // отдел и все родительские отделы, охватывая копию ещё до события Drop.
-    // Реальная иерархия меняется только на сервере по команде SetObjectParent при Drop.
-    let dragged_id = drag_object.unwrap_or_default();
-    let mut temp_reparent: Option<(String, Option<String>)> = None;
-    if let Some(dept_id) = drag_over {
-        if geometry.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
-            if drag_ghost.is_some() {
-                if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == dragged_id) {
-                    temp_reparent = Some((obj.id.clone(), obj.parent.clone()));
-                    obj.parent = Some(dept_id.to_owned());
-                }
-            }
-        }
-    }
     fit_departments_to_children(&mut geometry, None);
-    // Вернуть родителя перетаскиваемого объекта: реальная иерархия меняется
-    // только на сервере по команде SetObjectParent при Drop.
-    if let Some((id, parent)) = temp_reparent {
-        if let Some(obj) = geometry.objects.iter_mut().find(|o| o.id == id) {
-            obj.parent = parent;
-        }
-    }
     geometry
 }
 
@@ -259,7 +235,6 @@ impl PolygramApp {
             &self.canvas.objects,
             self.drag_object.as_deref(),
             self.drag_over.as_deref(),
-            self.drag_ghost,
         )
     }
 }

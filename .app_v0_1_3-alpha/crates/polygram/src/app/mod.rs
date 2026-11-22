@@ -5,7 +5,7 @@
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_canvas::Canvas;
 use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
-use polygram_core::drag_domain::{compute_drag_preview, compute_object_drop_commands, DragPreviewInput, ObjectDropContext};
+use polygram_core::drag_domain::{compute_object_drop_commands, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
 use polygram_core::layout::Rect as CoreRect;
 
@@ -72,8 +72,6 @@ pub struct PolygramApp {
     drag_start_cell: Option<(i32, i32)>,
     /// Отдел, над которым нависает перетаскиваемый объект.
     drag_over: Option<String>,
-    /// Свободная клетка для призрачной копии при перетаскивании процесса.
-    drag_ghost: Option<(i32, i32)>,
     /// Направление контейнера перетаскиваемого объекта (для Контейнера/Показателя).
     drag_object_dir: Option<ContainerDirection>,
     /// Источник перетаскивания показателя: (id объекта, направление, имя показателя).
@@ -106,7 +104,6 @@ impl PolygramApp {
             drag_start_screen: None,
             drag_start_cell: None,
             drag_over: None,
-            drag_ghost: None,
             drag_object_dir: None,
             drag_metric_source: None,
             drag_metric_start: None,
@@ -372,7 +369,6 @@ impl PolygramApp {
         }
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_over = None;
-        self.drag_ghost = None;
     }
 
     /// Начать перетаскивание контейнера как объекта.
@@ -383,7 +379,6 @@ impl PolygramApp {
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
-        self.drag_ghost = None;
     }
 
     /// Начать перетаскивание показателя как объекта.
@@ -394,17 +389,14 @@ impl PolygramApp {
         self.start_drag_object(id.clone(), screen_pos);
         self.drag_object_dir = Some(dir);
         self.drag_over = None;
-        self.drag_ghost = None;
     }
 
-    /// Вычислить превью перетаскивания процесса: отдел под курсором и свободная клетка для призрака.
-    fn process_drag_preview(&self, cursor: Pos2) -> (Option<String>, Option<(i32, i32)>) {
+    /// Обновить позицию перетаскиваемого процесса и подсветить отдел под курсором.
+    fn update_drag_process(&mut self, ui: &mut egui::Ui, cursor: Pos2, theme: &polygram_canvas::Theme) {
+        self.update_drag_object(cursor);
+
         let Some(drag_id) = self.drag_object.as_deref() else {
-            return (None, None);
-        };
-        let dragged_obj = match self.canvas.objects.iter().find(|o| o.id == drag_id) {
-            Some(o) => o.clone(),
-            None => return (None, None),
+            return;
         };
         let zoom = self.canvas.camera.zoom;
         let offset = self.canvas.camera.offset;
@@ -413,36 +405,40 @@ impl PolygramApp {
         let cursor_world_y = (cursor.y / zoom - offset.y) / cell_size;
         let cursor_cell = (cursor_world_x.round() as i32, cursor_world_y.round() as i32);
 
-        let geometry = Geometry {
-            rev: 0,
-            objects: self.canvas.objects.clone(),
-            edges: Vec::new(),
-        };
-        let preview = compute_drag_preview(&DragPreviewInput {
-            geometry,
-            dragged_id: drag_id.to_owned(),
-            dragged_size: (16, 16),
-            cursor_cell,
-        });
-        (preview.over, preview.ghost)
-    }
+        // Найти объект под курсором (исключая перетаскиваемый), определить отдел для подсветки.
+        let mut over: Option<String> = None;
+        if let Some(under_id) = self.canvas.objects.iter().find(|o| {
+            o.id != drag_id
+                && cursor_cell.0 >= o.rect.x && cursor_cell.0 < o.rect.x + o.rect.w
+                && cursor_cell.1 >= o.rect.y && cursor_cell.1 < o.rect.y + o.rect.h
+        }).map(|o| o.id.clone()) {
+            if let Some(under_obj) = self.canvas.objects.iter().find(|o| o.id == under_id) {
+                match under_obj.kind {
+                    NodeKind::Department => {
+                        over = Some(under_id);
+                    }
+                    NodeKind::Process => {
+                        if let Some(dept_id) = &under_obj.parent {
+                            if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
+                            {
+                                over = Some(dept_id.clone());
+                            } else {
+                                over = Some(under_id);
+                            }
+                        } else {
+                            over = Some(under_id);
+                        }
+                    }
+                    NodeKind::Container | NodeKind::Metric => {}
+                    _ => {}
+                }
+            }
+        }
 
-    /// Обновить позицию перетаскиваемого процесса, нарисовать призрачную копию и подсветку отдела.
-    fn update_drag_process(&mut self, ui: &mut egui::Ui, cursor: Pos2, theme: &polygram_canvas::Theme) {
-        self.update_drag_object(cursor);
-        let (over, ghost) = self.process_drag_preview(cursor);
         self.drag_over = over.clone();
-        // Призрачную копию не рисуем над отделом — процесс вставляется в отдел при подтверждении дропа,
-        // отдел растянется под него. Призрак только для свободного перемещения вне отделов.
-        let is_over_dept = over.as_ref().map_or(false, |id| {
-            self.canvas.objects.iter().any(|o| o.id == *id && o.kind == NodeKind::Department)
-        });
-        self.drag_ghost = if is_over_dept { None } else { ghost };
 
         let painter = ui.painter();
         let cell_px = self.canvas.cell_px();
-        let zoom = self.canvas.camera.zoom;
-        let offset = self.canvas.camera.offset;
 
         // Подсветить отдел, над которым нависает процесс.
         if let Some(dept_id) = &over {
@@ -461,15 +457,6 @@ impl PolygramApp {
                 );
             }
         }
-
-        // Нарисовать пустую пунктирную рамку ("призрачную копию") в целевой клетке.
-        if let Some((gx, gy)) = ghost {
-            let rect_px = Rect::from_min_size(
-                Pos2::new(gx as f32, gy as f32) * cell_px + offset * zoom,
-                Vec2::new(16.0 * cell_px, 16.0 * cell_px),
-            );
-            polygram_canvas::paint_dashed_rect(painter, rect_px, zoom, theme.accent);
-        }
     }
 
     /// Завершить перетаскивание процесса: перенос в отдел (с подтверждением) или обычное перемещение.
@@ -483,12 +470,11 @@ impl PolygramApp {
             self.drag_start_screen = None;
             self.drag_start_cell = None;
             self.drag_over = None;
-            self.drag_ghost = None;
             return;
         };
 
         // Конечная клетка: для отдела — свободная клетка внутри отдела,
-        // иначе призрачная копия, либо текущая позиция объекта.
+        // иначе текущая позиция объекта.
         let drop_cell = if self.drag_over.as_ref().map_or(false, |dept_id| {
             self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department)
         }) {
@@ -502,7 +488,7 @@ impl PolygramApp {
             )
             .unwrap_or((obj.rect.x, obj.rect.y))
         } else {
-            self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
+            (obj.rect.x, obj.rect.y)
         };
 
         // Если процесс над отделом:
@@ -529,8 +515,7 @@ impl PolygramApp {
                 self.drag_start_screen = None;
                 self.drag_start_cell = None;
                 self.drag_over = None;
-                self.drag_ghost = None;
-                return;
+                    return;
             }
             self.dialogs.reparent_confirm = Some((
                 drag_id.clone(),
@@ -543,7 +528,6 @@ impl PolygramApp {
             self.drag_start_screen = None;
             self.drag_start_cell = None;
             self.drag_over = None;
-            self.drag_ghost = None;
             return;
         }
 
@@ -565,7 +549,6 @@ impl PolygramApp {
         self.drag_start_screen = None;
         self.drag_start_cell = None;
         self.drag_over = None;
-        self.drag_ghost = None;
         self.drag_object_dir = None;
     }
 
@@ -582,7 +565,6 @@ impl PolygramApp {
             self.drag_start_screen = None;
             self.drag_start_cell = None;
             self.drag_over = None;
-            self.drag_ghost = None;
             self.drag_object_dir = None;
             return;
         };
@@ -601,7 +583,7 @@ impl PolygramApp {
             )
             .unwrap_or((obj.rect.x, obj.rect.y))
         } else {
-            self.drag_ghost.unwrap_or((obj.rect.x, obj.rect.y))
+            (obj.rect.x, obj.rect.y)
         };
 
         // Если позиция не изменилась — отмена.
@@ -614,7 +596,6 @@ impl PolygramApp {
             self.drag_start_screen = None;
             self.drag_start_cell = None;
             self.drag_over = None;
-            self.drag_ghost = None;
             self.drag_object_dir = None;
             return;
         }
@@ -648,7 +629,6 @@ impl PolygramApp {
         self.drag_start_screen = None;
         self.drag_start_cell = None;
         self.drag_over = None;
-        self.drag_ghost = None;
         self.drag_object_dir = None;
     }
 }

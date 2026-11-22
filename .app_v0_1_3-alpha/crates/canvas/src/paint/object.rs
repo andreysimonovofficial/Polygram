@@ -1,4 +1,4 @@
-//! Рисование объекта "Процесс" и пустой пунктирной рамки ("призрачной копии").
+//! Рисование объекта "Процесс" на холсте.
 //! Реализует динамическую геометрию по CSS спецификации:
 //! Процесс растягивается под контейнеры, Контейнер растягивается под показатели.
 
@@ -440,25 +440,4 @@ fn paint_metric_container(
 
 fn row_border_rad(zoom: f32) -> f32 {
     ROW_BORDER_RADIUS_PX * zoom
-}
-
-/// Пустая пунктирная рамка ("призрачная копия") размером с объект.
-pub fn paint_dashed_rect(painter: &Painter, rect: Rect, zoom: f32, color: egui::Color32) {
-    let dash = (6.0 * zoom).max(1.0);
-    let gap = (4.0 * zoom).max(1.0);
-    let stroke = Stroke::new((2.0 * zoom).max(1.0), color);
-    let mut x = rect.min.x;
-    while x < rect.max.x {
-        let x2 = (x + dash).min(rect.max.x);
-        painter.line_segment([Pos2::new(x, rect.min.y), Pos2::new(x2, rect.min.y)], stroke);
-        painter.line_segment([Pos2::new(x, rect.max.y), Pos2::new(x2, rect.max.y)], stroke);
-        x = x2 + gap;
-    }
-    let mut y = rect.min.y;
-    while y < rect.max.y {
-        let y2 = (y + dash).min(rect.max.y);
-        painter.line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.min.x, y2)], stroke);
-        painter.line_segment([Pos2::new(rect.max.x, y), Pos2::new(rect.max.x, y2)], stroke);
-        y = y2 + gap;
-    }
 }
