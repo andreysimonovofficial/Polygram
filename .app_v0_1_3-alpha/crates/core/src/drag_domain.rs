@@ -310,6 +310,22 @@ fn compute_container_drop(
     let existing_ids: Vec<String> = geometry.objects.iter().map(|o| o.id.clone()).collect();
     let process_id = allocate_id(&existing_ids);
 
+    // Данные dragged-контейнера.
+    let dragged_obj = geometry.objects.iter().find(|o| o.id == dragged_id).unwrap();
+    let source_entries = match dragged_dir {
+        ContainerDirection::Request => &dragged_obj.requests,
+        ContainerDirection::Result => &dragged_obj.results,
+    };
+
+    // Контейнер без показателей — отмена.
+    if source_entries.is_empty() {
+        return ObjectDropResult {
+            commands: Vec::new(),
+            final_cell: start_cell,
+            reparent_dept: None,
+        };
+    }
+
     // Определяем целевую клетку для нового процесса.
     let final_cell = if let Some(dept_id) = over_dept {
         if geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department) {
@@ -378,12 +394,6 @@ fn compute_container_drop(
     }
 
     // Копируем показатели контейнера в контейнер целевого объекта с противоположным направлением.
-    let dragged_obj = geometry.objects.iter().find(|o| o.id == dragged_id).unwrap();
-    let source_entries = match dragged_dir {
-        ContainerDirection::Request => &dragged_obj.requests,
-        ContainerDirection::Result => &dragged_obj.results,
-    };
-
     for entry in source_entries {
         commands.push(Command::AddMetricEntry {
             object: target_object_id.clone(),

@@ -576,6 +576,34 @@ fn object_drop_process_on_department_reparents() {
 }
 
 #[test]
+fn object_drop_container_empty_on_free_cell_cancels() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![container_obj(
+            "c",
+            0,
+            0,
+            2,
+            2,
+            ContainerDirection::Request,
+            vec![],
+        )],
+        edges: vec![],
+    };
+    let result = polygram_core::drag_domain::compute_object_drop_commands(&ObjectDropContext {
+        geometry,
+        dragged_id: "c".to_owned(),
+        start_cell: (0, 0),
+        drop_cell: (10, 10),
+        over_dept: None,
+        dragged_size: (2, 2),
+            dragged_dir: None,
+    });
+    assert!(result.commands.is_empty());
+}
+
+#[test]
 fn object_drop_container_request_on_free_cell_creates_process_and_copies_metrics() {
     use polygram_core::types::ContainerDirection;
     let geometry = Geometry {
