@@ -171,121 +171,131 @@ pub fn handle_add_metric_dialog(
                         .corner_radius(CornerRadius::same(4))
                         .inner_margin(Margin::symmetric(8, 8))
                         .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
-                            // Кнопка иконки типа (34×34, #252525, border 1px #373839, radius 4px)
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(4))
-                                .inner_margin(Margin::same(9))
-                                .show(ui, |ui| {
-                                    let icon_response = lucide_button(
-                                        ui,
-                                        metric_kind_icon(app.dialogs.add_metric_kind),
-                                        16.0,
-                                        COLOR_WHITE,
-                                    );
-                                    if icon_response.clicked() {
-                                        app.dialogs.add_metric_kind =
-                                            metric_kind_next(app.dialogs.add_metric_kind);
-                                        app.dialogs.add_metric_value.clear();
-                                        app.dialogs.add_metric_date = None;
-                                        app.dialogs.add_metric_date_popup_open = false;
-                                        app.dialogs.add_metric_time = None;
-                                    }
-                                });
-
-                            ui.add_space(8.0);
-
-                            // Поле ввода значения (204×34, #252525, border 1px #373839, radius 2px)
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(2))
-                                .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
-                                .show(ui, |ui| {
-                                    let is_date_kind = matches!(
-                                        app.dialogs.add_metric_kind,
-                                        MetricKind::Date | MetricKind::Deadline
-                                    );
-                                    if is_date_kind {
-                                        let date_label = match (
-                                            app.dialogs.add_metric_date,
-                                            app.dialogs.add_metric_time,
-                                        ) {
-                                            (Some(d), Some(t)) => {
-                                                d.format("%d.%m.%Y").to_string()
-                                                    + " "
-                                                    + &t.format("%H:%M").to_string()
-                                            }
-                                            (Some(d), None) => {
-                                                d.format("%d.%m.%Y").to_string()
-                                            }
-                                            (None, Some(t)) => {
-                                                "дата ".to_owned()
-                                                    + &t.format("%H:%M").to_string()
-                                            }
-                                            _ => "дата".to_string(),
-                                        };
-                                        if ui.button(date_label).clicked() {
-                                            app.dialogs.add_metric_date_popup_open = true;
-                                        }
-                                        if app.dialogs.add_metric_date_popup_open {
-                                            let picked = render_date_time_popup(
-                                                ui,
-                                                &mut app.dialogs.add_metric_date,
-                                                &mut app.dialogs.add_metric_time,
-                                            );
-                                            if picked {
-                                                app.dialogs.add_metric_date_popup_open = false;
-                                            }
-                                        }
-                                        app.dialogs.add_metric_value = match (
-                                            app.dialogs.add_metric_date,
-                                            app.dialogs.add_metric_time,
-                                        ) {
-                                            (Some(d), Some(_t)) => {
-                                                d.format("%d.%m.%Y %H:%M").to_string()
-                                            }
-                                            (Some(d), None) => {
-                                                d.format("%d.%m.%Y").to_string()
-                                            }
-                                            _ => String::new(),
-                                        };
-                                    } else {
-                                        ui.text_edit_singleline(
-                                            &mut app.dialogs.add_metric_value,
+                                // Кнопка иконки типа (34×34, #252525, border 1px #373839, radius 4px)
+                                Frame::new()
+                                    .fill(BG_INPUT)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .corner_radius(CornerRadius::same(4))
+                                    .inner_margin(Margin::same(9))
+                                    .show(ui, |ui| {
+                                        let icon_response = lucide_button(
+                                            ui,
+                                            metric_kind_icon(app.dialogs.add_metric_kind),
+                                            16.0,
+                                            COLOR_WHITE,
                                         );
-                                    }
-                                });
+                                        if icon_response.clicked() {
+                                            app.dialogs.add_metric_kind =
+                                                metric_kind_next(app.dialogs.add_metric_kind);
+                                            app.dialogs.add_metric_value.clear();
+                                            app.dialogs.add_metric_date = None;
+                                            app.dialogs.add_metric_date_popup_open = false;
+                                            app.dialogs.add_metric_time = None;
+                                        }
+                                    });
 
-                            ui.add_space(8.0);
+                                ui.add_space(8.0);
 
-                            // Единица измерения (96×32, #252525, border 1px #373839, radius 2px)
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(2))
-                                .inner_margin(Margin { left: 8, top: 7, right: 8, bottom: 7 })
-                                .show(ui, |ui| {
-                                    ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                                        ui.text_edit_singleline(
-                                            &mut app.dialogs.add_metric_unit,
+                                // Поле ввода значения (204×34, #252525, border 1px #373839, radius 2px)
+                                Frame::new()
+                                    .fill(BG_INPUT)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .corner_radius(CornerRadius::same(2))
+                                    .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
+                                    .show(ui, |ui| {
+                                        let is_date_kind = matches!(
+                                            app.dialogs.add_metric_kind,
+                                            MetricKind::Date | MetricKind::Deadline
+                                        );
+                                        if is_date_kind {
+                                            let date_label = match (
+                                                app.dialogs.add_metric_date,
+                                                app.dialogs.add_metric_time,
+                                            ) {
+                                                (Some(d), Some(t)) => {
+                                                    d.format("%d.%m.%Y").to_string()
+                                                        + " "
+                                                        + &t.format("%H:%M").to_string()
+                                                }
+                                                (Some(d), None) => {
+                                                    d.format("%d.%m.%Y").to_string()
+                                                }
+                                                (None, Some(t)) => {
+                                                    "дата ".to_owned()
+                                                        + &t.format("%H:%M").to_string()
+                                                }
+                                                _ => "дата".to_string(),
+                                            };
+                                            if ui.button(date_label).clicked() {
+                                                app.dialogs.add_metric_date_popup_open = true;
+                                            }
+                                            if app.dialogs.add_metric_date_popup_open {
+                                                let picked = render_date_time_popup(
+                                                    ui,
+                                                    &mut app.dialogs.add_metric_date,
+                                                    &mut app.dialogs.add_metric_time,
+                                                );
+                                                if picked {
+                                                    app.dialogs.add_metric_date_popup_open = false;
+                                                }
+                                            }
+                                            app.dialogs.add_metric_value = match (
+                                                app.dialogs.add_metric_date,
+                                                app.dialogs.add_metric_time,
+                                            ) {
+                                                (Some(d), Some(_t)) => {
+                                                    d.format("%d.%m.%Y %H:%M").to_string()
+                                                }
+                                                (Some(d), None) => {
+                                                    d.format("%d.%m.%Y").to_string()
+                                                }
+                                                _ => String::new(),
+                                            };
+                                        } else {
+                                            ui.text_edit_singleline(
+                                                &mut app.dialogs.add_metric_value,
+                                            );
+                                        }
+                                    });
+
+                                ui.add_space(8.0);
+
+                                // Единица измерения (96×32, #252525, border 1px #373839, radius 2px)
+                                Frame::new()
+                                    .fill(BG_INPUT)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .corner_radius(CornerRadius::same(2))
+                                    .inner_margin(Margin { left: 8, top: 7, right: 8, bottom: 7 })
+                                    .show(ui, |ui| {
+                                        ui.with_layout(
+                                            Layout::right_to_left(Align::TOP),
+                                            |ui| {
+                                                ui.text_edit_singleline(
+                                                    &mut app.dialogs.add_metric_unit,
+                                                );
+                                            },
                                         );
                                     });
-                                });
 
-                            ui.add_space(8.0);
+                                ui.add_space(8.0);
 
-                            // Кнопка calendar-sync (32×32, #2B2B2B, border-left 1px #373839, заглушка)
-                            Frame::new()
-                                .fill(BG_CALENDAR_STUB)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .inner_margin(Margin::same(8))
-                                .show(ui, |ui| {
-                                    lucide_button(ui, Lucide::CalendarSync, 15.0, COLOR_GRAY);
-                                });
+                                // Кнопка calendar-sync (32×32, #2B2B2B, border-left 1px #373839, заглушка)
+                                Frame::new()
+                                    .fill(BG_CALENDAR_STUB)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .inner_margin(Margin::same(8))
+                                    .show(ui, |ui| {
+                                        lucide_button(
+                                            ui,
+                                            Lucide::CalendarSync,
+                                            15.0,
+                                            COLOR_GRAY,
+                                        );
+                                    });
+                            });
                         });
                 });
 
