@@ -98,8 +98,7 @@ pub fn handle_add_metric_dialog(
                 .inner_margin(Margin::same(0)),
         )
         .show(ctx, |ui| {
-            // ---- Шапка диалога ----
-            // padding: 20px 20px 12px, bg: #1E1E1E
+            // ---- Шапка диалога (padding: 20px 20px 12px) ----
             Frame::new()
                 .fill(BG_DIALOG)
                 .inner_margin(Margin { left: 20, top: 20, right: 20, bottom: 12 })
@@ -160,7 +159,7 @@ pub fn handle_add_metric_dialog(
 
             ui.add_space(4.0);
 
-            // ---- Основное содержимое (padding 4px 20px 16px) ----
+            // ---- Основное содержимое (padding: 4px 20px 16px) ----
             Frame::new()
                 .fill(BG_DIALOG)
                 .inner_margin(Margin { left: 4, top: 0, right: 16, bottom: 20 })
