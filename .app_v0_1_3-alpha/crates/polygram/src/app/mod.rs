@@ -793,6 +793,10 @@ impl eframe::App for PolygramApp {
                                 .unwrap_or(0),
                         };
                         self.dialogs.add_metric_defaults(obj_id.clone(), *dir, n);
+                        self.dialogs.add_metric_process_name = self.canvas.objects.iter()
+                            .find(|o| o.id == *obj_id)
+                            .map(|o| o.name.clone())
+                            .unwrap_or_default();
                         // Сбрасываем любое состояние драга, чтобы клик на '+'
                         // не затащил объект за собой.
                         self.cancel_drag();

@@ -33,6 +33,7 @@ pub struct DialogState {
     /// ("Добавить процесс в отдел?"): (id объекта, id отдела, целевая клетка, стартовая клетка, вид объекта).
     pub reparent_confirm: Option<(String, String, (i32, i32), (i32, i32), NodeKind)>,
     pub add_metric_target: Option<(String, Direction)>,
+    pub add_metric_process_name: String,
     pub add_metric_name: String,
     pub add_metric_kind: MetricKind,
     pub add_metric_value: String,
@@ -63,6 +64,7 @@ impl DialogState {
             edit_input: String::new(),
             reparent_confirm: None,
             add_metric_target: None,
+            add_metric_process_name: String::new(),
             add_metric_name: String::new(),
             add_metric_kind: MetricKind::Number,
             add_metric_value: String::new(),
@@ -97,6 +99,7 @@ impl DialogState {
 
     pub fn reset_add_metric(&mut self) {
         self.add_metric_target = None;
+        self.add_metric_process_name.clear();
         self.add_metric_name.clear();
         self.add_metric_value.clear();
         self.add_metric_date = None;
