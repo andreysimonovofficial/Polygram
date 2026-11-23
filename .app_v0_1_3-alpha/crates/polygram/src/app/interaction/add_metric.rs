@@ -19,8 +19,6 @@ const BG_DIALOG: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
 const BG_BORDER: Color32 = Color32::from_rgb(0x37, 0x38, 0x39);
 /// Цвет фона полей ввода: #252525.
 const BG_INPUT: Color32 = Color32::from_rgb(0x25, 0x25, 0x25);
-/// Цвет фона строки значения: #222222.
-const BG_VALUE_ROW: Color32 = Color32::from_rgb(0x22, 0x22, 0x22);
 /// Цвет фона кнопки calendar-sync: #2B2B2B.
 const BG_CALENDAR_STUB: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
 /// Цвет белого: #FFFFFF.
@@ -85,6 +83,11 @@ pub fn handle_add_metric_dialog(
         .find(|md| md.name == app.dialogs.add_metric_name.trim())
         .cloned();
 
+    let label = match dir {
+        polygram_core::types::Direction::Request => "ЗАПРОС",
+        polygram_core::types::Direction::Result => "РЕЗУЛЬТАТ",
+    };
+
     Window::new("")
         .title_bar(false)
         .resizable(false)
@@ -130,9 +133,9 @@ pub fn handle_add_metric_dialog(
                                 }
                                 ui.add_space(6.0);
 
-                                // Метка типа "ТИП"
+                                // Метка типа (ЗАПРОС / РЕЗУЛЬТАТ)
                                 ui.label(
-                                    egui::RichText::new("ТИП")
+                                    egui::RichText::new(label)
                                         .strong()
                                         .small()
                                         .extra_letter_spacing(0.44)
@@ -164,15 +167,8 @@ pub fn handle_add_metric_dialog(
                 .fill(BG_DIALOG)
                 .inner_margin(Margin { left: 4, top: 0, right: 16, bottom: 20 })
                 .show(ui, |ui| {
-                    // Фон строки значения (#222222, border 1px #373839, radius 4px)
-                    Frame::new()
-                        .fill(BG_VALUE_ROW)
-                        .stroke(Stroke::new(1.0, BG_BORDER))
-                        .corner_radius(CornerRadius::same(4))
-                        .inner_margin(Margin::symmetric(8, 8))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
                                 // Кнопка иконки типа (34×34, #252525, border 1px #373839, radius 4px)
                                 Frame::new()
@@ -311,8 +307,6 @@ pub fn handle_add_metric_dialog(
                                     });
                             });
                         });
-                });
-
             ui.add_space(12.0);
 
             // ---- Нижняя панель действий ----
