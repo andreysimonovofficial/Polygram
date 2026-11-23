@@ -19,6 +19,8 @@ const BG_DIALOG: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
 const BG_BORDER: Color32 = Color32::from_rgb(0x37, 0x38, 0x39);
 /// Цвет фона полей ввода: #252525.
 const BG_INPUT: Color32 = Color32::from_rgb(0x25, 0x25, 0x25);
+/// Цвет фона общей обёртки полей: #222222.
+const BG_VALUE_ROW: Color32 = Color32::from_rgb(0x22, 0x22, 0x22);
 /// Цвет фона кнопки calendar-sync: #2B2B2B.
 const BG_CALENDAR_STUB: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
 /// Цвет белого: #FFFFFF.
@@ -74,6 +76,11 @@ pub fn handle_add_metric_dialog(
     let object_id = object_id.clone();
     let dir = *dir;
 
+    let label = match dir {
+        polygram_core::types::Direction::Request => "ЗАПРОС",
+        polygram_core::types::Direction::Result => "РЕЗУЛЬТАТ",
+    };
+
     let mut done = false;
     let mut cancelled = false;
 
@@ -82,11 +89,6 @@ pub fn handle_add_metric_dialog(
         .iter()
         .find(|md| md.name == app.dialogs.add_metric_name.trim())
         .cloned();
-
-    let label = match dir {
-        polygram_core::types::Direction::Request => "ЗАПРОС",
-        polygram_core::types::Direction::Result => "РЕЗУЛЬТАТ",
-    };
 
     Window::new("")
         .title_bar(false)
@@ -167,8 +169,15 @@ pub fn handle_add_metric_dialog(
                 .fill(BG_DIALOG)
                 .inner_margin(Margin { left: 4, top: 0, right: 16, bottom: 20 })
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
+                    // Background+Border (bg #222222, border #373839, radius 4px, padding 8px, gap 8px)
+                    Frame::new()
+                        .fill(BG_VALUE_ROW)
+                        .stroke(Stroke::new(1.0, BG_BORDER))
+                        .corner_radius(CornerRadius::same(4))
+                        .inner_margin(Margin::symmetric(8, 8))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
                                 // Кнопка иконки типа (34×34, #252525, border 1px #373839, radius 4px)
                                 Frame::new()
@@ -183,15 +192,15 @@ pub fn handle_add_metric_dialog(
                                             16.0,
                                             COLOR_WHITE,
                                         );
-                                    if icon_response.clicked() {
-                                        app.dialogs.add_metric_kind =
-                                            metric_kind_next(app.dialogs.add_metric_kind);
-                                        app.dialogs.add_metric_value.clear();
-                                        app.dialogs.add_metric_date = None;
-                                        app.dialogs.add_metric_date_popup_open = false;
-                                        app.dialogs.add_metric_time = None;
-                                    }
-                                });
+                                        if icon_response.clicked() {
+                                            app.dialogs.add_metric_kind =
+                                                metric_kind_next(app.dialogs.add_metric_kind);
+                                            app.dialogs.add_metric_value.clear();
+                                            app.dialogs.add_metric_date = None;
+                                            app.dialogs.add_metric_date_popup_open = false;
+                                            app.dialogs.add_metric_time = None;
+                                        }
+                                    });
 
                                 ui.add_space(8.0);
 
@@ -202,8 +211,11 @@ pub fn handle_add_metric_dialog(
                                     .corner_radius(CornerRadius::same(2))
                                     .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
                                     .show(ui, |ui| {
-                                        ui.text_edit_singleline(
-                                            &mut app.dialogs.add_metric_name,
+                                        ui.add(
+                                            egui::TextEdit::singleline(
+                                                &mut app.dialogs.add_metric_name,
+                                            )
+                                            .frame(Frame::new()),
                                         );
                                     });
 
@@ -265,8 +277,11 @@ pub fn handle_add_metric_dialog(
                                                 _ => String::new(),
                                             };
                                         } else {
-                                            ui.text_edit_singleline(
-                                                &mut app.dialogs.add_metric_value,
+                                            ui.add(
+                                                egui::TextEdit::singleline(
+                                                    &mut app.dialogs.add_metric_value,
+                                                )
+                                                .frame(Frame::new()),
                                             );
                                         }
                                     });
@@ -283,8 +298,11 @@ pub fn handle_add_metric_dialog(
                                         ui.with_layout(
                                             Layout::right_to_left(Align::TOP),
                                             |ui| {
-                                                ui.text_edit_singleline(
-                                                    &mut app.dialogs.add_metric_unit,
+                                                ui.add(
+                                                    egui::TextEdit::singleline(
+                                                        &mut app.dialogs.add_metric_unit,
+                                                    )
+                                                    .frame(Frame::new()),
                                                 );
                                             },
                                         );
@@ -307,6 +325,8 @@ pub fn handle_add_metric_dialog(
                                     });
                             });
                         });
+                });
+
             ui.add_space(12.0);
 
             // ---- Нижняя панель действий ----
