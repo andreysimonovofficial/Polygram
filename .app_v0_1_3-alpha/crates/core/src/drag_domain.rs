@@ -351,7 +351,7 @@ fn compute_container_drop(
             // Над отделом: создаём новый процесс.
             commands.push(Command::AddObject {
                 id: Some(process_id.clone()),
-                name: process_id.clone(),
+                name: format!("Процесс {}", process_id),
                 kind: NodeKind::Process,
                 at: Some([final_cell.0, final_cell.1]),
                 parent: None,
@@ -374,7 +374,7 @@ fn compute_container_drop(
             // Свободное место: создаём новый процесс.
             commands.push(Command::AddObject {
                 id: Some(process_id.clone()),
-                name: process_id.clone(),
+                name: format!("Процесс {}", process_id),
                 kind: NodeKind::Process,
                 at: Some([final_cell.0, final_cell.1]),
                 parent: None,
@@ -484,7 +484,7 @@ pub fn compute_metric_drop_object(
                 if geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department) {
                     commands.push(Command::AddObject {
                         id: Some(process_id.clone()),
-                        name: process_id.clone(),
+                        name: format!("Процесс {}", process_id),
                         kind: NodeKind::Process,
                         at: Some([final_cell.0, final_cell.1]),
                         parent: None,
@@ -507,7 +507,7 @@ pub fn compute_metric_drop_object(
                 // Свободное место.
                 commands.push(Command::AddObject {
                     id: Some(process_id.clone()),
-                    name: process_id.clone(),
+                    name: format!("Процесс {}", process_id),
                     kind: NodeKind::Process,
                     at: Some([final_cell.0, final_cell.1]),
                     parent: None,
