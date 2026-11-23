@@ -1000,89 +1000,89 @@ impl eframe::App for PolygramApp {
                                     target_id: dst_id.to_owned(),
                                 },
                             );
-                                if !cmds.is_empty() {
-                                    if let Err((_, e)) = self.engine.apply_batch(
-                                        polygram_core::types::Scope::Root,
-                                        cmds,
+                            if !cmds.is_empty() {
+                                if let Err((_, e)) = self.engine.apply_batch(
+                                    polygram_core::types::Scope::Root,
+                                    cmds,
+                                ) {
+                                    // Если показатель-def не существует, создаём его и повторяем.
+                                    if matches!(
+                                        e,
+                                        polygram_core::error::EngineError::MetricDefNotFound(_)
                                     ) {
-                                        // Если показатель-def не существует, создаём его и повторяем.
-                                        if matches!(
-                                            e,
-                                            polygram_core::error::EngineError::MetricDefNotFound(_)
-                                        ) {
-                                            let def_cmds = vec![
-                                                polygram_core::Command::AddMetricDef {
-                                                    id: Some(src_name.clone()),
-                                                    name: src_name.clone(),
-                                                    kind: polygram_core::types::MetricKind::Number,
-                                                    unit: String::new(),
-                                                    api: None,
+                                        let def_cmds = vec![
+                                            polygram_core::Command::AddMetricDef {
+                                                id: Some(src_name.clone()),
+                                                name: src_name.clone(),
+                                                kind: polygram_core::types::MetricKind::Number,
+                                                unit: String::new(),
+                                                api: None,
+                                            },
+                                        ];
+                                        let _ = self.engine.apply_batch(
+                                            polygram_core::types::Scope::Root,
+                                            def_cmds,
+                                        );
+                                        let geometry = self.engine.geometry();
+                                        let cmds2 =
+                                            polygram_core::drag_domain::compute_metric_drop(
+                                                &polygram_core::drag_domain::MetricDropContext {
+                                                    geometry,
+                                                    source_object: src_id.clone(),
+                                                    source_dir: src_dir,
+                                                    entry_name: src_name.clone(),
+                                                    target_id: dst_id.to_owned(),
                                                 },
-                                            ];
+                                            );
+                                        if !cmds2.is_empty() {
                                             let _ = self.engine.apply_batch(
                                                 polygram_core::types::Scope::Root,
-                                                def_cmds,
+                                                cmds2,
                                             );
-                                            let geometry = self.engine.geometry();
-                                            let cmds2 =
-                                                polygram_core::drag_domain::compute_metric_drop(
-                                                    &polygram_core::drag_domain::MetricDropContext {
-                                                        geometry,
-                                                        source_object: src_id.clone(),
-                                                        source_dir: src_dir,
-                                                        entry_name: src_name.clone(),
-                                                        target_id: dst_id.to_owned(),
-                                                    },
-                                                );
-                                            if !cmds2.is_empty() {
-                                                let _ = self.engine.apply_batch(
-                                                    polygram_core::types::Scope::Root,
-                                                    cmds2,
-                                                );
-                                            }
                                         }
                                     }
-                                self.sync_canvas_from_engine();
+                                }
                             }
-                        } else if !under_any {
-                            // Свободное место: создать Процесс и разместить показатель
-                            // в его контейнере с противоположным направлением (как при дропе Контейнера).
-                            // Определение показателя должно существовать, иначе AddMetricEntry не применится.
-                            if !self.engine.metric_def_views().iter().any(|m| m.name == src_name || m.id == src_name) {
-                                let _ = self.engine.apply_batch(
-                                    polygram_core::types::Scope::Root,
-                                    vec![polygram_core::Command::AddMetricDef {
-                                        id: Some(src_name.clone()),
-                                        name: src_name.clone(),
-                                        kind: polygram_core::types::MetricKind::Number,
-                                        unit: String::new(),
-                                        api: None,
-                                    }],
-                                );
-                            }
-                            let geometry = self.engine.geometry();
-                            let dragged_dir = match src_dir {
-                                Direction::Request => ContainerDirection::Request,
-                                Direction::Result => ContainerDirection::Result,
-                            };
-                            let cmds = polygram_core::drag_domain::compute_metric_drop_object(
-                                &geometry,
-                                &src_name,
-                                dragged_dir,
-                                cur_cell,
-                                cur_cell,
-                                None,
-                                (2, 2),
-                                None,
-                            );
-                            if !cmds.commands.is_empty() {
-                                let _ = self.engine.apply_batch(
-                                    polygram_core::types::Scope::Root,
-                                    cmds.commands,
-                                );
-                            }
-                            self.sync_canvas_from_engine();
                         }
+                        self.sync_canvas_from_engine();
+                    } else if !under_any {
+                        // Свободное место: создать Процесс и разместить показатель
+                        // в его контейнере с противоположным направлением (как при дропе Контейнера).
+                        // Определение показателя должно существовать, иначе AddMetricEntry не применится.
+                        if !self.engine.metric_def_views().iter().any(|m| m.name == src_name || m.id == src_name) {
+                            let _ = self.engine.apply_batch(
+                                polygram_core::types::Scope::Root,
+                                vec![polygram_core::Command::AddMetricDef {
+                                    id: Some(src_name.clone()),
+                                    name: src_name.clone(),
+                                    kind: polygram_core::types::MetricKind::Number,
+                                    unit: String::new(),
+                                    api: None,
+                                }],
+                            );
+                        }
+                        let geometry = self.engine.geometry();
+                        let dragged_dir = match src_dir {
+                            Direction::Request => ContainerDirection::Request,
+                            Direction::Result => ContainerDirection::Result,
+                        };
+                        let cmds = polygram_core::drag_domain::compute_metric_drop_object(
+                            &geometry,
+                            &src_name,
+                            dragged_dir,
+                            cur_cell,
+                            cur_cell,
+                            None,
+                            (2, 2),
+                            None,
+                        );
+                        if !cmds.commands.is_empty() {
+                            let _ = self.engine.apply_batch(
+                                polygram_core::types::Scope::Root,
+                                cmds.commands,
+                            );
+                        }
+                        self.sync_canvas_from_engine();
                     }
                 }
             }
