@@ -123,7 +123,7 @@ pub fn paint_process(
     );
 
     // Название процесса.
-    let title = format!("{} '{}'", object.kind.label_ru(), object.name);
+    let title = object.name.clone();
     let title_x = ox + padding + icon_size + 8.0 * zoom;
     painter.text(
         Pos2::new(title_x, header_cy),
