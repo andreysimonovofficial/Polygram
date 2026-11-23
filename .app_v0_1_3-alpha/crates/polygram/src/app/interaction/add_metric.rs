@@ -27,8 +27,6 @@ const BG_CALENDAR_STUB: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
 const COLOR_WHITE: Color32 = Color32::from_rgb(0xFF, 0xFF, 0xFF);
 /// Цвет серого текста: #A1A1AA.
 const COLOR_GRAY: Color32 = Color32::from_rgb(0xA1, 0xA1, 0xAA);
-/// Цвет тёмного текста: #1E1E1E.
-const COLOR_DARK: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
 
 /// Иконка Lucide для данного типа показателя.
 fn metric_kind_icon(kind: MetricKind) -> Lucide {
@@ -101,244 +99,316 @@ pub fn handle_add_metric_dialog(
         .resizable(false)
         .collapsible(false)
         .fixed_size([540.0, 198.0])
-        .frame(
-            Frame::new()
-                .fill(BG_DIALOG)
-                .stroke(Stroke::new(1.0, BG_BORDER))
-                .corner_radius(CornerRadius::same(8))
-                .inner_margin(Margin::same(0)),
-        )
+        .frame(Frame::new().inner_margin(Margin::same(0)))
         .show(ctx, |ui| {
+            // Фон диалога и рамка (540×198, bg #1E1E1E, border 1px #373839, radius 8)
+            let dialog_rect = ui.available_rect_before_wrap();
+            {
+                let p = ui.painter();
+                p.rect_filled(dialog_rect, 8.0, BG_DIALOG);
+                p.rect_stroke(
+                    dialog_rect,
+                    8.0,
+                    Stroke::new(1.0, BG_BORDER),
+                    egui::StrokeKind::Middle,
+                );
+            }
+
             // ---- Шапка диалога (Background section) ----
             // flex-direction: row, justify-content: space-between, align-items: flex-start
             // padding: 20px 20px 12px, gap: 277.84px, размер: 538×72, bg: #1E1E1E
-            Frame::new()
-                .fill(BG_DIALOG)
-                .inner_margin(Margin { left: 20, top: 20, right: 12, bottom: 20 })
-                .show(ui, |ui| {
+            let header_rect = egui::Rect::from_min_size(
+                dialog_rect.min + Vec2::new(1.0, 1.0),
+                Vec2::new(538.0, 72.0),
+            );
+            {
+                let p = ui.painter();
+                p.rect_filled(header_rect, 0.0, BG_DIALOG);
+            }
+            ui.allocate_rect(header_rect, egui::Sense::hover());
+
+            ui.horizontal(|ui| {
+                ui.set_min_width(538.0);
+                ui.spacing_mut().item_spacing = Vec2::new(277.84, 0.0);
+
+                // ---- Контейнер имени процесса (Column, gap 4px, 192.16×40) ----
+                ui.vertical(|ui| {
+                    ui.set_min_width(192.16);
+                    ui.spacing_mut().item_spacing = Vec2::new(0.0, 4.0);
+
+                    // Имя процесса (Inter 600, 16px, #FFFFFF)
+                    ui.label(
+                        egui::RichText::new(&app.dialogs.add_metric_process_name)
+                            .strong()
+                            .size(16.0)
+                            .color(COLOR_WHITE),
+                    );
+
+                    // Строка типа показателя (Row, center, gap 6px, 192.16×14)
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(277.84, 0.0);
+                        ui.spacing_mut().item_spacing = Vec2::new(6.0, 0.0);
 
-                        // ---- Контейнер имени процесса (Column, gap 4px, 192.16×40) ----
+                        // Точка-индикатор (6×6, #A1A1AA, border-radius 3px)
+                        let dot_center = ui.cursor().center();
+                        {
+                            let p = ui.painter();
+                            p.circle_filled(dot_center, 3.0, COLOR_GRAY);
+                        }
+                        ui.add_space(6.0);
+
+                        // Контейнер метки типа (Column, 49.92×14)
                         ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(0.0, 4.0);
-
-                            // Внутренний контейнер заголовка (Column, 192.16×22)
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    egui::RichText::new(&app.dialogs.add_metric_process_name)
-                                        .strong()
-                                        .size(16.0)
-                                        .color(COLOR_WHITE),
-                                );
-                            });
-
-                            // Строка типа показателя (Row, center, gap 6px, 192.16×14)
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing = Vec2::new(6.0, 0.0);
-                                // Точка-индикатор (6×6, #A1A1AA, border-radius 3px)
-                                    let dot_center = ui.cursor().center();
-                                    ui.painter().circle_filled(dot_center, 3.0, COLOR_GRAY);
-                                    ui.add_space(6.0);
-
-                                    // Контейнер метки типа (Column, 49.92×14)
-                                    ui.vertical(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("ТИП")
-                                                .strong()
-                                                .small()
-                                                .extra_letter_spacing(0.44)
-                                                .text_style(egui::TextStyle::Small)
-                                                .color(COLOR_GRAY),
-                                        );
-                                    });
-                            });
-                        });
-
-                        // ---- Кнопка закрытия (28×28, border-radius 4px) ----
-                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                            Frame::new()
-                                .inner_margin(Margin::same(0))
-                                .show(ui, |ui| {
-                                    let (rect, _response) = ui.allocate_exact_size(
-                                        Vec2::splat(28.0),
-                                        egui::Sense::click(),
-                                    );
-                                    if _response.hovered() {
-                                        ui.painter().rect_filled(rect, 0.0, BG_INPUT);
-                                    }
-                                    // X иконка 16×16
-                                    lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
-                                });
+                            ui.set_min_width(49.92);
+                            ui.label(
+                                egui::RichText::new("ТИП")
+                                    .strong()
+                                    .small()
+                                    .extra_letter_spacing(0.44)
+                                    .text_style(egui::TextStyle::Small)
+                                    .color(COLOR_GRAY),
+                            );
                         });
                     });
                 });
 
-            // ---- Основное содержимое (Container, column, padding 4px 20px 16px, 538×72) ----
-            Frame::new()
-                .fill(BG_DIALOG)
-                .inner_margin(Margin { left: 4, top: 20, right: 16, bottom: 20 })
-                .show(ui, |ui| {
-                    // ---- Фон+рамка ввода значения (Background+Border) ----
-                    // flex-direction: row, align-items: center, padding: 8px, gap: 8px
-                    // размер: 498×52, bg: #222222, border: 1px #373839, border-radius: 4px
-                    Frame::new()
-                        .fill(BG_VALUE_ROW)
-                        .stroke(Stroke::new(1.0, BG_BORDER))
-                        .corner_radius(CornerRadius::same(4))
-                        .inner_margin(Margin::symmetric(8, 8))
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
-
-                            // ---- Кнопка иконки типа (Button, 34×34) ----
-                            // bg: #252525, border: 1px #373839, border-radius: 4px, SVG 16×16
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(4))
-                                .inner_margin(Margin::same(9))
-                                .show(ui, |ui| {
-                                    let icon_resp = lucide_button(
-                                        ui,
-                                        metric_kind_icon(app.dialogs.add_metric_kind),
-                                        16.0,
-                                        COLOR_WHITE,
-                                    );
-                                    if icon_resp.clicked() {
-                                        app.dialogs.add_metric_kind =
-                                            metric_kind_next(app.dialogs.add_metric_kind);
-                                        app.dialogs.add_metric_value.clear();
-                                        app.dialogs.add_metric_date = None;
-                                        app.dialogs.add_metric_date_popup_open = false;
-                                        app.dialogs.add_metric_time = None;
-                                    }
-                                });
-
-                            // ---- Поле ввода значения (Input) ----
-                            // flex-direction: row, justify-content: center, align-items: flex-start
-                            // padding: 7.5px 10px, размер: 204×34, bg: #252525, border: 1px #373839, border-radius: 2px
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(2))
-                                .inner_margin(Margin { left: 8, top: 10, right: 8, bottom: 10 })
-                                .show(ui, |ui| {
-                                        let is_date_kind = matches!(
-                                            app.dialogs.add_metric_kind,
-                                            MetricKind::Date | MetricKind::Deadline
-                                        );
-                                        if is_date_kind {
-                                            let date_label = match (
-                                                app.dialogs.add_metric_date,
-                                                app.dialogs.add_metric_time,
-                                            ) {
-                                                (Some(d), Some(t)) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                        + " "
-                                                        + &t.format("%H:%M").to_string()
-                                                }
-                                                (Some(d), None) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                }
-                                                (None, Some(t)) => {
-                                                    "дата ".to_owned() + &t.format("%H:%M").to_string()
-                                                }
-                                                _ => "дата".to_string(),
-                                            };
-                                            if ui.button(date_label).clicked() {
-                                                app.dialogs.add_metric_date_popup_open = true;
-                                            }
-                                            if app.dialogs.add_metric_date_popup_open {
-                                                let picked = render_date_time_popup(
-                                                    ui,
-                                                    &mut app.dialogs.add_metric_date,
-                                                    &mut app.dialogs.add_metric_time,
-                                                );
-                                                if picked {
-                                                    app.dialogs.add_metric_date_popup_open = false;
-                                                }
-                                            }
-                                            app.dialogs.add_metric_value = match (
-                                                app.dialogs.add_metric_date,
-                                                app.dialogs.add_metric_time,
-                                            ) {
-                                                (Some(d), Some(_t)) => {
-                                                    d.format("%d.%m.%Y %H:%M").to_string()
-                                                }
-                                                (Some(d), None) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                }
-                                                _ => String::new(),
-                                            };
-                                        } else {
-                                            ui.text_edit_singleline(
-                                                &mut app.dialogs.add_metric_value,
-                                            );
-                                        }
-                                });
-
-                            // ---- Единица измерения (Input, column) ----
-                            // padding: 7.5px 8px, размер: 96×32, bg: #252525, border: 1px #373839, border-radius: 2px
-                            Frame::new()
-                                .fill(BG_INPUT)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .corner_radius(CornerRadius::same(2))
-                                .inner_margin(Margin { left: 8, top: 8, right: 8, bottom: 8 })
-                                .show(ui, |ui| {
-                                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                                            ui.text_edit_singleline(
-                                                &mut app.dialogs.add_metric_unit,
-                                            );
-                                        });
-                                    });
-                                });
-
-                            // ---- Кнопка calendar-sync (Заглушка) ----
-                            // 32×32, bg: #2B2B2B, border-left: 1px #373839, SVG 15×15
-                            Frame::new()
-                                .fill(BG_CALENDAR_STUB)
-                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                .inner_margin(Margin::same(8))
-                                .show(ui, |ui| {
-                                        lucide_button(ui, Lucide::CalendarSync, 15.0, COLOR_GRAY);
-                                    });
-                        });
-
-                    ui.separator();
-
-                    // ---- Нижняя панель действий (Background) ----
-                    // flex-direction: row, justify-content: flex-end, align-items: center
-                    // padding: 0px 20px 20px, размер: 538×52, bg: #1E1E1E
-                    Frame::new()
-                        .fill(BG_DIALOG)
-                        .inner_margin(Margin { left: 0, top: 20, right: 20, bottom: 20 })
-                        .show(ui, |ui| {
-                            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                                // ---- Кнопка Отмена ----
-                                // flex-direction: column, justify-content: center, align-items: center
-                                // padding: 0px 20px, размер: 89.27×32, bg: #FFFFFF, border: 1px #FFFFFF, border-radius: 4px
-                                Frame::new()
-                                    .fill(COLOR_WHITE)
-                                    .stroke(Stroke::new(1.0, COLOR_WHITE))
-                                    .corner_radius(CornerRadius::same(4))
-                                    .inner_margin(Margin { left: 0, top: 20, right: 0, bottom: 20 })
-                                    .show(ui, |ui| {
-                                            if ui.button("Отмена").clicked() {
-                                                cancelled = true;
-                                            }
-                                    });
-
-                                // ---- Кнопка ОК ----
-                                Frame::new()
-                                    .inner_margin(Margin { left: 0, top: 8, right: 0, bottom: 0 })
-                                    .show(ui, |ui| {
-                                        if ui.button("ОК").clicked() {
-                                            done = true;
-                                        }
-                                    });
-                            });
-                        });
+                // ---- Кнопка закрытия (28×28, border-radius 4px) ----
+                ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                    ui.set_min_width(28.0);
+                    let (rect, response) = ui.allocate_exact_size(
+                        Vec2::splat(28.0),
+                        egui::Sense::click(),
+                    );
+                    if response.hovered() {
+                        let p = ui.painter();
+                        p.rect_filled(rect, 0.0, BG_INPUT);
+                    }
+                    lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
                 });
+            });
+
+            ui.add_space(4.0);
+
+            // ---- Основное содержимое (Container, column, padding 4px 20px 16px, 538×72) ----
+            let content_rect = egui::Rect::from_min_size(
+                dialog_rect.min + Vec2::new(20.0, 76.0),
+                Vec2::new(498.0, 52.0),
+            );
+            {
+                let p = ui.painter();
+                p.rect_filled(content_rect, 4.0, BG_VALUE_ROW);
+                p.rect_stroke(
+                    content_rect,
+                    4.0,
+                    Stroke::new(1.0, BG_BORDER),
+                    egui::StrokeKind::Middle,
+                );
+            }
+            ui.allocate_rect(content_rect, egui::Sense::hover());
+
+            ui.horizontal(|ui| {
+                ui.set_min_width(498.0);
+                ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
+
+                // ---- Кнопка иконки типа (Button, 34×34) ----
+                // bg: #252525, border: 1px #373839, border-radius: 4px, SVG 16×16
+                let icon_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::splat(34.0),
+                );
+                {
+                    let p = ui.painter();
+                    p.rect_filled(icon_rect, 4.0, BG_INPUT);
+                    p.rect_stroke(
+                        icon_rect,
+                        4.0,
+                        Stroke::new(1.0, BG_BORDER),
+                        egui::StrokeKind::Middle,
+                    );
+                }
+
+                let icon_response = lucide_button(
+                    ui,
+                    metric_kind_icon(app.dialogs.add_metric_kind),
+                    16.0,
+                    COLOR_WHITE,
+                );
+                if icon_response.clicked() {
+                    app.dialogs.add_metric_kind =
+                        metric_kind_next(app.dialogs.add_metric_kind);
+                    app.dialogs.add_metric_value.clear();
+                    app.dialogs.add_metric_date = None;
+                    app.dialogs.add_metric_date_popup_open = false;
+                    app.dialogs.add_metric_time = None;
+                }
+
+                ui.add_space(8.0);
+
+                // ---- Поле ввода значения (Input) ----
+                // padding: 7.5px 10px, размер: 204×34, bg: #252525, border: 1px #373839, border-radius: 2px
+                let input_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::new(204.0, 34.0),
+                );
+                {
+                    let p = ui.painter();
+                    p.rect_filled(input_rect, 2.0, BG_INPUT);
+                    p.rect_stroke(
+                        input_rect,
+                        2.0,
+                        Stroke::new(1.0, BG_BORDER),
+                        egui::StrokeKind::Middle,
+                    );
+                }
+                ui.allocate_rect(input_rect, egui::Sense::hover());
+
+                ui.vertical_centered(|ui| {
+                    ui.set_min_size(Vec2::new(204.0, 34.0));
+                    let is_date_kind = matches!(
+                        app.dialogs.add_metric_kind,
+                        MetricKind::Date | MetricKind::Deadline
+                    );
+                    if is_date_kind {
+                        let date_label = match (
+                            app.dialogs.add_metric_date,
+                            app.dialogs.add_metric_time,
+                        ) {
+                            (Some(d), Some(t)) => {
+                                d.format("%d.%m.%Y").to_string()
+                                    + " "
+                                    + &t.format("%H:%M").to_string()
+                            }
+                            (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                            (None, Some(t)) => {
+                                "дата ".to_owned() + &t.format("%H:%M").to_string()
+                            }
+                            _ => "дата".to_string(),
+                        };
+                        if ui.button(date_label).clicked() {
+                            app.dialogs.add_metric_date_popup_open = true;
+                        }
+                        if app.dialogs.add_metric_date_popup_open {
+                            let picked = render_date_time_popup(
+                                ui,
+                                &mut app.dialogs.add_metric_date,
+                                &mut app.dialogs.add_metric_time,
+                            );
+                            if picked {
+                                app.dialogs.add_metric_date_popup_open = false;
+                            }
+                        }
+                        app.dialogs.add_metric_value = match (
+                            app.dialogs.add_metric_date,
+                            app.dialogs.add_metric_time,
+                        ) {
+                            (Some(d), Some(_t)) => {
+                                d.format("%d.%m.%Y %H:%M").to_string()
+                            }
+                            (Some(d), None) => {
+                                d.format("%d.%m.%Y").to_string()
+                            }
+                            _ => String::new(),
+                        };
+                    } else {
+                        ui.text_edit_singleline(&mut app.dialogs.add_metric_value);
+                    }
+                });
+
+                ui.add_space(8.0);
+
+                // ---- Единица измерения (Input, column) ----
+                // padding: 7.5px 8px, размер: 96×32, bg: #252525, border: 1px #373839, border-radius: 2px
+                let unit_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::new(96.0, 32.0),
+                );
+                {
+                    let p = ui.painter();
+                    p.rect_filled(unit_rect, 2.0, BG_INPUT);
+                    p.rect_stroke(
+                        unit_rect,
+                        2.0,
+                        Stroke::new(1.0, BG_BORDER),
+                        egui::StrokeKind::Middle,
+                    );
+                }
+                ui.allocate_rect(unit_rect, egui::Sense::hover());
+
+                ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                    ui.set_min_size(Vec2::new(96.0, 32.0));
+                    ui.text_edit_singleline(&mut app.dialogs.add_metric_unit);
+                });
+
+                ui.add_space(8.0);
+
+                // ---- Кнопка calendar-sync (Заглушка) ----
+                // 32×32, bg: #2B2B2B, border-left: 1px #373839, SVG 15×15
+                let cal_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::splat(32.0),
+                );
+                {
+                    let p = ui.painter();
+                    p.rect_filled(cal_rect, 0.0, BG_CALENDAR_STUB);
+                    p.rect_stroke(
+                        cal_rect,
+                        0.0,
+                        Stroke::new(1.0, BG_BORDER),
+                        egui::StrokeKind::Middle,
+                    );
+                }
+                ui.allocate_rect(cal_rect, egui::Sense::hover());
+                lucide_button(ui, Lucide::CalendarSync, 15.0, COLOR_GRAY);
+            });
+
+            ui.add_space(12.0);
+
+            // ---- Нижняя панель действий (Background) ----
+            // flex-direction: row, justify-content: flex-end, align-items: center
+            // padding: 0px 20px 20px, размер: 538×52, bg: #1E1E1E
+            let bottom_rect = egui::Rect::from_min_size(
+                dialog_rect.min + Vec2::new(1.0, 146.0),
+                Vec2::new(538.0, 52.0),
+            );
+            {
+                let p = ui.painter();
+                p.rect_filled(bottom_rect, 0.0, BG_DIALOG);
+            }
+            ui.allocate_rect(bottom_rect, egui::Sense::hover());
+
+            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                ui.set_min_width(538.0);
+                ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
+
+                // ---- Кнопка Отмена ----
+                // bg: #FFFFFF, border: 1px #FFFFFF, border-radius: 4px, текст #1E1E1E
+                let cancel_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::new(89.27, 32.0),
+                );
+                {
+                    let p = ui.painter();
+                    p.rect_filled(cancel_rect, 4.0, COLOR_WHITE);
+                    p.rect_stroke(
+                        cancel_rect,
+                        4.0,
+                        Stroke::new(1.0, COLOR_WHITE),
+                        egui::StrokeKind::Middle,
+                    );
+                }
+                ui.allocate_rect(cancel_rect, egui::Sense::click());
+
+                if ui.button("Отмена").clicked() {
+                    cancelled = true;
+                }
+
+                ui.add_space(8.0);
+
+                // ---- Кнопка ОК ----
+                if ui.button("ОК").clicked() {
+                    done = true;
+                }
+            });
+        });
 
     if cancelled {
         app.dialogs.reset_add_metric();
