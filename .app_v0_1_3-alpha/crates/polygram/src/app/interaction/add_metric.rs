@@ -187,14 +187,28 @@ pub fn handle_add_metric_dialog(
                                             16.0,
                                             COLOR_WHITE,
                                         );
-                                        if icon_response.clicked() {
-                                            app.dialogs.add_metric_kind =
-                                                metric_kind_next(app.dialogs.add_metric_kind);
-                                            app.dialogs.add_metric_value.clear();
-                                            app.dialogs.add_metric_date = None;
-                                            app.dialogs.add_metric_date_popup_open = false;
-                                            app.dialogs.add_metric_time = None;
-                                        }
+                                    if icon_response.clicked() {
+                                        app.dialogs.add_metric_kind =
+                                            metric_kind_next(app.dialogs.add_metric_kind);
+                                        app.dialogs.add_metric_value.clear();
+                                        app.dialogs.add_metric_date = None;
+                                        app.dialogs.add_metric_date_popup_open = false;
+                                        app.dialogs.add_metric_time = None;
+                                    }
+                                });
+
+                                ui.add_space(8.0);
+
+                                // Имя показателя (204×34, #252525, border 1px #373839, radius 2px)
+                                Frame::new()
+                                    .fill(BG_INPUT)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .corner_radius(CornerRadius::same(2))
+                                    .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
+                                    .show(ui, |ui| {
+                                        ui.text_edit_singleline(
+                                            &mut app.dialogs.add_metric_name,
+                                        );
                                     });
 
                                 ui.add_space(8.0);
