@@ -190,7 +190,7 @@ pub fn context_menu(
             let (cx, cy) = app.canvas.screen_to_cell(pos);
             let existing_ids: Vec<String> = app.canvas.objects.iter().map(|o| o.id.clone()).collect();
             let id = allocate_id(&existing_ids);
-            let name = format!("Процесс {}", app.engine.hierarchy().object_count() + 1);
+            let name = format!("Процесс {}", id);
             app.apply_cmd(polygram_core::Command::AddObject {
                 id: Some(id.clone()),
                 name,
