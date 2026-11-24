@@ -117,7 +117,7 @@ pub fn handle_add_metric_dialog(
         .frame(modal_frame())
         .show(ctx, |ui| {
             // ---- Шапка диалога (отступы 20/20/20/12, фон #1E1E1E) ----
-            let closed = header(ui, &app.dialogs.add_metric_process_name, &label);
+            let closed = header(ui, &app.dialogs.add_metric_process_name, &label, None);
             if closed {
                 cancelled = true;
             }

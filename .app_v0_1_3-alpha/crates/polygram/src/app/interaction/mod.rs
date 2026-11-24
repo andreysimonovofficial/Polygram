@@ -2,7 +2,7 @@
 
 pub mod add_metric;
 pub mod container_menu;
-pub mod reparent_confirm;
+pub mod place_object;
 pub mod rename;
 
 use polygram_core::id_allocator::allocate_id;

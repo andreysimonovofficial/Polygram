@@ -96,10 +96,11 @@ pub fn modal_frame() -> Frame {
 /// Универсальная шапка модального окна.
 /// Отступы: 20 px сверху, 20 px слева, 20 px справа, 12 px снизу, фон #1E1E1E.
 /// Левый текстовый блок: вертикальный стек (заголовок + подзаголовок), зазор 4 px.
+/// Подзаголовок может опционально содержать иконку объекта слева от текста (зазор 6 px).
 /// Кнопка закрытия × (28×28, скругление 4 px) выровнена по правому и верхнему краю.
 /// Верхние углы скруглены на 8 px по радиусу внешней рамки окна.
 /// Возвращает `true`, если нажата кнопка закрытия.
-pub fn header(ui: &mut Ui, title: &str, subtitle: &str) -> bool {
+pub fn header(ui: &mut Ui, title: &str, subtitle: &str, subtitle_icon: Option<Lucide>) -> bool {
     let mut closed = false;
     Frame::new()
         .fill(MODAL_BG)
@@ -129,14 +130,24 @@ pub fn header(ui: &mut Ui, title: &str, subtitle: &str) -> bool {
                             .line_height(Some(22.0))
                             .color(MODAL_TEXT),
                     );
-                    ui.label(
-                        egui::RichText::new(subtitle)
-                            .family(FontFamily::Name("inter_bold".into()))
-                            .size(11.0)
-                            .line_height(Some(13.0))
-                            .extra_letter_spacing(0.44)
-                            .color(MODAL_TEXT_MUTED),
-                    );
+                    // Подзаголовок: опциональная иконка + текст, горизонтальный стек, зазор 6 px.
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = Vec2::new(6.0, 0.0);
+                        if let Some(icon) = subtitle_icon {
+                            let icon_rect =
+                                Rect::from_center_size(ui.cursor().min, Vec2::splat(13.0));
+                            paint_lucide(ui, icon_rect, icon, MODAL_TEXT_MUTED);
+                            ui.advance_cursor_after_rect(icon_rect);
+                        }
+                        ui.label(
+                            egui::RichText::new(subtitle)
+                                .family(FontFamily::Name("inter_bold".into()))
+                                .size(11.0)
+                                .line_height(Some(13.0))
+                                .extra_letter_spacing(0.44)
+                                .color(MODAL_TEXT_MUTED),
+                        );
+                    });
                 });
 
                 // Кнопка закрытия выровнена по правому верхнему углу шапки.

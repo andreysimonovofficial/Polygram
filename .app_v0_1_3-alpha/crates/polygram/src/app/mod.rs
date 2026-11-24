@@ -10,6 +10,7 @@ use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirect
 use polygram_core::drag_domain::{compute_metric_drop_object, compute_object_drop_commands, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
 use polygram_core::layout::Rect as CoreRect;
+use interaction::place_object::PlaceObjectConfirmData;
 
 mod dialogs;
 mod icons;
@@ -407,50 +408,74 @@ impl PolygramApp {
         let drag_set: HashSet<&str> =
             self.drag_objects.iter().map(|s| s.as_str()).collect();
 
-        // Один Процесс над отделом — диалог подтверждения переноса (как раньше).
+        // Один объект (Процесс или Отдел) над Отделом — диалог «Поместить Объект в Объект».
+        // Процесс в Процесс и Отдел в Процесс запрещены.
         if self.drag_objects.len() == 1 {
             let id = self.drag_objects[0].clone();
             if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == id) {
-                if obj.kind == NodeKind::Process {
-                    if let Some(dept_id) = &self.drag_over {
-                        if self.canvas.objects.iter().any(|o| o.id == *dept_id && o.kind == NodeKind::Department) {
-                            let start_cell = self.drag_start_cells.get(0).copied().unwrap_or((0, 0));
-                            let object_size = (obj.rect.w, obj.rect.h);
-                            let drop_cell = find_free_cell_in_dept(
-                                &self.canvas.objects,
-                                dept_id,
-                                object_size.0,
-                                object_size.1,
-                                &id,
-                            )
-                            .unwrap_or((obj.rect.x, obj.rect.y));
-                            let already_in_dept = self.canvas.objects.iter().any(|o| {
-                                o.id == id && o.parent.as_deref() == Some(dept_id)
-                            });
-                            if already_in_dept {
-                                if drop_cell != start_cell {
-                                    self.apply_batch(vec![Command::MoveObject {
-                                        object: id.clone(),
-                                        at: [drop_cell.0, drop_cell.1],
-                                    }]);
-                                } else {
-                                    if let Some(o) = self.canvas.objects.iter_mut().find(|o| o.id == id) {
-                                        o.rect.x = start_cell.0;
-                                        o.rect.y = start_cell.1;
+                if obj.kind == NodeKind::Process || obj.kind == NodeKind::Department {
+                    if let Some(over_id) = &self.drag_over {
+                        if let Some(over_obj) = self.canvas.objects.iter().find(|o| o.id == *over_id)
+                        {
+                            match over_obj.kind {
+                                NodeKind::Department => {
+                                    let start_cell =
+                                        self.drag_start_cells.get(0).copied().unwrap_or((0, 0));
+                                    let object_size = (obj.rect.w, obj.rect.h);
+                                    let drop_cell = find_free_cell_in_dept(
+                                        &self.canvas.objects,
+                                        over_id,
+                                        object_size.0,
+                                        object_size.1,
+                                        &id,
+                                    )
+                                    .unwrap_or((obj.rect.x, obj.rect.y));
+                                    let already_in_dept = self.canvas.objects.iter().any(|o| {
+                                        o.id == id && o.parent.as_deref() == Some(over_id)
+                                    });
+                                    if already_in_dept {
+                                        if drop_cell != start_cell {
+                                            self.apply_batch(vec![Command::MoveObject {
+                                                object: id.clone(),
+                                                at: [drop_cell.0, drop_cell.1],
+                                            }]);
+                                        } else {
+                                            if let Some(o) = self
+                                                .canvas
+                                                .objects
+                                                .iter_mut()
+                                                .find(|o| o.id == id)
+                                            {
+                                                o.rect.x = start_cell.0;
+                                                o.rect.y = start_cell.1;
+                                            }
+                                        }
+                                        self.clear_drag_state();
+                                        return;
                                     }
+                                    let object_name = obj.name.clone();
+                                    let target_name = over_obj.name.clone();
+                                    self.dialogs.place_object_confirm =
+                                        Some(PlaceObjectConfirmData {
+                                            object_id: id.clone(),
+                                            object_name,
+                                            object_kind: obj.kind,
+                                            target_id: over_id.clone(),
+                                            target_name,
+                                            target_kind: over_obj.kind,
+                                            drop_cell,
+                                            start_cell,
+                                        });
+                                    self.cancel_drag();
+                                    return;
                                 }
-                                self.clear_drag_state();
-                                return;
+                                NodeKind::Process => {
+                                    // Запрещено: Процесс в Процесс или Отдел в Процесс.
+                                    self.cancel_drag();
+                                    return;
+                                }
+                                _ => {}
                             }
-                            self.dialogs.reparent_confirm = Some((
-                                id.clone(),
-                                dept_id.clone(),
-                                drop_cell,
-                                start_cell,
-                                NodeKind::Process,
-                            ));
-                            self.cancel_drag();
-                            return;
                         }
                     }
                 }
@@ -1161,7 +1186,7 @@ impl eframe::App for PolygramApp {
         interaction::add_metric::handle_add_metric_dialog(self, ui.ctx(), &published);
         interaction::rename_dialog(self, ui.ctx());
         interaction::rename::inline_rename_editor(self, ui.ctx(), &published);
-        interaction::reparent_confirm::handle_reparent_confirm(self, ui.ctx(), &published);
+        interaction::place_object::handle_place_object_confirm(self, ui.ctx(), &published);
 
         ui.ctx().request_repaint();
     }
