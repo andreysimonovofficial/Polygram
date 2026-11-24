@@ -94,7 +94,7 @@ pub fn handle_add_metric_dialog(
         .title_bar(false)
         .resizable(false)
         .collapsible(false)
-        .fixed_size([540.0, 198.0])
+        .fixed_size([540.0, 197.0])
         .frame(
             Frame::new()
                 .fill(BG_DIALOG)
@@ -161,7 +161,7 @@ pub fn handle_add_metric_dialog(
             // ---- Основное содержимое (padding: 4px 20px 16px) ----
             Frame::new()
                 .fill(BG_DIALOG)
-                .inner_margin(Margin { left: 4, top: 0, right: 16, bottom: 20 })
+                .inner_margin(Margin { left: 4, top: 4, right: 20, bottom: 16 })
                 .show(ui, |ui| {
                     // Background+Border (bg #222222, border #373839, radius 4px, padding 8px, gap 8px)
                     Frame::new()
@@ -203,13 +203,14 @@ pub fn handle_add_metric_dialog(
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
+                                    .inner_margin(Margin { left: 10, top: 8, right: 10, bottom: 8 })
                                     .show(ui, |ui| {
                                         ui.add(
                                             egui::TextEdit::singleline(
                                                 &mut app.dialogs.add_metric_name,
                                             )
-                                            .frame(Frame::new()),
+                                            .frame(Frame::new())
+                                            .hint_text("Ввод имени Показателя"),
                                         );
                                     });
 
@@ -279,7 +280,8 @@ pub fn handle_add_metric_dialog(
                                                     egui::TextEdit::singleline(
                                                         &mut app.dialogs.add_metric_value,
                                                     )
-                                                    .frame(Frame::new()),
+                                                    .frame(Frame::new())
+                                                    .hint_text("Ввод значения"),
                                                 );
                                             }
 
@@ -306,7 +308,7 @@ pub fn handle_add_metric_dialog(
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 8, top: 7, right: 8, bottom: 7 })
+                                    .inner_margin(Margin { left: 10, top: 8, right: 10, bottom: 8 })
                                     .show(ui, |ui| {
                                         ui.with_layout(
                                             Layout::right_to_left(Align::TOP),
@@ -315,7 +317,8 @@ pub fn handle_add_metric_dialog(
                                                     egui::TextEdit::singleline(
                                                         &mut app.dialogs.add_metric_unit,
                                                     )
-                                                    .frame(Frame::new()),
+                                                    .frame(Frame::new())
+                                                    .hint_text("Ввод единицы измерения"),
                                                 );
                                             },
                                         );
