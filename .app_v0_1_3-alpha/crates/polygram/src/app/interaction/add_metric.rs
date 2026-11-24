@@ -15,8 +15,8 @@ use polygram_canvas::modal::{
 use polygram_canvas::paint_lucide;
 use chrono::{Datelike, NaiveDate, NaiveTime, Utc};
 use egui::{
-    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, PointerButton, Rect,
-    Sense, Stroke, StrokeKind, Ui, Vec2, pos2, Window,
+    Align, Color32, Context, CornerRadius, FontFamily, FontId, Frame, Layout, Margin, PointerButton,
+    Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, Window,
 };
 use egui_lucide::Lucide;
 use polygram_core::{MetricKind, MetricValue, runtime::Published};
@@ -346,6 +346,7 @@ pub fn handle_add_metric_dialog(
                                 egui::TextEdit::singleline(
                                     &mut app.dialogs.add_metric_value,
                                 )
+                                .font(FontId::new(14.0, FontFamily::Name("inter_medium".into())))
                                 .frame(
                                     Frame::new()
                                         .fill(Color32::TRANSPARENT)
@@ -548,6 +549,7 @@ fn text_field(
     );
     child.add(
         egui::TextEdit::singleline(text)
+            .font(FontId::new(14.0, FontFamily::Name("inter_medium".into())))
             .frame(
                 Frame::new()
                     .fill(Color32::TRANSPARENT)
@@ -560,7 +562,7 @@ fn text_field(
 
 /// Окрасить текст строкой, прижатый к правому краю прямоугольника, по вертикальному центру.
 fn paint_right_aligned(ui: &Ui, rect: Rect, text: &str, pad_right: f32) {
-    let font_id = egui::FontId::new(14.0, egui::FontFamily::Proportional);
+    let font_id = FontId::new(14.0, FontFamily::Name("inter_medium".into()));
     let galley = ui
         .fonts_mut(|f| f.layout_no_wrap(text.to_owned(), font_id, MODAL_TEXT));
     let x = rect.max.x - pad_right - galley.size().x;

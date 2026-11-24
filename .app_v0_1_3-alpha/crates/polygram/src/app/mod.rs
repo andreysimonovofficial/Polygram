@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
-use polygram_canvas::{Canvas, paint::constants::PROCESS_HEADER_H_PX};
+use polygram_canvas::{Canvas, register_inter_fonts, paint::constants::PROCESS_HEADER_H_PX};
 use polygram_core::{Command, Engine, runtime::Published, types::{ContainerDirection, Direction, NodeKind}};
 use polygram_core::drag_domain::{compute_metric_drop_object, compute_object_drop_commands, ObjectDropContext};
 use polygram_core::geometry::{Geometry, ObjectGeom};
@@ -60,6 +60,8 @@ pub struct PolygramApp {
     right_click_object: Option<String>,
     /// Установлены ли загрузчики изображений egui_extras (включая SVG).
     image_loaders_installed: bool,
+    /// Зарегистрированы ли шрифты Inter в контексте egui.
+    inter_fonts_installed: bool,
     /// Меню только что открыто правым кликом — игнорировать close-логику в этом кадре.
     menu_just_opened: bool,
     /// Выделенные объекты.
@@ -101,6 +103,7 @@ impl PolygramApp {
             right_click: None,
             right_click_object: None,
             image_loaders_installed: false,
+            inter_fonts_installed: false,
             menu_just_opened: false,
             selected_objects: Vec::new(),
             drag_objects: Vec::new(),
@@ -711,6 +714,12 @@ impl eframe::App for PolygramApp {
         if !self.image_loaders_installed {
             egui_extras::loaders::install_image_loaders(ui.ctx());
             self.image_loaders_installed = true;
+        }
+
+        // Регистрируем шрифты Inter (500/600/700) при первом кадре.
+        if !self.inter_fonts_installed {
+            register_inter_fonts(ui.ctx());
+            self.inter_fonts_installed = true;
         }
 
         let published = self.published();

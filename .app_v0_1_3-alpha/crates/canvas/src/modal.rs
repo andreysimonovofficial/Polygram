@@ -6,8 +6,8 @@
 //! специфического тела окна.
 
 use egui::{
-    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, PointerButton, Rect, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    Align, Color32, Context, CornerRadius, FontFamily, FontId, Frame, Layout, Margin, PointerButton,
+    Rect, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use egui_lucide::Lucide;
 use crate::icons::paint_lucide;
@@ -117,14 +117,16 @@ pub fn header(ui: &mut Ui, title: &str, subtitle: &str) -> bool {
                     ui.spacing_mut().item_spacing = Vec2::new(0.0, 4.0);
                     ui.label(
                         egui::RichText::new(title)
-                            .strong()
+                            .family(FontFamily::Name("inter_semibold".into()))
                             .size(16.0)
+                            .line_height(Some(22.0))
                             .color(MODAL_TEXT),
                     );
                     ui.label(
                         egui::RichText::new(subtitle)
-                            .strong()
+                            .family(FontFamily::Name("inter_bold".into()))
                             .size(11.0)
+                            .line_height(Some(13.0))
                             .extra_letter_spacing(0.44)
                             .color(MODAL_TEXT_MUTED),
                     );
@@ -226,7 +228,7 @@ pub fn confirm_button(ui: &mut Ui) -> bool {
         StrokeKind::Middle,
     );
 
-    let font_id = egui::FontId::new(14.0, egui::FontFamily::Proportional);
+    let font_id = FontId::new(14.0, FontFamily::Name("inter_semibold".into()));
     let galley = ui
         .fonts_mut(|f| f.layout_no_wrap("Готово".to_owned(), font_id, MODAL_CONFIRM_TEXT));
     let text_pos = rect.center() - galley.size() / 2.0;
@@ -293,6 +295,7 @@ pub fn input_field(
     );
     child.add(
         egui::TextEdit::singleline(text)
+            .font(FontId::new(14.0, FontFamily::Name("inter_medium".into())))
             .frame(
                 Frame::new()
                     .fill(Color32::TRANSPARENT)

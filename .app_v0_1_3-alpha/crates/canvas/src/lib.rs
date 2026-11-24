@@ -14,6 +14,43 @@ pub use theme::{status_dot_color, status_label_ru, Theme};
 pub use polygram_core::types::{Direction, NodeKind, StatusCode};
 pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
 
+/// Встроенные данные шрифта Inter Regular (400).
+pub const INTER_REGULAR: &'static [u8] = include_bytes!("../assets/fonts/Inter-Regular.otf");
+/// Встроенные данные шрифта Inter Medium (500).
+pub const INTER_MEDIUM: &'static [u8] = include_bytes!("../assets/fonts/Inter-Medium.otf");
+/// Встроенные данные шрифта Inter SemiBold (600).
+pub const INTER_SEMIBOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-SemiBold.otf");
+/// Встроенные данные шрифта Inter Bold (700).
+pub const INTER_BOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-Bold.otf");
+
+/// Регистрировать шрифты Inter (500/600/700) в контексте egui.
+/// Вызывать один раз при инициализации приложения.
+pub fn register_inter_fonts(ctx: &egui::Context) {
+    use std::sync::Arc;
+    let mut font_defs = egui::FontDefinitions::default();
+    font_defs.font_data.insert(
+        "inter_regular".to_owned(),
+        Arc::new(egui::FontData::from_static(INTER_REGULAR)),
+    );
+    font_defs.font_data.insert(
+        "inter_medium".to_owned(),
+        Arc::new(egui::FontData::from_static(INTER_MEDIUM)),
+    );
+    font_defs.font_data.insert(
+        "inter_semibold".to_owned(),
+        Arc::new(egui::FontData::from_static(INTER_SEMIBOLD)),
+    );
+    font_defs.font_data.insert(
+        "inter_bold".to_owned(),
+        Arc::new(egui::FontData::from_static(INTER_BOLD)),
+    );
+    // Inter-Regular как первый выбор для пропорционального шрифта (fallback цепочка сохранит системные шрифты).
+    if let Some(proportional) = font_defs.families.get_mut(&egui::FontFamily::Proportional) {
+        proportional.insert(0, "inter_regular".to_owned());
+    }
+    ctx.set_fonts(font_defs);
+}
+
 use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Vec2};
 use polygram_core::{DynamicState, id_allocator::allocate_id};
 
