@@ -8,8 +8,8 @@ use crate::app::PolygramApp;
 use crate::app::icons::lucide_button;
 use chrono::{Datelike, NaiveDate, NaiveTime, Utc};
 use egui::{
-    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, Sense, Stroke, StrokeKind, Vec2,
-    Window,
+    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, Sense, Stroke, StrokeKind,
+    Vec2, Window,
 };
 use egui_lucide::Lucide;
 use polygram_core::{MetricKind, MetricValue, runtime::Published};
@@ -166,7 +166,7 @@ pub fn handle_add_metric_dialog(
                 .fill(BG_DIALOG)
                 .inner_margin(Margin { left: 4, top: 4, right: 20, bottom: 16 })
                 .show(ui, |ui| {
-                    // Background+Border (bg #222222, border #373839, radius 4px, padding 8px, gap 8px)
+                    // Background+Border: 498×52, bg #222222, border #373839, radius 4px, padding 8px, gap 8px
                     Frame::new()
                         .fill(BG_VALUE_ROW)
                         .stroke(Stroke::new(1.0, BG_BORDER))
@@ -176,64 +176,81 @@ pub fn handle_add_metric_dialog(
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
-                                // Кнопка иконки типа (34×34, #252525, border 1px #373839, radius 4px)
+                                // ---- 1. Иконка типа (34×34, radius 4px) ----
                                 Frame::new()
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(4))
-                                    .inner_margin(Margin::same(9))
+                                    .inner_margin(Margin::same(8))
                                     .show(ui, |ui| {
-                                        let icon_response = lucide_button(
-                                            ui,
-                                            metric_kind_icon(app.dialogs.add_metric_kind),
-                                            16.0,
-                                            COLOR_WHITE,
-                                        );
-                                        if icon_response.clicked() {
-                                            app.dialogs.add_metric_kind =
-                                                metric_kind_next(app.dialogs.add_metric_kind);
-                                            app.dialogs.add_metric_value.clear();
-                                            app.dialogs.add_metric_date = None;
-                                            app.dialogs.add_metric_date_popup_open = false;
-                                            app.dialogs.add_metric_time = None;
-                                        }
-                                    });
-
-                                ui.add_space(8.0);
-
-                                // Имя показателя (204×34, #252525, border 1px #373839, radius 2px)
-                                Frame::new()
-                                    .fill(BG_INPUT)
-                                    .stroke(Stroke::new(1.0, BG_BORDER))
-                                    .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 10, top: 8, right: 10, bottom: 8 })
-                                    .show(ui, |ui| {
-                                        ui.add(
-                                            egui::TextEdit::singleline(
-                                                &mut app.dialogs.add_metric_name,
-                                            )
-                                            .frame(Frame::new())
-                                            .hint_text("Ввод имени Показателя"),
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(16.0, 16.0),
+                                            Layout::left_to_right(Align::Center),
+                                            |ui| {
+                                                let icon_response = lucide_button(
+                                                    ui,
+                                                    metric_kind_icon(app.dialogs.add_metric_kind),
+                                                    16.0,
+                                                    COLOR_WHITE,
+                                                );
+                                                if icon_response.clicked() {
+                                                    app.dialogs.add_metric_kind =
+                                                        metric_kind_next(app.dialogs.add_metric_kind);
+                                                    app.dialogs.add_metric_value.clear();
+                                                    app.dialogs.add_metric_date = None;
+                                                    app.dialogs.add_metric_date_popup_open = false;
+                                                    app.dialogs.add_metric_time = None;
+                                                }
+                                            },
                                         );
                                     });
 
                                 ui.add_space(8.0);
 
-                                // Блок значения + календарь (130×34, единая рамка #373839, radius 2px)
+                                // ---- 2. Имя показателя (204×34, radius 2px) ----
                                 Frame::new()
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 8, top: 7, right: 8, bottom: 7 })
+                                    .inner_margin(Margin {
+                                        left: 10,
+                                        top: 8,
+                                        right: 10,
+                                        bottom: 8,
+                                    })
+                                    .show(ui, |ui| {
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(182.0, 18.0),
+                                            Layout::left_to_right(Align::TOP),
+                                            |ui| {
+                                                ui.add(
+                                                    egui::TextEdit::singleline(
+                                                        &mut app.dialogs.add_metric_name,
+                                                    )
+                                                    .frame(Frame::new())
+                                                    .hint_text("Ввод имени Показателя"),
+                                                );
+                                            },
+                                        );
+                                    });
+
+                                ui.add_space(8.0);
+
+                                // ---- 3. Значение + кнопка синхронизации (130×34, одна рамка, radius 2px) ----
+                                Frame::new()
+                                    .fill(BG_INPUT)
+                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                    .corner_radius(CornerRadius::same(2))
+                                    .inner_margin(Margin::same(0))
                                     .show(ui, |ui| {
                                         ui.horizontal(|ui| {
                                             ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
 
-                                            // Поле значения
                                             let is_date_kind = matches!(
                                                 app.dialogs.add_metric_kind,
                                                 MetricKind::Date | MetricKind::Deadline
                                             );
+
                                             if is_date_kind {
                                                 let date_label = match (
                                                     app.dialogs.add_metric_date,
@@ -257,11 +274,19 @@ pub fn handle_add_metric_dialog(
                                                     app.dialogs.add_metric_date_popup_open = true;
                                                 }
                                                 if app.dialogs.add_metric_date_popup_open {
-                                                    let picked = render_date_time_popup(
-                                                        ui,
-                                                        &mut app.dialogs.add_metric_date,
-                                                        &mut app.dialogs.add_metric_time,
-                                                    );
+                                                    let mut picked = false;
+                                                    egui::Window::new("Выберите дату")
+                                                        .collapsible(false)
+                                                        .resizable(false)
+                                                        .show(ui.ctx(), |ui| {
+                                                            if render_date_time_popup(
+                                                                ui,
+                                                                &mut app.dialogs.add_metric_date,
+                                                                &mut app.dialogs.add_metric_time,
+                                                            ) {
+                                                                picked = true;
+                                                            }
+                                                        });
                                                     if picked {
                                                         app.dialogs.add_metric_date_popup_open = false;
                                                     }
@@ -279,26 +304,53 @@ pub fn handle_add_metric_dialog(
                                                     _ => String::new(),
                                                 };
                                             } else {
-                                                ui.add(
-                                                    egui::TextEdit::singleline(
-                                                        &mut app.dialogs.add_metric_value,
-                                                    )
-                                                    .frame(Frame::new())
-                                                    .hint_text("Ввод значения"),
-                                                );
+                                                // Поле значения (94×32 внутри Unified frame)
+                                                Frame::new()
+                                                    .fill(BG_INPUT)
+                                                    .stroke(Stroke::new(1.0, BG_BORDER))
+                                                    .corner_radius(CornerRadius::same(2))
+                                                    .inner_margin(Margin {
+                                                        left: 8,
+                                                        top: 7,
+                                                        right: 8,
+                                                        bottom: 7,
+                                                    })
+                                                    .show(ui, |ui| {
+                                                        ui.allocate_ui_with_layout(
+                                                            Vec2::new(76.0, 18.0),
+                                                            Layout::left_to_right(Align::TOP),
+                                                            |ui| {
+                                                                ui.add(
+                                                                    egui::TextEdit::singleline(
+                                                                        &mut app
+                                                                            .dialogs
+                                                                            .add_metric_value,
+                                                                    )
+                                                                    .frame(Frame::new())
+                                                                    .hint_text("Ввод значения"),
+                                                                );
+                                                            },
+                                                        );
+                                                    });
                                             }
 
-                                            // Кнопка calendar-sync (32×32, #2B2B2B, border-left #373839, заглушка)
+                                            ui.add_space(4.0);
+
+                                            // Кнопка синхронизации (32×32)
                                             Frame::new()
                                                 .fill(BG_CALENDAR_STUB)
-                                                .stroke(Stroke::new(1.0, BG_BORDER))
-                                                .inner_margin(Margin::same(8))
                                                 .show(ui, |ui| {
-                                                    lucide_button(
-                                                        ui,
-                                                        Lucide::CalendarSync,
-                                                        15.0,
-                                                        COLOR_GRAY,
+                                                    ui.allocate_ui_with_layout(
+                                                        Vec2::new(32.0, 32.0),
+                                                        Layout::left_to_right(Align::Center),
+                                                        |ui| {
+                                                            lucide_button(
+                                                                ui,
+                                                                Lucide::CalendarSync,
+                                                                15.0,
+                                                                COLOR_GRAY,
+                                                            );
+                                                        },
                                                     );
                                                 });
                                         });
@@ -306,14 +358,20 @@ pub fn handle_add_metric_dialog(
 
                                 ui.add_space(8.0);
 
-                                // Единица измерения (88×34, #252525, border 1px #373839, radius 2px)
+                                // ---- 4. Единица измерения (88×34, radius 2px) ----
                                 Frame::new()
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 10, top: 8, right: 10, bottom: 8 })
+                                    .inner_margin(Margin {
+                                        left: 10,
+                                        top: 8,
+                                        right: 10,
+                                        bottom: 8,
+                                    })
                                     .show(ui, |ui| {
-                                        ui.with_layout(
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(66.0, 18.0),
                                             Layout::right_to_left(Align::TOP),
                                             |ui| {
                                                 ui.add(
