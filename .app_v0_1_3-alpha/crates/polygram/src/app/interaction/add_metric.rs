@@ -93,11 +93,26 @@ pub fn handle_add_metric_dialog(
         .find(|md| md.name == app.dialogs.add_metric_name.trim())
         .cloned();
 
+    // Затемнённый фон позади модального окна (50%).
+    let screen_rect = ctx.viewport_rect();
+    ctx.layer_painter(egui::LayerId::background()).rect_filled(
+        screen_rect,
+        0.0,
+        Color32::from_black_alpha(128),
+    );
+
+    // Центрирование модального окна по экрану.
+    let center_pos = egui::pos2(
+        screen_rect.center().x - 270.0,
+        screen_rect.center().y - 98.5,
+    );
+
     Window::new("")
         .title_bar(false)
         .resizable(false)
         .collapsible(false)
         .fixed_size([540.0, 197.0])
+        .fixed_pos(center_pos)
         .frame(
             Frame::new()
                 .fill(BG_DIALOG)
