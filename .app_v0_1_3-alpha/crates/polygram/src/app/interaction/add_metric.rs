@@ -8,7 +8,8 @@ use crate::app::PolygramApp;
 use crate::app::icons::lucide_button;
 use chrono::{Datelike, NaiveDate, NaiveTime, Utc};
 use egui::{
-    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, Stroke, Vec2, Window,
+    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, Sense, Stroke, StrokeKind, Vec2,
+    Window,
 };
 use egui_lucide::Lucide;
 use polygram_core::{MetricKind, MetricValue, runtime::Published};
@@ -25,6 +26,8 @@ const BG_VALUE_ROW: Color32 = Color32::from_rgb(0x22, 0x22, 0x22);
 const BG_CALENDAR_STUB: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
 /// Цвет белого: #FFFFFF.
 const COLOR_WHITE: Color32 = Color32::from_rgb(0xFF, 0xFF, 0xFF);
+/// Цвет фона кнопки «Готово» при наведении: #E5E5E5.
+const COLOR_BTN_HOVER: Color32 = Color32::from_rgb(0xE5, 0xE5, 0xE5);
 /// Цвет серого текста: #A1A1AA.
 const COLOR_GRAY: Color32 = Color32::from_rgb(0xA1, 0xA1, 0xAA);
 
@@ -337,23 +340,28 @@ pub fn handle_add_metric_dialog(
                     ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                         ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
-                        // Кнопка Готово (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
-                        Frame::new()
-                            .fill(COLOR_WHITE)
-                            .stroke(Stroke::new(1.0, COLOR_WHITE))
-                            .corner_radius(CornerRadius::same(4))
-                            .inner_margin(Margin::symmetric(20, 0))
-                            .show(ui, |ui| {
-                                ui.vertical_centered(|ui| {
-                                    let label = egui::Label::new(
-                                        egui::RichText::new("Готово").color(BG_DIALOG),
-                                    );
-                                    let resp = ui.add(label);
-                                    if resp.clicked() {
-                                        done = true;
-                                    }
-                                });
-                            });
+                        // Кнопка Готово (#FFFFFF, при наведении #E5E5E5, border #FFFFFF, radius 4px, текст #1E1E1E, невыделяемый)
+                        let btn_size = Vec2::new(89.27, 32.0);
+                        let (btn_rect, btn_response) = ui.allocate_exact_size(btn_size, Sense::click());
+                        let btn_hovered = btn_response.hovered();
+                        let btn_fill = if btn_hovered { COLOR_BTN_HOVER } else { COLOR_WHITE };
+
+                        ui.painter().rect_filled(btn_rect, CornerRadius::same(4), btn_fill);
+                        ui.painter().rect_stroke(
+                            btn_rect,
+                            CornerRadius::same(4),
+                            Stroke::new(1.0, COLOR_WHITE),
+                            StrokeKind::Middle,
+                        );
+
+                        let font_id = egui::TextStyle::Button.resolve(ui.style());
+                        let galley = ui.fonts_mut(|f| f.layout_no_wrap("Готово".to_owned(), font_id, BG_DIALOG));
+                        let text_pos = btn_rect.center() - galley.size() / 2.0;
+                        ui.painter().galley(text_pos, galley, BG_DIALOG);
+
+                        if btn_response.clicked() {
+                            done = true;
+                        }
                         ui.add_space(32.0);
                     });
                 });
