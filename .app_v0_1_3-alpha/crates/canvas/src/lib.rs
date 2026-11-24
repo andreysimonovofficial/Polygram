@@ -5,6 +5,7 @@ mod icons;
 pub mod paint;
 mod paint_department;
 pub mod theme;
+pub mod modal;
 
 pub use icons::paint_lucide;
 pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
