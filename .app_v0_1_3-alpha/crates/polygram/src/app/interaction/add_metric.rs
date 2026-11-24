@@ -148,13 +148,11 @@ pub fn handle_add_metric_dialog(
                         });
 
                         // Кнопка закрытия в правом верхнем углу (28×28, border-radius 4px)
-                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                            ui.set_min_width(f32::INFINITY);
-                            let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
-                            if x_resp.clicked() {
-                                cancelled = true;
-                            }
-                        });
+                        ui.add_space(277.84);
+                        let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
+                        if x_resp.clicked() {
+                            cancelled = true;
+                        }
                     });
                 });
 
