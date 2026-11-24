@@ -14,6 +14,8 @@ pub use theme::{status_dot_color, status_label_ru, Theme};
 pub use polygram_core::types::{Direction, NodeKind, StatusCode};
 pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
 
+use std::collections::HashSet;
+
 /// Встроенные данные шрифта Inter Regular (400).
 pub const INTER_REGULAR: &'static [u8] = include_bytes!("../assets/fonts/Inter-Regular.ttf");
 /// Встроенные данные шрифта Inter Medium (500).
@@ -246,6 +248,7 @@ impl Canvas {
         dynamic: &DynamicState,
         hovered_object: Option<&str>,
         selected_objects: &[String],
+        drag_visual: Option<(egui::Vec2, &HashSet<String>)>,
     ) {
         let painter = ui.painter();
         let clip_rect = ui.clip_rect();
@@ -298,8 +301,14 @@ impl Canvas {
                 continue;
             }
             let r = &object.rect;
+            let mut screen_pos = self.cell_to_screen(r.x, r.y);
+            if let Some((shift, ids)) = &drag_visual {
+                if ids.contains(&object.id) {
+                    screen_pos = screen_pos + *shift;
+                }
+            }
             let rect_px = Rect::from_min_size(
-                self.cell_to_screen(r.x, r.y),
+                screen_pos,
                 Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
             if !rect_px.intersects(clip_rect) {
@@ -329,7 +338,12 @@ impl Canvas {
                 continue;
             }
             let r = &object.rect;
-            let screen_pos = self.cell_to_screen(r.x, r.y);
+            let mut screen_pos = self.cell_to_screen(r.x, r.y);
+            if let Some((shift, ids)) = &drag_visual {
+                if ids.contains(&object.id) {
+                    screen_pos = screen_pos + *shift;
+                }
+            }
             // Процесс: ширина фиксирована 512px (CSS спецификация), высота динамическая.
             let card_w = 512.0 * zoom;
             let card_h = paint::object::process_total_height(object, dynamic, zoom, card_w);

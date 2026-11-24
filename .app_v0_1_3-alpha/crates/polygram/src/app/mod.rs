@@ -85,6 +85,14 @@ pub struct PolygramApp {
     drag_metric_source: Option<(String, Direction, String)>,
     /// Начальная позиция перетаскивания показателя (экран).
     drag_metric_start: Option<Pos2>,
+    /// Фракционное смещение (в клетках) для плавного визуального перемещения
+    /// перетаскиваемых объектов и их детей во время драга. rect остаётся
+    /// привязанным к сетке (целые клетки) для логики и сброса; визуально
+    /// объект сдвигается на эту фракцию при отрисовке.
+    drag_visual_offset: Option<(f32, f32)>,
+    /// Идентификаторы объектов, которым применять drag_visual_offset при
+    /// отрисовке (перетаскиваемые + дети dragged-отделов).
+    drag_visual_ids: HashSet<String>,
     /// Объект, который сейчас переименовывается.
     pub rename_target: Option<String>,
     /// Введённое новое имя для переименования.
@@ -116,6 +124,8 @@ impl PolygramApp {
             drag_object_dir: None,
             drag_metric_source: None,
             drag_metric_start: None,
+            drag_visual_offset: None,
+            drag_visual_ids: HashSet::new(),
             rename_target: None,
             rename_input: String::new(),
             selection_box_start: None,
@@ -277,6 +287,8 @@ impl PolygramApp {
         self.drag_over = None;
         self.drag_ghost = None;
         self.drag_object_dir = None;
+        self.drag_visual_offset = None;
+        self.drag_visual_ids = ids.iter().cloned().collect();
     }
 
     /// Очистить состояние драга без сброса позиций объектов.
@@ -289,6 +301,8 @@ impl PolygramApp {
         self.drag_over = None;
         self.drag_ghost = None;
         self.drag_object_dir = None;
+        self.drag_visual_offset = None;
+        self.drag_visual_ids.clear();
     }
 
     /// Сбросить состояние драга и вернуть объекты на исходные позиции
@@ -355,9 +369,19 @@ impl PolygramApp {
         self.drag_over = over_dept.clone();
 
         // Переместить каждый объект группы, сохраняя относительные позиции.
+        // rect остаётся привязанным к сетке (целые клетки) для логики и сброса;
+        // визуальное плавное смещение задаётся drag_visual_offset (фракция клетки)
+        // и применяется при отрисовке.
+        let mut visual_offset: Option<(f32, f32)> = None;
+        let mut visual_ids: HashSet<String> = self.drag_objects.iter().cloned().collect();
         for (i, id) in self.drag_objects.iter().enumerate() {
-            let target_x = (cursor_world_x - self.drag_offsets[i].0).round() as i32;
-            let target_y = (cursor_world_y - self.drag_offsets[i].1).round() as i32;
+            let smooth_x = cursor_world_x - self.drag_offsets[i].0;
+            let smooth_y = cursor_world_y - self.drag_offsets[i].1;
+            let target_x = smooth_x.round() as i32;
+            let target_y = smooth_y.round() as i32;
+            if visual_offset.is_none() {
+                visual_offset = Some((smooth_x - target_x as f32, smooth_y - target_y as f32));
+            }
             if let Some(dragged) = self.canvas.objects.iter_mut().find(|o| o.id == *id) {
                 let dx = target_x - dragged.rect.x;
                 let dy = target_y - dragged.rect.y;
@@ -370,10 +394,13 @@ impl PolygramApp {
                     }) {
                         child.rect.x += dx;
                         child.rect.y += dy;
+                        visual_ids.insert(child.id.clone());
                     }
                 }
             }
         }
+        self.drag_visual_offset = visual_offset;
+        self.drag_visual_ids = visual_ids;
 
         let painter = ui.painter();
         let cell_px = self.canvas.cell_px();
@@ -770,11 +797,20 @@ impl eframe::App for PolygramApp {
             let predicted = self.geometry_with_predictions();
             self.canvas.objects = predicted.objects;
 
+            // Плавное визуальное смещение перетаскиваемых объектов (пиксели экрана).
+            // rect остаётся привязанным к сетке; визуально объект сдвигается на
+            // фракцию клетки, чтобы двигаться плавно, а не прыгать по клеткам.
+            let cell_px = self.canvas.cell_px();
+            let drag_shift = self
+                .drag_visual_offset
+                .map(|(ox, oy)| egui::Vec2::new(ox * cell_px, oy * cell_px));
+            let drag_ids = &self.drag_visual_ids;
             self.canvas.paint(
                 ui,
                 &published.dynamic,
                 self.right_click_object.as_deref(),
                 &self.selected_objects,
+                drag_shift.map(|shift| (shift, drag_ids)),
             );
 
             if !canvas_response.hovered() {
