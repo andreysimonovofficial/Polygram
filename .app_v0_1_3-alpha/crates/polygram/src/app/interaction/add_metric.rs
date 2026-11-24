@@ -149,6 +149,7 @@ pub fn handle_add_metric_dialog(
 
                         // Кнопка закрытия в правом верхнем углу (28×28, border-radius 4px)
                         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                            ui.set_min_width(f32::INFINITY);
                             let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
                             if x_resp.clicked() {
                                 cancelled = true;
@@ -333,11 +334,24 @@ pub fn handle_add_metric_dialog(
                         ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
                         // Кнопка Готово (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
-                        let gotovo_resp = ui.add(
-                            egui::Button::new(egui::RichText::new("Готово").color(BG_DIALOG))
-                                .fill(COLOR_WHITE)
-                                .stroke(Stroke::new(1.0, COLOR_WHITE))
-                                .min_size(Vec2::new(89.27, 32.0)),
+                        let gotovo_rect = egui::Rect::from_min_size(ui.cursor().min, Vec2::new(89.27, 32.0));
+                        {
+                            let p = ui.painter();
+                            p.rect_filled(gotovo_rect, 4.0, COLOR_WHITE);
+                            p.rect_stroke(
+                                gotovo_rect,
+                                4.0,
+                                Stroke::new(1.0, COLOR_WHITE),
+                                egui::StrokeKind::Middle,
+                            );
+                        }
+                        let gotovo_resp = ui.allocate_rect(gotovo_rect, egui::Sense::click());
+                        ui.painter().text(
+                            gotovo_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "Готово",
+                            egui::TextStyle::Button.resolve(ui.style()),
+                            BG_DIALOG,
                         );
                         if gotovo_resp.clicked() {
                             done = true;
