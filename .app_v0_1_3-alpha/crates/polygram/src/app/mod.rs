@@ -386,12 +386,7 @@ impl PolygramApp {
                     self.canvas.cell_to_screen(r.x, r.y),
                     Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
                 );
-                painter.rect_stroke(
-                    rect_px.expand(2.0),
-                    2.0,
-                    egui::Stroke::new(2.0 * self.canvas.camera.zoom, self.canvas.theme.accent),
-                    egui::StrokeKind::Middle,
-                );
+                _ = rect_px;
             }
         }
     }
