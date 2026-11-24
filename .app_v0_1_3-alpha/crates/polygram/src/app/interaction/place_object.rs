@@ -87,7 +87,7 @@ pub fn handle_place_object_confirm(
         .frame(modal_frame())
         .show(ctx, |ui| {
             // ---- Шапка диалога (отступы 20/20/20/12, фон #1E1E1E) ----
-            let closed = header(ui, &title, &subtitle, Some(object_icon(data.target_kind)));
+            let closed = header(ui, &title, &subtitle, None);
             if closed {
                 cancelled = true;
             }
