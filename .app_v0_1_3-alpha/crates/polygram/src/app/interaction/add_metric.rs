@@ -179,7 +179,7 @@ pub fn handle_add_metric_dialog(
             // ---- Основное содержимое (padding: 4px 20px 16px) ----
             Frame::new()
                 .fill(BG_DIALOG)
-                .inner_margin(Margin { left: 4, top: 4, right: 20, bottom: 16 })
+                .inner_margin(Margin { left: 20, top: 4, right: 20, bottom: 16 })
                 .show(ui, |ui| {
                     // Background+Border: 498×52, bg #222222, border #373839, radius 4px, padding 8px, gap 8px
                     Frame::new()
