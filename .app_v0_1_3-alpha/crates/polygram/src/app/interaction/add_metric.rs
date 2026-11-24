@@ -147,14 +147,13 @@ pub fn handle_add_metric_dialog(
                             });
                         });
 
-                        // Gap между именем процесса и крестиком (277.84px как в CSS)
-                        ui.add_space(277.84);
-
-                        // ---- Кнопка закрытия (28×28, border-radius 4px) ----
-                        let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
-                        if x_resp.clicked() {
-                            cancelled = true;
-                        }
+                        // Кнопка закрытия в правом верхнем углу (28×28, border-radius 4px)
+                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                            let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
+                            if x_resp.clicked() {
+                                cancelled = true;
+                            }
+                        });
                     });
                 });
 
@@ -334,18 +333,15 @@ pub fn handle_add_metric_dialog(
                         ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
                         // Кнопка Готово (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
-                        Frame::new()
-                            .fill(COLOR_WHITE)
-                            .stroke(Stroke::new(1.0, COLOR_WHITE))
-                            .corner_radius(CornerRadius::same(4))
-                            .inner_margin(Margin { left: 20, top: 0, right: 20, bottom: 0 })
-                            .show(ui, |ui| {
-                                if ui.button(
-                                    egui::RichText::new("Готово").color(BG_DIALOG),
-                                ).clicked() {
-                                    done = true;
-                                }
-                            });
+                        let gotovo_resp = ui.add(
+                            egui::Button::new(egui::RichText::new("Готово").color(BG_DIALOG))
+                                .fill(COLOR_WHITE)
+                                .stroke(Stroke::new(1.0, COLOR_WHITE))
+                                .min_size(Vec2::new(89.27, 32.0)),
+                        );
+                        if gotovo_resp.clicked() {
+                            done = true;
+                        }
                     });
                 });
         });
