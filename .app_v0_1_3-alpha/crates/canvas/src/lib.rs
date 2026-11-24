@@ -15,13 +15,13 @@ pub use polygram_core::types::{Direction, NodeKind, StatusCode};
 pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
 
 /// Встроенные данные шрифта Inter Regular (400).
-pub const INTER_REGULAR: &'static [u8] = include_bytes!("../assets/fonts/Inter-Regular.otf");
+pub const INTER_REGULAR: &'static [u8] = include_bytes!("../assets/fonts/Inter-Regular.ttf");
 /// Встроенные данные шрифта Inter Medium (500).
-pub const INTER_MEDIUM: &'static [u8] = include_bytes!("../assets/fonts/Inter-Medium.otf");
+pub const INTER_MEDIUM: &'static [u8] = include_bytes!("../assets/fonts/Inter-Medium.ttf");
 /// Встроенные данные шрифта Inter SemiBold (600).
-pub const INTER_SEMIBOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-SemiBold.otf");
+pub const INTER_SEMIBOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-SemiBold.ttf");
 /// Встроенные данные шрифта Inter Bold (700).
-pub const INTER_BOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-Bold.otf");
+pub const INTER_BOLD: &'static [u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
 
 /// Регистрировать шрифты Inter (500/600/700) в контексте egui.
 /// Вызывать один раз при инициализации приложения.
