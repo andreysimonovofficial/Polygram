@@ -215,74 +215,93 @@ pub fn handle_add_metric_dialog(
 
                                 ui.add_space(8.0);
 
-                                // Поле ввода значения (204×34, #252525, border 1px #373839, radius 2px)
+                                // Блок значения + календарь (130×34, единая рамка #373839, radius 2px)
                                 Frame::new()
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
                                     .corner_radius(CornerRadius::same(2))
-                                    .inner_margin(Margin { left: 10, top: 7, right: 10, bottom: 7 })
+                                    .inner_margin(Margin { left: 8, top: 7, right: 8, bottom: 7 })
                                     .show(ui, |ui| {
-                                        let is_date_kind = matches!(
-                                            app.dialogs.add_metric_kind,
-                                            MetricKind::Date | MetricKind::Deadline
-                                        );
-                                        if is_date_kind {
-                                            let date_label = match (
-                                                app.dialogs.add_metric_date,
-                                                app.dialogs.add_metric_time,
-                                            ) {
-                                                (Some(d), Some(t)) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                        + " "
-                                                        + &t.format("%H:%M").to_string()
-                                                }
-                                                (Some(d), None) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                }
-                                                (None, Some(t)) => {
-                                                    "дата ".to_owned()
-                                                        + &t.format("%H:%M").to_string()
-                                                }
-                                                _ => "дата".to_string(),
-                                            };
-                                            if ui.button(date_label).clicked() {
-                                                app.dialogs.add_metric_date_popup_open = true;
-                                            }
-                                            if app.dialogs.add_metric_date_popup_open {
-                                                let picked = render_date_time_popup(
-                                                    ui,
-                                                    &mut app.dialogs.add_metric_date,
-                                                    &mut app.dialogs.add_metric_time,
-                                                );
-                                                if picked {
-                                                    app.dialogs.add_metric_date_popup_open = false;
-                                                }
-                                            }
-                                            app.dialogs.add_metric_value = match (
-                                                app.dialogs.add_metric_date,
-                                                app.dialogs.add_metric_time,
-                                            ) {
-                                                (Some(d), Some(_t)) => {
-                                                    d.format("%d.%m.%Y %H:%M").to_string()
-                                                }
-                                                (Some(d), None) => {
-                                                    d.format("%d.%m.%Y").to_string()
-                                                }
-                                                _ => String::new(),
-                                            };
-                                        } else {
-                                            ui.add(
-                                                egui::TextEdit::singleline(
-                                                    &mut app.dialogs.add_metric_value,
-                                                )
-                                                .frame(Frame::new()),
+                                        ui.horizontal(|ui| {
+                                            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+
+                                            // Поле значения
+                                            let is_date_kind = matches!(
+                                                app.dialogs.add_metric_kind,
+                                                MetricKind::Date | MetricKind::Deadline
                                             );
-                                        }
+                                            if is_date_kind {
+                                                let date_label = match (
+                                                    app.dialogs.add_metric_date,
+                                                    app.dialogs.add_metric_time,
+                                                ) {
+                                                    (Some(d), Some(t)) => {
+                                                        d.format("%d.%m.%Y").to_string()
+                                                            + " "
+                                                            + &t.format("%H:%M").to_string()
+                                                    }
+                                                    (Some(d), None) => {
+                                                        d.format("%d.%m.%Y").to_string()
+                                                    }
+                                                    (None, Some(t)) => {
+                                                        "дата ".to_owned()
+                                                            + &t.format("%H:%M").to_string()
+                                                    }
+                                                    _ => "дата".to_string(),
+                                                };
+                                                if ui.button(date_label).clicked() {
+                                                    app.dialogs.add_metric_date_popup_open = true;
+                                                }
+                                                if app.dialogs.add_metric_date_popup_open {
+                                                    let picked = render_date_time_popup(
+                                                        ui,
+                                                        &mut app.dialogs.add_metric_date,
+                                                        &mut app.dialogs.add_metric_time,
+                                                    );
+                                                    if picked {
+                                                        app.dialogs.add_metric_date_popup_open = false;
+                                                    }
+                                                }
+                                                app.dialogs.add_metric_value = match (
+                                                    app.dialogs.add_metric_date,
+                                                    app.dialogs.add_metric_time,
+                                                ) {
+                                                    (Some(d), Some(_t)) => {
+                                                        d.format("%d.%m.%Y %H:%M").to_string()
+                                                    }
+                                                    (Some(d), None) => {
+                                                        d.format("%d.%m.%Y").to_string()
+                                                    }
+                                                    _ => String::new(),
+                                                };
+                                            } else {
+                                                ui.add(
+                                                    egui::TextEdit::singleline(
+                                                        &mut app.dialogs.add_metric_value,
+                                                    )
+                                                    .frame(Frame::new()),
+                                                );
+                                            }
+
+                                            // Кнопка calendar-sync (32×32, #2B2B2B, border-left #373839, заглушка)
+                                            Frame::new()
+                                                .fill(BG_CALENDAR_STUB)
+                                                .stroke(Stroke::new(1.0, BG_BORDER))
+                                                .inner_margin(Margin::same(8))
+                                                .show(ui, |ui| {
+                                                    lucide_button(
+                                                        ui,
+                                                        Lucide::CalendarSync,
+                                                        15.0,
+                                                        COLOR_GRAY,
+                                                    );
+                                                });
+                                        });
                                     });
 
                                 ui.add_space(8.0);
 
-                                // Единица измерения (96×32, #252525, border 1px #373839, radius 2px)
+                                // Единица измерения (88×34, #252525, border 1px #373839, radius 2px)
                                 Frame::new()
                                     .fill(BG_INPUT)
                                     .stroke(Stroke::new(1.0, BG_BORDER))
@@ -299,22 +318,6 @@ pub fn handle_add_metric_dialog(
                                                     .frame(Frame::new()),
                                                 );
                                             },
-                                        );
-                                    });
-
-                                ui.add_space(8.0);
-
-                                // Кнопка calendar-sync (32×32, #2B2B2B, border-left 1px #373839, заглушка)
-                                Frame::new()
-                                    .fill(BG_CALENDAR_STUB)
-                                    .stroke(Stroke::new(1.0, BG_BORDER))
-                                    .inner_margin(Margin::same(8))
-                                    .show(ui, |ui| {
-                                        lucide_button(
-                                            ui,
-                                            Lucide::CalendarSync,
-                                            15.0,
-                                            COLOR_GRAY,
                                         );
                                     });
                             });
@@ -338,9 +341,15 @@ pub fn handle_add_metric_dialog(
                             .corner_radius(CornerRadius::same(4))
                             .inner_margin(Margin::symmetric(20, 0))
                             .show(ui, |ui| {
-                                if ui.button(egui::RichText::new("Готово").color(BG_DIALOG)).clicked() {
-                                    done = true;
-                                }
+                                ui.vertical_centered(|ui| {
+                                    let label = egui::Label::new(
+                                        egui::RichText::new("Готово").color(BG_DIALOG),
+                                    );
+                                    let resp = ui.add(label);
+                                    if resp.clicked() {
+                                        done = true;
+                                    }
+                                });
                             });
                         ui.add_space(32.0);
                     });
