@@ -97,11 +97,18 @@ pub fn modal_frame() -> Frame {
 /// Отступы: 20 px сверху, 20 px слева, 20 px справа, 12 px снизу, фон #1E1E1E.
 /// Левый текстовый блок: вертикальный стек (заголовок + подзаголовок), зазор 4 px.
 /// Кнопка закрытия × (28×28, скругление 4 px) выровнена по правому и верхнему краю.
+/// Верхние углы скруглены на 8 px по радиусу внешней рамки окна.
 /// Возвращает `true`, если нажата кнопка закрытия.
 pub fn header(ui: &mut Ui, title: &str, subtitle: &str) -> bool {
     let mut closed = false;
     Frame::new()
         .fill(MODAL_BG)
+        .corner_radius(CornerRadius {
+            nw: MODAL_RADIUS,
+            ne: MODAL_RADIUS,
+            sw: 0,
+            se: 0,
+        })
         .inner_margin(Margin {
             left: 20,
             top: 20,
@@ -178,11 +185,18 @@ pub fn close_button(ui: &mut Ui) -> bool {
 /// Универсальный подвал модального окна.
 /// Высота 52 px, отступы 20/20/20 (слева/справа/снизу), фон #1E1E1E,
 /// выравнивание по правому краю и центру по вертикали.
+/// Нижние углы скруглены на 8 px по радиусу внешней рамки окна.
 /// Рисует кнопку подтверждения «Готово». Возвращает `true` при клике на кнопку.
 pub fn footer(ui: &mut Ui) -> bool {
     let mut confirmed = false;
     Frame::new()
         .fill(MODAL_BG)
+        .corner_radius(CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: MODAL_RADIUS,
+            se: MODAL_RADIUS,
+        })
         .inner_margin(Margin {
             left: 20,
             top: 0,
