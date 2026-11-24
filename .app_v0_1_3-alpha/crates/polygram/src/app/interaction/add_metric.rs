@@ -157,7 +157,10 @@ pub fn handle_add_metric_dialog(
                                 let p = ui.painter();
                                 p.rect_filled(rect, 0.0, BG_INPUT);
                             }
-                            lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
+                            let x_resp = lucide_button(ui, Lucide::X, 16.0, COLOR_GRAY);
+                            if x_resp.clicked() {
+                                cancelled = true;
+                            }
                         });
                     });
                 });
@@ -337,25 +340,14 @@ pub fn handle_add_metric_dialog(
                     ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                         ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
-                        // Кнопка Отмена (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
+                        // Кнопка Готово (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
                         Frame::new()
                             .fill(COLOR_WHITE)
                             .stroke(Stroke::new(1.0, COLOR_WHITE))
                             .corner_radius(CornerRadius::same(4))
                             .inner_margin(Margin { left: 20, top: 0, right: 20, bottom: 0 })
                             .show(ui, |ui| {
-                                if ui.button("Отмена").clicked() {
-                                    cancelled = true;
-                                }
-                            });
-
-                        ui.add_space(8.0);
-
-                        // Кнопка ОК
-                        Frame::new()
-                            .inner_margin(Margin { left: 8, top: 0, right: 0, bottom: 0 })
-                            .show(ui, |ui| {
-                                if ui.button("ОК").clicked() {
+                                if ui.button("Готово").clicked() {
                                     done = true;
                                 }
                             });
