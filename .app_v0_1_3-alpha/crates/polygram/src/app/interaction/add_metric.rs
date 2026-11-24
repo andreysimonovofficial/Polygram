@@ -83,10 +83,11 @@ pub fn handle_add_metric_dialog(
     let object_id = object_id.clone();
     let dir = *dir;
 
-    let label = match dir {
+    let container_type = match dir {
         polygram_core::types::Direction::Request => "ЗАПРОС",
         polygram_core::types::Direction::Result => "РЕЗУЛЬТАТ",
     };
+    let label = format!("Добавить Показатель в {}", container_type);
 
     let mut done = false;
     let mut cancelled = false;
@@ -116,7 +117,7 @@ pub fn handle_add_metric_dialog(
         .frame(modal_frame())
         .show(ctx, |ui| {
             // ---- Шапка диалога (отступы 20/20/20/12, фон #1E1E1E) ----
-            let closed = header(ui, &app.dialogs.add_metric_process_name, label);
+            let closed = header(ui, &app.dialogs.add_metric_process_name, &label);
             if closed {
                 cancelled = true;
             }
