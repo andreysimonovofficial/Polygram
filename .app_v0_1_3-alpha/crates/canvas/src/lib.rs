@@ -191,10 +191,19 @@ impl Canvas {
             }
         }
 
+        // Панорамирование камеры свободно (без привязки к сетке во время перетаскивания).
         if canvas_response.dragged_by(PointerButton::Secondary)
             || canvas_response.dragged_by(PointerButton::Middle)
         {
             self.camera.offset += ui.input(|i| i.pointer.delta());
+            ctx.request_repaint();
+        }
+
+        // При отпускании кнопки панорамирования камера стыкуется к ближайшим
+        // координатам выравнивания сетки.
+        if canvas_response.drag_stopped_by(PointerButton::Secondary)
+            || canvas_response.drag_stopped_by(PointerButton::Middle)
+        {
             self.camera.offset.x = (self.camera.offset.x / self.cell_size).round() * self.cell_size;
             self.camera.offset.y = (self.camera.offset.y / self.cell_size).round() * self.cell_size;
             ctx.request_repaint();
