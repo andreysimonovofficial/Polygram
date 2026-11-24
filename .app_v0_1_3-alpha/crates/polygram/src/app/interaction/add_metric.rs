@@ -332,28 +332,17 @@ pub fn handle_add_metric_dialog(
                         ui.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
 
                         // Кнопка Готово (#FFFFFF, border 1px #FFFFFF, radius 4px, текст #1E1E1E)
-                        let gotovo_rect = egui::Rect::from_min_size(ui.cursor().min, Vec2::new(89.27, 32.0));
-                        {
-                            let p = ui.painter();
-                            p.rect_filled(gotovo_rect, 4.0, COLOR_WHITE);
-                            p.rect_stroke(
-                                gotovo_rect,
-                                4.0,
-                                Stroke::new(1.0, COLOR_WHITE),
-                                egui::StrokeKind::Middle,
-                            );
-                        }
-                        let gotovo_resp = ui.allocate_rect(gotovo_rect, egui::Sense::click());
-                        ui.painter().text(
-                            gotovo_rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            "Готово",
-                            egui::TextStyle::Button.resolve(ui.style()),
-                            BG_DIALOG,
-                        );
-                        if gotovo_resp.clicked() {
-                            done = true;
-                        }
+                        Frame::new()
+                            .fill(COLOR_WHITE)
+                            .stroke(Stroke::new(1.0, COLOR_WHITE))
+                            .corner_radius(CornerRadius::same(4))
+                            .inner_margin(Margin::symmetric(20, 0))
+                            .show(ui, |ui| {
+                                if ui.button(egui::RichText::new("Готово").color(BG_DIALOG)).clicked() {
+                                    done = true;
+                                }
+                            });
+                        ui.add_space(32.0);
                     });
                 });
         });
