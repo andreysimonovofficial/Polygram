@@ -1,12 +1,13 @@
 //! Модальное диалоговое окно добавления показателя.
-//! Соответствует спецификации оформления: «Модальные окна - Оформление.md».
+//! Соответствует спецификации оформления: «Модальные окна - Оформление.md» (в т.ч. правки v15).
 //! Универсальная оболочка (оверлей, рамка, шапка, подвал, состояния)
 //! вынесена в `polygram_canvas::modal`; здесь осталось только специфическое
-//! тело окна добавления показателя.
+//! тело окна добавления показателя с жёстким вертикальным центрированием
+//! содержимого внутри рамки тела и составным блоком «значение + синхронизация».
 
 use crate::app::PolygramApp;
 use polygram_canvas::modal::{
-    footer, header, input_field, modal_frame, paint_overlay,
+    footer, header, modal_frame, paint_overlay,
     MODAL_BG, MODAL_BORDER, MODAL_INPUT_BG, MODAL_INPUT_HOVER_BG,
     MODAL_INPUT_HOVER_BORDER, MODAL_TEXT, MODAL_TEXT_MUTED, MODAL_TYPE_ACTIVE_BG,
     MODAL_TYPE_HOVER_BG,
@@ -14,8 +15,8 @@ use polygram_canvas::modal::{
 use polygram_canvas::paint_lucide;
 use chrono::{Datelike, NaiveDate, NaiveTime, Utc};
 use egui::{
-    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, PointerButton, Rect, Sense,
-    Stroke, StrokeKind, Ui, Vec2, Window,
+    Align, Color32, Context, CornerRadius, Frame, Layout, Margin, PointerButton, Rect,
+    Sense, Stroke, StrokeKind, Ui, Vec2, pos2, Window,
 };
 use egui_lucide::Lucide;
 use polygram_core::{MetricKind, MetricValue, runtime::Published};
@@ -63,6 +64,11 @@ fn metric_kind_next(kind: MetricKind) -> MetricKind {
         MetricKind::Timestamp => MetricKind::Number,
         _ => MetricKind::Number,
     }
+}
+
+/// Является ли тип показателя датовым (Date / Deadline).
+fn is_date_kind(kind: MetricKind) -> bool {
+    matches!(kind, MetricKind::Date | MetricKind::Deadline)
 }
 
 /// Модальное диалоговое окно добавления показателя.
@@ -115,9 +121,7 @@ pub fn handle_add_metric_dialog(
                 cancelled = true;
             }
 
-            ui.add_space(4.0);
-
-            // ---- Тело диалога (отступы 4/20/20/16) ----
+            // ---- Тело диалога (отступы секции: сверху 4, слева 20, справа 20, снизу 16) ----
             Frame::new()
                 .fill(MODAL_BG)
                 .inner_margin(Margin {
@@ -127,52 +131,54 @@ pub fn handle_add_metric_dialog(
                     bottom: 16,
                 })
                 .show(ui, |ui| {
-                    // Внутренняя рамка: 498×52, bg #222222, border #373839, radius 4, padding 8, gap 8
-                    let inner_size = Vec2::new(498.0, 52.0);
-                    let (inner_rect, _) = ui.allocate_exact_size(inner_size, Sense::hover());
-                    ui.painter().rect_filled(
-                        inner_rect,
-                        CornerRadius::same(4),
-                        BG_VALUE_ROW,
-                    );
+                    // Внутренняя рамка тела: 498×52, bg #222222, рамка 1 px #373839, radius 4.
+                    let frame_size = Vec2::new(498.0, 52.0);
+                    let (frame_rect, _) =
+                        ui.allocate_exact_size(frame_size, Sense::hover());
+                    ui.painter()
+                        .rect_filled(frame_rect, CornerRadius::same(4), BG_VALUE_ROW);
                     ui.painter().rect_stroke(
-                        inner_rect,
+                        frame_rect,
                         CornerRadius::same(4),
                         Stroke::new(1.0, MODAL_BORDER),
                         StrokeKind::Middle,
                     );
 
+                    // Внутренняя область с отступом 8 px; все элементы строго по вертикальному центру.
                     const PAD: f32 = 8.0;
                     let work = Rect::from_min_max(
-                        egui::pos2(inner_rect.min.x + PAD, inner_rect.min.y + PAD),
-                        egui::pos2(
-                            inner_rect.max.x - PAD,
-                            inner_rect.max.y - PAD,
-                        ),
+                        pos2(frame_rect.min.x + PAD, frame_rect.min.y + PAD),
+                        pos2(frame_rect.max.x - PAD, frame_rect.max.y - PAD),
                     );
-                    let mut row = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(work)
-                            .layout(Layout::left_to_right(Align::Center)),
-                    );
-                    row.spacing_mut().item_spacing = Vec2::new(8.0, 0.0);
-                    row.horizontal(|ui| {
-                        // ---- 1. Кнопка смены типа показателя (34×34, radius 4) ----
-                        let type_size = Vec2::splat(34.0);
-                        let (type_rect, type_response) =
-                            ui.allocate_exact_size(type_size, Sense::click());
-                        let type_hovered = type_response.hovered();
-                        let type_pressed = type_hovered
-                            && ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary));
-                        let type_fill = if type_pressed {
+                    // work = 482×36; элементы высотой 34 -> центр, отступ по 1 px от границ work.
+                    const ELEM_H: f32 = 34.0;
+                    let elem_y = work.min.y + (work.height() - ELEM_H) / 2.0;
+
+                    let mut x = work.min.x;
+
+                    // ---- 1. Кнопка смены типа показателя (34×34, radius 4) ----
+                    {
+                        let type_rect =
+                            Rect::from_min_size(pos2(x, elem_y), Vec2::splat(34.0));
+                        let type_response = ui.interact(
+                            type_rect,
+                            ui.auto_id_with("type_button"),
+                            Sense::click(),
+                        );
+                        let hovered = type_response.hovered();
+                        let pressed = hovered
+                            && ui.ctx().input(|i| {
+                                i.pointer.button_down(PointerButton::Primary)
+                            });
+                        let fill = if pressed {
                             MODAL_TYPE_ACTIVE_BG
-                        } else if type_hovered {
+                        } else if hovered {
                             MODAL_TYPE_HOVER_BG
                         } else {
                             MODAL_INPUT_BG
                         };
                         ui.painter()
-                            .rect_filled(type_rect, CornerRadius::same(4), type_fill);
+                            .rect_filled(type_rect, CornerRadius::same(4), fill);
                         ui.painter().rect_stroke(
                             type_rect,
                             CornerRadius::same(4),
@@ -181,111 +187,242 @@ pub fn handle_add_metric_dialog(
                         );
                         let icon_rect =
                             Rect::from_center_size(type_rect.center(), Vec2::splat(16.0));
-                        paint_lucide(ui, icon_rect, metric_kind_icon(app.dialogs.add_metric_kind), MODAL_TEXT);
+                        paint_lucide(
+                            ui,
+                            icon_rect,
+                            metric_kind_icon(app.dialogs.add_metric_kind),
+                            MODAL_TEXT,
+                        );
                         if type_response.clicked() {
-                            let kind = metric_kind_next(app.dialogs.add_metric_kind);
+                            let kind =
+                                metric_kind_next(app.dialogs.add_metric_kind);
                             app.dialogs.add_metric_kind = kind;
                             app.dialogs.add_metric_value.clear();
                             app.dialogs.add_metric_date = None;
                             app.dialogs.add_metric_date_popup_open = false;
                             app.dialogs.add_metric_time = None;
                         }
+                        x += 34.0 + 8.0;
+                    }
 
-                        // ---- 2. Имя показателя (растягивается, высота 34, radius 2) ----
+                    // ---- 2. Имя показателя (растягивается, 34 px, radius 2, pad 10/8/7.5/7.5) ----
+                    {
                         let name_w = work.width() - 34.0 - 130.0 - 88.0 - 3.0 * 8.0;
-                        input_field(
+                        let name_rect =
+                            Rect::from_min_size(pos2(x, elem_y), Vec2::new(name_w, ELEM_H));
+                        text_field(
                             ui,
+                            name_rect,
                             &mut app.dialogs.add_metric_name,
                             "Имя Показателя",
-                            Vec2::new(name_w, 34.0),
                             false,
-                            Margin::symmetric(10, 8),
+                            10.0,
+                            10.0,
+                            7.5,
+                            7.5,
                         );
+                        x += name_w + 8.0;
+                    }
 
-                        // ---- 3. Составной блок значение + синхронизация (130×34, radius 2) ----
-                        let vs_size = Vec2::new(130.0, 34.0);
-                        let (vs_rect, _) = ui.allocate_exact_size(vs_size, Sense::hover());
+                    // ---- 3. Составной блок значение + синхронизация (130×34, radius 2) ----
+                    {
+                        let comp_rect =
+                            Rect::from_min_size(pos2(x, elem_y), Vec2::new(130.0, ELEM_H));
+                        // Единая рамка контейнера: bg #252525, рамка 1 px #373839, radius 2.
                         ui.painter()
-                            .rect_filled(vs_rect, CornerRadius::same(2), MODAL_INPUT_BG);
+                            .rect_filled(comp_rect, CornerRadius::same(2), MODAL_INPUT_BG);
                         ui.painter().rect_stroke(
-                            vs_rect,
+                            comp_rect,
                             CornerRadius::same(2),
                             Stroke::new(1.0, MODAL_BORDER),
                             StrokeKind::Middle,
                         );
-                        let vs_work = Rect::from_min_max(
-                            egui::pos2(vs_rect.min.x + 1.0, vs_rect.min.y + 1.0),
-                            egui::pos2(vs_rect.max.x - 1.0, vs_rect.max.y - 1.0),
+                        // Внутренняя область (за вычетом рамки 1 px): 128×32.
+                        let inner = Rect::from_min_max(
+                            pos2(comp_rect.min.x + 1.0, comp_rect.min.y + 1.0),
+                            pos2(comp_rect.max.x - 1.0, comp_rect.max.y - 1.0),
                         );
-                        let mut vs = ui.new_child(
-                            egui::UiBuilder::new()
-                                .max_rect(vs_work)
-                                .layout(Layout::left_to_right(Align::Center)),
-                        );
-                        vs.spacing_mut().item_spacing = Vec2::new(0.0, 0.0);
-                        vs.horizontal(|ui| {
-                            // Поле ввода значения: 96×32, правое выравнивание, плейсхолдер «Значение».
-                            if is_date_kind(app.dialogs.add_metric_kind) {
-                                render_date_button(
-                                    ui,
-                                    &mut app.dialogs.add_metric_date,
-                                    &mut app.dialogs.add_metric_time,
-                                    &mut app.dialogs.add_metric_date_popup_open,
-                                    &mut app.dialogs.add_metric_value,
-                                    ctx,
-                                );
-                            } else {
-                                input_field(
-                                    ui,
-                                    &mut app.dialogs.add_metric_value,
-                                    "Значение",
-                                    Vec2::new(96.0, 32.0),
-                                    true,
-                                    Margin::symmetric(8, 8),
-                                );
-                            }
 
-                            // Кнопка синхронизации (32×32, левая граница 1px #373839, заглушка).
-                            let sync_size = Vec2::splat(32.0);
-                            let (sync_rect, sync_response) =
-                                ui.allocate_exact_size(sync_size, Sense::click());
-                            let sync_hovered = sync_response.hovered();
-                            let sync_pressed = sync_hovered
-                                && ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary));
-                            let sync_fill = if sync_pressed {
-                                BG_SYNC_ACTIVE
-                            } else if sync_hovered {
-                                BG_SYNC_HOVER
+                        const VALUE_W: f32 = 96.0;
+
+                        if is_date_kind(app.dialogs.add_metric_kind) {
+                            // Кнопка даты/времени 96×32 внутри зоны значения.
+                            let date_rect = Rect::from_min_size(
+                                pos2(inner.min.x, inner.min.y),
+                                Vec2::new(VALUE_W, inner.height()),
+                            );
+                            let date_response = ui.interact(
+                                date_rect,
+                                ui.auto_id_with("date_button"),
+                                Sense::click(),
+                            );
+                            let hovered = date_response.hovered();
+                            let pressed = hovered
+                                && ui.ctx().input(|i| {
+                                    i.pointer.button_down(PointerButton::Primary)
+                                });
+                            let fill = if pressed || hovered {
+                                MODAL_INPUT_HOVER_BG
                             } else {
-                                BG_SYNC_BASE
+                                MODAL_INPUT_BG
+                            };
+                            let stroke = if hovered || pressed {
+                                MODAL_INPUT_HOVER_BORDER
+                            } else {
+                                MODAL_BORDER
                             };
                             ui.painter()
-                                .rect_filled(sync_rect, CornerRadius::same(0), sync_fill);
-                            // Левая граница-разделитель 1 px #373839.
-                            ui.painter().line_segment(
-                                [
-                                    sync_rect.min,
-                                    sync_rect.min + egui::vec2(0.0, 32.0),
-                                ],
-                                Stroke::new(1.0, MODAL_BORDER),
+                                .rect_filled(date_rect, CornerRadius::same(2), fill);
+                            ui.painter().rect_stroke(
+                                date_rect,
+                                CornerRadius::same(2),
+                                Stroke::new(1.0, stroke),
+                                StrokeKind::Middle,
                             );
-                            let icon_rect =
-                                Rect::from_center_size(sync_rect.center(), Vec2::splat(15.0));
-                            paint_lucide(ui, icon_rect, Lucide::CalendarSync, MODAL_TEXT_MUTED);
-                            // Кнопка является визуальной заглушкой: при нажатии ничего не происходит.
-                            let _ = sync_response;
-                        });
+                            if date_response.clicked() {
+                                app.dialogs.add_metric_date_popup_open = true;
+                            }
+                            if app.dialogs.add_metric_date_popup_open {
+                                let mut picked = false;
+                                egui::Window::new("Выберите дату")
+                                    .collapsible(false)
+                                    .resizable(false)
+                                    .show(ctx, |ui| {
+                                        if render_date_time_popup(
+                                            ui,
+                                            &mut app.dialogs.add_metric_date,
+                                            &mut app.dialogs.add_metric_time,
+                                        ) {
+                                            picked = true;
+                                        }
+                                    });
+                                if picked {
+                                    app.dialogs.add_metric_date_popup_open = false;
+                                }
+                            }
+                            app.dialogs.add_metric_value = match (
+                                app.dialogs.add_metric_date,
+                                app.dialogs.add_metric_time,
+                            ) {
+                                (Some(d), Some(_t)) => {
+                                    d.format("%d.%m.%Y %H:%M").to_string()
+                                }
+                                (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                                _ => String::new(),
+                            };
+                            let date_label = match (
+                                app.dialogs.add_metric_date,
+                                app.dialogs.add_metric_time,
+                            ) {
+                                (Some(d), Some(t)) => {
+                                    d.format("%d.%m.%Y").to_string()
+                                        + " "
+                                        + &t.format("%H:%M").to_string()
+                                }
+                                (Some(d), None) => d.format("%d.%m.%Y").to_string(),
+                                (None, Some(t)) => {
+                                    "дата ".to_owned() + &t.format("%H:%M").to_string()
+                                }
+                                _ => "дата".to_string(),
+                            };
+                            paint_right_aligned(
+                                ui,
+                                date_rect,
+                                &date_label,
+                                8.0,
+                            );
+                        } else {
+                            // Поле ввода значения: правое выравнивание, pad 8/8/7.5/7.5.
+                            let value_text_rect = Rect::from_min_max(
+                                pos2(inner.min.x + 8.0, inner.min.y + 7.5),
+                                pos2(inner.min.x + VALUE_W - 8.0, inner.max.y - 7.5),
+                            );
+                            let mut child = ui.new_child(
+                                egui::UiBuilder::new()
+                                    .max_rect(value_text_rect)
+                                    .layout(Layout::right_to_left(Align::Center)),
+                            );
+                            child.add(
+                                egui::TextEdit::singleline(
+                                    &mut app.dialogs.add_metric_value,
+                                )
+                                .frame(
+                                    Frame::new()
+                                        .fill(Color32::TRANSPARENT)
+                                        .stroke(Stroke::new(
+                                            0.0,
+                                            Color32::TRANSPARENT,
+                                        )),
+                                )
+                                .text_color(MODAL_TEXT)
+                                .hint_text("Значение"),
+                            );
+                        }
 
-                        // ---- 4. Единица измерения (88×34, правое выравнивание, radius 2) ----
-                        input_field(
+                        // Разделительная линия 1 px #373839 на границе между значением и синхронизацией.
+                        let divider_x = inner.min.x + VALUE_W;
+                        ui.painter().line_segment(
+                            [
+                                pos2(divider_x, inner.min.y),
+                                pos2(divider_x, inner.max.y),
+                            ],
+                            Stroke::new(1.0, MODAL_BORDER),
+                        );
+
+                        // Кнопка синхронизации 32×32, левая граница — разделительная линия.
+                        const SYNC_W: f32 = 32.0;
+                        let sync_rect = Rect::from_min_size(
+                            pos2(inner.min.x + VALUE_W, inner.min.y),
+                            Vec2::new(SYNC_W, inner.height()),
+                        );
+                        let sync_response = ui.interact(
+                            sync_rect,
+                            ui.auto_id_with("sync_button"),
+                            Sense::click(),
+                        );
+                        let hovered = sync_response.hovered();
+                        let pressed = hovered
+                            && ui.ctx().input(|i| {
+                                i.pointer.button_down(PointerButton::Primary)
+                            });
+                        let fill = if pressed {
+                            BG_SYNC_ACTIVE
+                        } else if hovered {
+                            BG_SYNC_HOVER
+                        } else {
+                            BG_SYNC_BASE
+                        };
+                        // Заливка кнопки синхронизации (кроме левой 1 px границы-разделителя).
+                        let sync_fill_rect = Rect::from_min_size(
+                            pos2(sync_rect.min.x + 1.0, sync_rect.min.y),
+                            Vec2::new(SYNC_W - 1.0, sync_rect.height()),
+                        );
+                        ui.painter().rect_filled(sync_fill_rect, CornerRadius::same(0), fill);
+                        let icon_rect =
+                            Rect::from_center_size(sync_rect.center(), Vec2::splat(15.0));
+                        paint_lucide(ui, icon_rect, Lucide::CalendarSync, MODAL_TEXT_MUTED);
+                        // Кнопка является визуальной заглушкой: при нажатии ничего не происходит.
+                        let _ = sync_response;
+
+                        x += 130.0 + 8.0;
+                    }
+
+                    // ---- 4. Единица измерения (88×34, правое выравнивание, radius 2, pad 10/8) ----
+                    {
+                        let unit_rect =
+                            Rect::from_min_size(pos2(x, elem_y), Vec2::new(88.0, ELEM_H));
+                        text_field(
                             ui,
+                            unit_rect,
                             &mut app.dialogs.add_metric_unit,
                             "Ед.",
-                            Vec2::new(88.0, 34.0),
                             true,
-                            Margin::symmetric(10, 8),
+                            10.0,
+                            10.0,
+                            8.0,
+                            8.0,
                         );
-                    });
+                    }
                 });
 
             ui.add_space(12.0);
@@ -361,30 +498,30 @@ pub fn handle_add_metric_dialog(
     }
 }
 
-/// Является ли тип показателя датовым (Date / Deadline).
-fn is_date_kind(kind: MetricKind) -> bool {
-    matches!(kind, MetricKind::Date | MetricKind::Deadline)
-}
-
-/// Кнопка выбора даты/времени для датовых типов (96×32, оформлена как поле ввода).
-fn render_date_button(
+/// Текстовое поле модального окна в заданном прямоугольнике.
+/// Рисует рамку (с состоянием наведения) и размещает `TextEdit` со выравниванием
+/// текста по вертикальному центру; `right_align` — текст прижат к правому краю.
+fn text_field(
     ui: &mut Ui,
-    selected_date: &mut Option<NaiveDate>,
-    selected_time: &mut Option<NaiveTime>,
-    popup_open: &mut bool,
-    value_buf: &mut String,
-    ctx: &Context,
+    rect: Rect,
+    text: &mut String,
+    hint: &str,
+    right_align: bool,
+    pad_l: f32,
+    pad_r: f32,
+    pad_t: f32,
+    pad_b: f32,
 ) {
-    let size = Vec2::new(96.0, 32.0);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let hovered = response.hovered();
-    let pressed = hovered && ui.ctx().input(|i| i.pointer.button_down(PointerButton::Primary));
-    let fill = if hovered || pressed {
+    let hovered = ui
+        .ctx()
+        .input(|i| i.pointer.hover_pos())
+        .map_or(false, |p| rect.contains(p));
+    let fill = if hovered {
         MODAL_INPUT_HOVER_BG
     } else {
         MODAL_INPUT_BG
     };
-    let stroke = if hovered || pressed {
+    let stroke = if hovered {
         MODAL_INPUT_HOVER_BORDER
     } else {
         MODAL_BORDER
@@ -397,42 +534,39 @@ fn render_date_button(
         StrokeKind::Middle,
     );
 
-    let date_label = match (*selected_date, *selected_time) {
-        (Some(d), Some(t)) => d.format("%d.%m.%Y").to_string() + " " + &t.format("%H:%M").to_string(),
-        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
-        (None, Some(t)) => "дата ".to_owned() + &t.format("%H:%M").to_string(),
-        _ => "дата".to_string(),
+    let inner = Rect::from_min_max(
+        pos2(rect.min.x + pad_l, rect.min.y + pad_t),
+        pos2(rect.max.x - pad_r, rect.max.y - pad_b),
+    );
+    let layout = if right_align {
+        Layout::right_to_left(Align::Center)
+    } else {
+        Layout::left_to_right(Align::Center)
     };
-    if response.clicked() {
-        *popup_open = true;
-    }
-    if *popup_open {
-        let mut picked = false;
-        egui::Window::new("Выберите дату")
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                if render_date_time_popup(ui, selected_date, selected_time) {
-                    picked = true;
-                }
-            });
-        if picked {
-            *popup_open = false;
-        }
-    }
-    *value_buf = match (*selected_date, *selected_time) {
-        (Some(d), Some(_t)) => d.format("%d.%m.%Y %H:%M").to_string(),
-        (Some(d), None) => d.format("%d.%m.%Y").to_string(),
-        _ => String::new(),
-    };
+    let mut child = ui.new_child(
+        egui::UiBuilder::new().max_rect(inner).layout(layout),
+    );
+    child.add(
+        egui::TextEdit::singleline(text)
+            .frame(
+                Frame::new()
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(Stroke::new(0.0, Color32::TRANSPARENT)),
+            )
+            .text_color(MODAL_TEXT)
+            .hint_text(hint),
+    );
+}
 
+/// Окрасить текст строкой, прижатый к правому краю прямоугольника, по вертикальному центру.
+fn paint_right_aligned(ui: &Ui, rect: Rect, text: &str, pad_right: f32) {
     let font_id = egui::FontId::new(14.0, egui::FontFamily::Proportional);
     let galley = ui
-        .fonts_mut(|f| f.layout_no_wrap(date_label, font_id, MODAL_TEXT));
-    let text_x = rect.right() - 8.0 - galley.size().x;
-    let text_y = rect.center().y - galley.size().y / 2.0;
-    let text_pos = egui::pos2(text_x, text_y);
-    ui.painter().galley(text_pos, galley, MODAL_TEXT);
+        .fonts_mut(|f| f.layout_no_wrap(text.to_owned(), font_id, MODAL_TEXT));
+    let x = rect.max.x - pad_right - galley.size().x;
+    let y = rect.center().y - galley.size().y / 2.0;
+    ui.painter()
+        .galley(pos2(x, y), galley, MODAL_TEXT);
 }
 
 /// Преобразовать строку из текстового поля в MetricValue согласно типу показателя.
