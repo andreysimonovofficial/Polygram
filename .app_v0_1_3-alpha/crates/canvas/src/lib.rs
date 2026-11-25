@@ -195,8 +195,11 @@ impl Canvas {
         if canvas_response.dragged_by(PointerButton::Secondary)
             || canvas_response.dragged_by(PointerButton::Middle)
         {
-            self.camera.offset += ui.input(|i| i.pointer.delta());
-            ctx.request_repaint();
+            let delta = ui.input(|i| i.pointer.delta());
+            if delta.x != 0.0 || delta.y != 0.0 {
+                self.camera.offset += delta;
+                ctx.request_repaint();
+            }
         }
 
         // При отпускании кнопки панорамирования камера стыкуется к ближайшим
