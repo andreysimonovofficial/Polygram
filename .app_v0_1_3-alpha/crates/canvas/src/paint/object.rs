@@ -116,8 +116,8 @@ pub fn paint_process(
             // при zoom < 1.0 содержимое увеличивается, чтобы остаться читабельным издалека.
             // Содержимое не ограничено рамкой карточки объекта и может выходить за её пределы.
             let cover_scale = if zoom < 1.0 { 1.0 / zoom } else { 1.0 };
-            // Иконка обложки: 10 клеток, строго по центру, белый цвет.
-            let cover_icon_side = 10.0 * (theme.cell_size * zoom) * cover_scale;
+            // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
+            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * cover_scale;
             let cover_icon = default_icon_for(object.kind, &object.icon);
             let cover_icon_rect =
                 Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
