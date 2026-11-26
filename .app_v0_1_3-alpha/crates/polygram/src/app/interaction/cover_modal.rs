@@ -18,18 +18,6 @@ const GRID_BTN_SIZE: Vec2 = Vec2::new(54.0, 38.0);
 /// Шаг сетки по горизонтали / вертикали (пиксели).
 const GRID_STEP_X: f32 = 60.0;
 const GRID_STEP_Y: f32 = 44.0;
-/// Высота области прокручиваемой сетки иконок (пиксели).
-const GRID_AREA_H: f32 = 170.0;
-/// Высота карточки предпросмотра (пиксели).
-const PREVIEW_H: f32 = 58.0;
-/// Вертикальный зазор между карточкой и контейнером (пиксели).
-const PREVIEW_TO_CONTAINER_GAP: f32 = 10.0;
-/// Отступ контейнера выборки (пиксели).
-const CONTAINER_PADDING: f32 = 8.0;
-/// Высота строки поиска (пиксели).
-const SEARCH_H: f32 = 32.0;
-/// Зазор между поиском и сеткой (пиксели).
-const SEARCH_TO_GRID_GAP: f32 = 12.0;
 
 /// Все уникальные иконки Lucide без дублей.
 /// Берём напрямую из `Lucide::ALL` (все 1903 иконки библиотеки).
@@ -38,8 +26,7 @@ fn all_lucide_icons() -> Vec<(String, Lucide)> {
 }
 
 /// Рисование модального окна «Настроить обложку».
-/// Вертикальный поток: шапка (modal::header) → тело (предпросмотр + контейнер выборки) → подвал (modal::footer).
-/// Тело не прокручивается целиком — прокручивается только область сетки иконок.
+/// Вертикальный поток: шапка (modal::header) → тело (предпросмотр + поиск + сетка со скроллом) → подвал (modal::footer).
 pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     if !app.dialogs.cover_modal_open {
         return;
@@ -95,71 +82,50 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
 
                 ui.add_space(12.0);
 
-                // === Карточка предпросмотра (фиксированная высота 58px) ===
-                let preview_reset =
-                    preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
-                if preview_reset {
-                    reset_icon = true;
-                }
+                // === Тело: карточка предпросмотра + поиск + сетка иконок со скроллом ===
+                let body_height = 240.0;
+                egui::ScrollArea::vertical()
+                    .auto_shrink(false)
+                    .max_height(body_height)
+                    .show(ui, |ui| {
+                        ui.set_width(496.0);
 
-                ui.add_space(PREVIEW_TO_CONTAINER_GAP);
+                        // Карточка предпросмотра.
+                        let preview_reset =
+                            preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
+                        if preview_reset {
+                            reset_icon = true;
+                        }
 
-                // === Контейнер выборки иконки (рамка, отступы 8px) ===
-                let container_width = ui.available_width();
-                let container_h =
-                    CONTAINER_PADDING * 2.0 + SEARCH_H + SEARCH_TO_GRID_GAP + GRID_AREA_H;
-                let container_start_y = ui.cursor().min.y;
-                let container_rect = Rect::from_min_size(
-                    Pos2::new(ui.cursor().min.x, container_start_y),
-                    Vec2::new(container_width, container_h),
-                );
-                // Фон контейнера #222222, рамка #373839, скругление 4px.
-                ui.painter()
-                    .rect_filled(container_rect, 4.0, Color32::from_rgb(0x22, 0x22, 0x22));
-                ui.painter().rect_stroke(
-                    container_rect,
-                    4.0,
-                    Stroke::new(1.0, Color32::from_rgb(0x37, 0x38, 0x39)),
-                    StrokeKind::Middle,
-                );
+                        ui.add_space(12.0);
 
-                ui.advance_cursor_after_rect(container_rect);
+                        // Строка поиска.
+                        modal::input_field(
+                            ui,
+                            &mut app.dialogs.cover_modal_search,
+                            "Поиск иконки",
+                            Vec2::new(ui.available_width(), 32.0),
+                            false,
+                            egui::Margin {
+                                left: 40,
+                                top: 6,
+                                right: 40,
+                                bottom: 6,
+                            },
+                        );
 
-                // --- Строка поиска (фиксированная, высота 32px) ---
-                let search_rect = Rect::from_min_size(
-                    Pos2::new(
-                        container_rect.min.x + CONTAINER_PADDING,
-                        container_rect.min.y + CONTAINER_PADDING,
-                    ),
-                    Vec2::new(
-                        container_width - 2.0 * CONTAINER_PADDING,
-                        SEARCH_H,
-                    ),
-                );
-                search_input(ui, search_rect, &mut app.dialogs.cover_modal_search);
+                        ui.add_space(12.0);
 
-                // --- Область сетки иконок (прокручиваемая, высота 170px) ---
-                let grid_area_rect = Rect::from_min_size(
-                    Pos2::new(
-                        container_rect.min.x + CONTAINER_PADDING,
-                        search_rect.max.y + SEARCH_TO_GRID_GAP,
-                    ),
-                    Vec2::new(
-                        container_width - 2.0 * CONTAINER_PADDING,
-                        GRID_AREA_H,
-                    ),
-                );
-                let all_icons = all_lucide_icons();
-                icon_grid(
-                    ui,
-                    grid_area_rect,
-                    &app.dialogs.cover_modal_search,
-                    &app.dialogs.cover_modal_icon,
-                    &all_icons,
-                    &mut new_icon,
-                );
-
-                ui.add_space(12.0);
+                        // Сетка иконок (все уникальные варианты Lucide).
+                        let all_icons = all_lucide_icons();
+                        icon_grid(
+                            ui,
+                            &app.dialogs.cover_modal_search,
+                            &app.dialogs.cover_modal_icon,
+                            &all_icons,
+                            &mut new_icon,
+                        );
+                    });
 
                 // === Подвал (внизу) ===
                 if modal::footer(ui) {
@@ -194,7 +160,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     }
 }
 
-/// Карточка предпросмотра обложки: горизонтальная карточка (высота 58px).
+/// Карточка предпросмотра обложки: горизонтальная карточка.
 /// Слева — иконка в рамке, в центре — текстовый блок, справа — кнопка «Сбросить» на том же уровне.
 /// Возвращает `true`, если нажата кнопка «Сбросить».
 fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> bool {
@@ -202,7 +168,8 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
     let card_border = Color32::from_rgb(0x37, 0x38, 0x39);
 
     let available_width = ui.available_width();
-    let card_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(available_width, PREVIEW_H));
+    let card_h = 72.0;
+    let card_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(available_width, card_h));
 
     // Всегда выделяем регионы взаимодействия СНАЧАЛА (корректный порядок ID в egui).
     let reset_w = 72.0;
@@ -292,58 +259,17 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
 
     ui.advance_cursor_after_rect(Rect::from_min_size(
         Pos2::new(card_rect.min.x, preview_start_y),
-        Vec2::new(available_width, PREVIEW_H),
+        Vec2::new(available_width, card_h),
     ));
     ui.add_space(8.0);
 
     reset_response.clicked()
 }
 
-/// Строка поиска иконки: поле 32px, скругление 2px, лупа + текст по вертикальному центру.
-fn search_input(ui: &mut egui::Ui, rect: Rect, search: &mut String) {
-    let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
-    let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
-
-    ui.painter().rect_filled(rect, 2.0, input_bg);
-    ui.painter().rect_stroke(
-        rect,
-        2.0,
-        Stroke::new(1.0, container_border),
-        StrokeKind::Middle,
-    );
-    // Лупа слева (отступ 10px от левого края поля).
-    let search_icon_rect = Rect::from_center_size(
-        Pos2::new(rect.min.x + 10.0 + 7.0, rect.center().y), // 10px отступ + половина 14px
-        Vec2::splat(14.0),
-    );
-    paint_lucide(ui, search_icon_rect, Lucide::Search, Color32::from_rgb(0x71, 0x71, 0x7A));
-    // Текст-подсказка (отступ 30px от левого края поля).
-    ui.painter().text(
-        Pos2::new(rect.min.x + 30.0, rect.center().y),
-        Align2::LEFT_CENTER,
-        "Поиск иконки",
-        FontId::new(13.0, FontFamily::Name("inter_medium".into())),
-        Color32::from_rgb(0x71, 0x71, 0x7A),
-    );
-    // Реальное поле ввода поверх всего.
-    egui::TextEdit::singleline(search)
-        .font(FontId::new(13.0, FontFamily::Name("inter_medium".into())))
-        .text_color(Color32::from_rgb(0x71, 0x71, 0x7A))
-        .hint_text("")
-        .frame(
-            egui::Frame::new()
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::new(0.0, Color32::TRANSPARENT)),
-        )
-        .show(ui);
-}
-
 /// Сетка иконок с возможностью выбора.
-/// Область сетки прокручивается вертикально (высота 170px), скроллбар только для этой области.
 /// Каждая иконка — уникальный вариант Lucide (все 1903 из библиотеки).
 fn icon_grid(
     ui: &mut egui::Ui,
-    grid_area_rect: Rect,
     search: &str,
     selected_icon: &str,
     all_icons: &[(String, Lucide)],
@@ -353,15 +279,8 @@ fn icon_grid(
     let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
     let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
 
-    // Фон и рамка области сетки.
-    ui.painter()
-        .rect_filled(grid_area_rect, 2.0, container_bg);
-    ui.painter().rect_stroke(
-        grid_area_rect,
-        2.0,
-        Stroke::new(1.0, container_border),
-        StrokeKind::Middle,
-    );
+    let container_width = ui.available_width();
+    let container_x = ui.cursor().min.x;
 
     // Фильтрация иконок по поиску (по kebab-case имени Lucide).
     let filter = search.to_lowercase();
@@ -371,85 +290,97 @@ fn icon_grid(
         .collect();
 
     if filtered.is_empty() {
-        // Показываем "Найдено: 0" внутри области сетки.
-        ui.painter().text(
-            grid_area_rect.center(),
-            Align2::CENTER_CENTER,
-            "Найдено: 0",
-            FontId::new(13.0, FontFamily::Name("inter_medium".into())),
-            Color32::from_rgb(0xA1, 0xA1, 0xAA),
-        );
+        ui.label("Найдено: 0");
+        ui.add_space(8.0);
         return;
     }
 
     let step_x = GRID_STEP_X;
     let step_y = GRID_STEP_Y;
-    let max_cols = ((grid_area_rect.width() / step_x).floor() as usize).max(1);
+    let max_cols = ((container_width / step_x).floor() as usize).max(1);
     let rows = (filtered.len() + max_cols - 1) / max_cols;
     let grid_h = rows as f32 * step_y;
+    let grid_start_y = ui.cursor().min.y;
 
-    egui::ScrollArea::vertical()
-        .max_height(GRID_AREA_H)
-        .show(ui, |ui| {
-            ui.set_width(grid_area_rect.width());
+    let grid_rect = Rect::from_min_size(
+        Pos2::new(container_x, grid_start_y),
+        Vec2::new(container_width, grid_h),
+    );
+    ui.painter().rect_filled(grid_rect, 2.0, container_bg);
+    ui.painter().rect_stroke(
+        grid_rect,
+        2.0,
+        Stroke::new(1.0, container_border),
+        StrokeKind::Middle,
+    );
 
-            let btn_size = GRID_BTN_SIZE;
-            let icon_size = GRID_ICON_SIZE;
+    let btn_size = GRID_BTN_SIZE;
+    let icon_size = GRID_ICON_SIZE;
 
-            for row in 0..rows {
-                for col in 0..max_cols {
-                    let idx = row * max_cols + col;
-                    if idx >= filtered.len() {
-                        break;
-                    }
-                    let (_label, icon) = filtered[idx];
-                    let btn_x = col as f32 * step_x + (step_x - btn_size.x) / 2.0;
-                    let btn_y = row as f32 * step_y + (step_y - btn_size.y) / 2.0;
-                    let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
-
-                    let is_selected = icon.name() == selected_icon;
-                    let hovered = btn_rect.contains(
-                        ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
-                    );
-
-                    let fill = if is_selected {
-                        Color32::from_rgb(0x34, 0x34, 0x34)
-                    } else if hovered {
-                        Color32::from_rgb(0x28, 0x28, 0x28)
-                    } else {
-                        input_bg
-                    };
-                    let border = if is_selected {
-                        Color32::WHITE
-                    } else {
-                        container_border
-                    };
-                    ui.painter().rect_filled(btn_rect, 2.0, fill);
-                    ui.painter().rect_stroke(
-                        btn_rect,
-                        2.0,
-                        Stroke::new(1.0, border),
-                        StrokeKind::Middle,
-                    );
-
-                    let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
-                    let icon_color = if is_selected {
-                        Color32::WHITE
-                    } else {
-                        Color32::from_rgb(0xD4, 0xD4, 0xD8)
-                    };
-                    paint_lucide(ui, icon_rect, *icon, icon_color);
-
-                    let response = ui.allocate_rect(btn_rect, Sense::click());
-                    if response.clicked() {
-                        *new_icon = Some(*icon);
-                    }
-                }
+    // Сначала выделяем все регионы взаимодействия (уникальные ID через allocate_rect).
+    let mut btn_rects: Vec<Rect> = Vec::with_capacity(filtered.len());
+    for row in 0..rows {
+        for col in 0..max_cols {
+            let idx = row * max_cols + col;
+            if idx >= filtered.len() {
+                break;
             }
+            let btn_x = container_x + col as f32 * step_x + (step_x - btn_size.x) / 2.0;
+            let btn_y = grid_rect.min.y + row as f32 * step_y + (step_y - btn_size.y) / 2.0;
+            let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
+            btn_rects.push(btn_rect);
+        }
+    }
 
-            ui.advance_cursor_after_rect(Rect::from_min_size(
-                Pos2::ZERO,
-                Vec2::new(grid_area_rect.width(), grid_h),
-            ));
-        });
+    // Регистрируем все интерактивные зоны.
+    let responses: Vec<egui::Response> = btn_rects
+        .iter()
+        .map(|rect| ui.allocate_rect(*rect, Sense::click()))
+        .collect();
+
+    // Затем рисуем все иконки.
+    for (idx, (_label, icon)) in filtered.iter().enumerate() {
+        let btn_rect = btn_rects[idx];
+        let response = &responses[idx];
+
+        let is_selected = icon.name() == selected_icon;
+        let hovered = response.hovered();
+
+        let fill = if is_selected {
+            Color32::from_rgb(0x34, 0x34, 0x34)
+        } else if hovered {
+            Color32::from_rgb(0x28, 0x28, 0x28)
+        } else {
+            input_bg
+        };
+        let border = if is_selected {
+            Color32::WHITE
+        } else {
+            container_border
+        };
+        ui.painter().rect_filled(btn_rect, 2.0, fill);
+        ui.painter().rect_stroke(
+            btn_rect,
+            2.0,
+            Stroke::new(1.0, border),
+            StrokeKind::Middle,
+        );
+
+        let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
+        let icon_color = if is_selected {
+            Color32::WHITE
+        } else {
+            Color32::from_rgb(0xD4, 0xD4, 0xD8)
+        };
+        paint_lucide(ui, icon_rect, *icon, icon_color);
+
+        if response.clicked() {
+            *new_icon = Some(*icon);
+        }
+    }
+
+    ui.advance_cursor_after_rect(Rect::from_min_size(
+        Pos2::new(container_x, grid_start_y),
+        Vec2::new(container_width, grid_h),
+    ));
 }
