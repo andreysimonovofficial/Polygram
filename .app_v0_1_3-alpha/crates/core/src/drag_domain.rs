@@ -202,7 +202,17 @@ pub fn compute_object_drop_commands(ctx: &ObjectDropContext) -> ObjectDropResult
         }
         NodeKind::Metric => {
             let dir = dragged.direction.unwrap_or(ContainerDirection::Request);
-            compute_metric_drop_object(geometry, dragged_id, dir, start_cell, drop_cell, over_dept_str, dragged_size, target)
+            compute_metric_drop_object(
+                geometry,
+                dragged_id,
+                dragged_id,
+                dir,
+                start_cell,
+                drop_cell,
+                over_dept_str,
+                dragged_size,
+                target,
+            )
         }
     }
 }
@@ -426,7 +436,11 @@ fn compute_container_drop(
 /// Создаёт Процесс (если нужно), создаёт показатель в контейнере процесса с противоположным направлением, связывает показатели.
 pub fn compute_metric_drop_object(
     geometry: &Geometry,
-    dragged_id: &str,
+    // Объект, чья запись-источник используется в связи (для перетаскиваемого объекта-Показателя — его id;
+    // для строки Показателя внутри Процесса — id этого Процесса).
+    source_object: &str,
+    // Имя записи-показателя (используется как имя новой записи в цели и ключ связи).
+    entry_name: &str,
     dragged_dir: ContainerDirection,
     start_cell: (i32, i32),
     drop_cell: (i32, i32),
@@ -438,10 +452,10 @@ pub fn compute_metric_drop_object(
     let existing_ids: Vec<String> = geometry.objects.iter().map(|o| o.id.clone()).collect();
     let process_id = allocate_id(&existing_ids);
 
-    // Определяем целевую клетку.
+    // Определяем целевую клетку для нового процесса (или показателя).
     let final_cell = if let Some(dept_id) = over_dept {
         if geometry.objects.iter().any(|o| o.id == dept_id && o.kind == NodeKind::Department) {
-            find_free_cell_in_dept_domain(geometry, dept_id, dragged_size.0, dragged_size.1, dragged_id)
+            find_free_cell_in_dept_domain(geometry, dept_id, dragged_size.0, dragged_size.1, source_object)
                 .unwrap_or(drop_cell)
         } else {
             drop_cell
@@ -531,9 +545,9 @@ pub fn compute_metric_drop_object(
         commands.push(Command::AddMetricEntry {
             object: target_object_id.clone(),
             dir: target_dir.into_direction(),
-            id: Some(dragged_id.to_owned()),
-            metric_def: dragged_id.to_owned(),
-            name: dragged_id.to_owned(),
+            id: Some(entry_name.to_owned()),
+            metric_def: entry_name.to_owned(),
+            name: entry_name.to_owned(),
             value: MetricValue::Null,
             required: MetricValue::Null,
             max: None,
@@ -541,12 +555,27 @@ pub fn compute_metric_drop_object(
         });
     }
 
-    // Связать показатели: источник -> цель.
+    // Связать показатели: сторона Результата -> сторона Запроса.
+    // При перетаскивании Запроса источникとなる цель — Результат, цель — Запрос (источник).
+    let (from_object, from_entry, to_object, to_entry) = match dragged_dir {
+        ContainerDirection::Result => (
+            source_object.to_owned(),
+            entry_name.to_owned(),
+            target_object_id.clone(),
+            entry_name.to_owned(),
+        ),
+        ContainerDirection::Request => (
+            target_object_id.clone(),
+            entry_name.to_owned(),
+            source_object.to_owned(),
+            entry_name.to_owned(),
+        ),
+    };
     commands.push(Command::Connect {
-        from_object: dragged_id.to_owned(),
-        from_entry: dragged_id.to_owned(),
-        to_object: target_object_id,
-        to_entry: dragged_id.to_owned(),
+        from_object,
+        from_entry,
+        to_object,
+        to_entry,
         throughput: 100.0,
     });
 

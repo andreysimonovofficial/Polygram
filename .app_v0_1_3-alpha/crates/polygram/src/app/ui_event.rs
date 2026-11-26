@@ -8,7 +8,7 @@
 
 use egui::{Pos2, PointerButton, Rect, Vec2};
 use polygram_core::{
-    drag_domain::{compute_metric_drop, compute_metric_drop_object, MetricDropContext},
+    drag_domain::compute_metric_drop_object,
     types::{ContainerDirection, Direction},
 };
 use polygram_canvas::paint::object::process_total_height;
@@ -309,24 +309,63 @@ impl PolygramApp {
                         return;
                     }
                 }
-                // Соединение показателя с объектом-целью: ищем любой объект под курсором.
-                if let Some(dst_id) = self.canvas.object_at_any(cur, &published.dynamic) {
-                    if src_id != dst_id {
-                        let geometry = self.engine.geometry();
-                        let cmds = compute_metric_drop(
-                            &MetricDropContext {
-                                geometry,
-                                source_object: src_id.clone(),
-                                source_dir: src_dir,
-                                entry_name: src_name.clone(),
-                                target_id: dst_id.to_owned(),
-                            },
-                        );
-                        if !cmds.is_empty() {
-                            if let Err((_, e)) = self.engine.apply_batch(
-                                polygram_core::types::Scope::Root,
-                                cmds,
-                            ) {
+                // Соединение показателя с объектом-целью: определяем цель под курсором.
+                // Процесс — добавить запись в его контейнер и связать.
+                // Отдел — создать Процесс, переподчинить отдел и связать.
+                // Контейнер/Показатель/другое по клетке курсора — связать с объектом под курсором.
+                // Свободное место — создать Процесс и связать.
+                let dragged_dir = match src_dir {
+                    Direction::Request => ContainerDirection::Request,
+                    Direction::Result => ContainerDirection::Result,
+                };
+                let geometry = self.engine.geometry();
+                let (target_geom, over_dept) =
+                    if let Some(dst_id) = self.canvas.object_at_any(cur, &published.dynamic) {
+                        let obj = self.canvas.objects.iter().find(|o| o.id == dst_id);
+                        match obj.map(|o| o.kind) {
+                            Some(polygram_core::types::NodeKind::Department) => {
+                                (None, Some(dst_id))
+                            }
+                            _ => (obj.cloned(), None),
+                        }
+                    } else if under_any {
+                        self.canvas.objects
+                            .iter()
+                            .find(|o| {
+                                o.id != src_id
+                                    && o.rect.x <= cur_cell.0
+                                    && cur_cell.0 < o.rect.x + o.rect.w
+                                    && o.rect.y <= cur_cell.1
+                                    && cur_cell.1 < o.rect.y + o.rect.h
+                            })
+                            .map(|o| (Some(o.clone()), None))
+                            .unwrap_or((None, None))
+                    } else {
+                        (None, None)
+                    };
+
+                // Не соединять объект с самим собой.
+                let is_self = target_geom.as_ref().map_or(false, |t| t.id == src_id);
+                if !is_self {
+                    let cmds = compute_metric_drop_object(
+                        &geometry,
+                        &src_id,
+                        &src_name,
+                        dragged_dir,
+                        cur_cell,
+                        cur_cell,
+                        over_dept.as_deref(),
+                        (2, 2),
+                        target_geom.as_ref(),
+                    );
+                    let mut applied = false;
+                    if !cmds.commands.is_empty() {
+                        match self.engine.apply_batch(
+                            polygram_core::types::Scope::Root,
+                            cmds.commands,
+                        ) {
+                            Ok(_) => applied = true,
+                            Err((_, e)) => {
                                 // Если показатель-def не существует, создаём его и повторяем.
                                 if matches!(
                                     e,
@@ -346,65 +385,31 @@ impl PolygramApp {
                                         def_cmds,
                                     );
                                     let geometry = self.engine.geometry();
-                                    let cmds2 =
-                                        compute_metric_drop(
-                                            &MetricDropContext {
-                                                geometry,
-                                                source_object: src_id.clone(),
-                                                source_dir: src_dir,
-                                                entry_name: src_name.clone(),
-                                                target_id: dst_id.to_owned(),
-                                            },
-                                        );
-                                    if !cmds2.is_empty() {
+                                    let cmds2 = compute_metric_drop_object(
+                                        &geometry,
+                                        &src_id,
+                                        &src_name,
+                                        dragged_dir,
+                                        cur_cell,
+                                        cur_cell,
+                                        over_dept.as_deref(),
+                                        (2, 2),
+                                        target_geom.as_ref(),
+                                    );
+                                    if !cmds2.commands.is_empty() {
                                         let _ = self.engine.apply_batch(
                                             polygram_core::types::Scope::Root,
-                                            cmds2,
+                                            cmds2.commands,
                                         );
+                                        applied = true;
                                     }
                                 }
                             }
                         }
                     }
-                    self.sync_canvas_from_engine();
-                } else if !under_any {
-                    // Свободное место: создать Процесс и разместить показатель
-                    // в его контейнере с противоположным направлением (как при дропе Контейнера).
-                    // Определение показателя должно существовать, иначе AddMetricEntry не применится.
-                    if !self.engine.metric_def_views().iter().any(|m| m.name == src_name || m.id == src_name) {
-                        let _ = self.engine.apply_batch(
-                            polygram_core::types::Scope::Root,
-                            vec![polygram_core::Command::AddMetricDef {
-                                id: Some(src_name.clone()),
-                                name: src_name.clone(),
-                                kind: polygram_core::types::MetricKind::Number,
-                                unit: String::new(),
-                                api: None,
-                            }],
-                        );
+                    if applied {
+                        self.sync_canvas_from_engine();
                     }
-                    let geometry = self.engine.geometry();
-                    let dragged_dir = match src_dir {
-                        Direction::Request => ContainerDirection::Request,
-                        Direction::Result => ContainerDirection::Result,
-                    };
-                    let cmds = compute_metric_drop_object(
-                        &geometry,
-                        &src_name,
-                        dragged_dir,
-                        cur_cell,
-                        cur_cell,
-                        None,
-                        (2, 2),
-                        None,
-                    );
-                    if !cmds.commands.is_empty() {
-                        let _ = self.engine.apply_batch(
-                            polygram_core::types::Scope::Root,
-                            cmds.commands,
-                        );
-                    }
-                    self.sync_canvas_from_engine();
                 }
             }
         }

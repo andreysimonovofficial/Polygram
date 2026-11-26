@@ -1,6 +1,6 @@
 //! Тесты чистой доменной логики дроп объекта (compute_object_drop_commands, compute_metric_drop).
 use polygram_core::drag_domain::{
-    compute_metric_drop, MetricDropContext, ObjectDropContext,
+    compute_metric_drop, compute_metric_drop_object, MetricDropContext, ObjectDropContext,
 };
 use polygram_core::geometry::{EntryGeom, Geometry, ObjectGeom};
 use polygram_core::layout::Rect;
@@ -742,9 +742,9 @@ fn object_drop_metric_request_on_free_cell_creates_process_and_metric() {
     }
     match &result.commands[2] {
         Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
-            assert_eq!(from_object, "m");
+            assert_eq!(from_object, &process_id);
             assert_eq!(from_entry, "m");
-            assert_eq!(to_object, &process_id);
+            assert_eq!(to_object, "m");
             assert_eq!(to_entry, "m");
         }
         other => panic!("expected Connect, got {:?}", other),
@@ -929,9 +929,9 @@ fn object_drop_metric_on_metric_connects_only() {
     assert_eq!(result.commands.len(), 1);
     match &result.commands[0] {
         Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
-            assert_eq!(from_object, "m");
+            assert_eq!(from_object, "m2");
             assert_eq!(from_entry, "m");
-            assert_eq!(to_object, "m2");
+            assert_eq!(to_object, "m");
             assert_eq!(to_entry, "m");
         }
         other => panic!("expected Connect, got {:?}", other),
@@ -970,8 +970,8 @@ fn object_drop_metric_request_on_process_adds_entry_and_connects() {
     }
     match &result.commands[1] {
         Command::Connect { from_object, to_object, .. } => {
-            assert_eq!(from_object, "m");
-            assert_eq!(to_object, "p");
+            assert_eq!(from_object, "p");
+            assert_eq!(to_object, "m");
         }
         other => panic!("expected Connect, got {:?}", other),
     }
@@ -1009,8 +1009,8 @@ fn object_drop_metric_request_on_container_matching_direction() {
     }
     match &result.commands[1] {
         Command::Connect { from_object, to_object, .. } => {
-            assert_eq!(from_object, "m");
-            assert_eq!(to_object, "c");
+            assert_eq!(from_object, "c");
+            assert_eq!(to_object, "m");
         }
         other => panic!("expected Connect, got {:?}", other),
     }
@@ -1039,3 +1039,160 @@ fn object_drop_metric_request_on_container_mismatching_direction_cancels() {
     });
     assert!(result.commands.is_empty());
 }
+
+#[test]
+fn object_drop_metric_request_on_free_cell_connects_result_to_request() {
+    use polygram_core::types::ContainerDirection;
+    // Источник Запрос -> цель создаётся с Результатом, связь идёт от Результата к Запросу.
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request)],
+        edges: vec![],
+    };
+    let result = compute_metric_drop_object(
+        &geometry,
+        "m",
+        "m",
+        ContainerDirection::Request,
+        (0, 0),
+        (10, 10),
+        None,
+        (2, 2),
+        None,
+    );
+    assert_eq!(result.commands.len(), 3);
+    let process_id = new_process_id(&result.commands, &["m"]);
+    match &result.commands[1] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, &process_id);
+            assert_eq!(*dir, Direction::Result);
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+    match &result.commands[2] {
+        Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
+            assert_eq!(from_object, &process_id);
+            assert_eq!(from_entry, "m");
+            assert_eq!(to_object, "m");
+            assert_eq!(to_entry, "m");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_result_on_free_cell_connects_source_to_request() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![metric_obj("m", 0, 0, 2, 2, ContainerDirection::Result)],
+        edges: vec![],
+    };
+    let result = compute_metric_drop_object(
+        &geometry,
+        "m",
+        "m",
+        ContainerDirection::Result,
+        (0, 0),
+        (10, 10),
+        None,
+        (2, 2),
+        None,
+    );
+    assert_eq!(result.commands.len(), 3);
+    let process_id = new_process_id(&result.commands, &["m"]);
+    match &result.commands[2] {
+        Command::Connect { from_object, to_object, .. } => {
+            assert_eq!(from_object, "m");
+            assert_eq!(to_object, &process_id);
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_request_on_department_connects_result_to_request() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            dept_obj("d", 10, 10, 10, 10),
+        ],
+        edges: vec![],
+    };
+    let result = compute_metric_drop_object(
+        &geometry,
+        "m",
+        "m",
+        ContainerDirection::Request,
+        (0, 0),
+        (12, 12),
+        Some("d"),
+        (2, 2),
+        None,
+    );
+    assert_eq!(result.commands.len(), 4);
+    assert_eq!(result.reparent_dept.as_deref(), Some("d"));
+    let process_id = new_process_id(&result.commands, &["m", "d"]);
+    match &result.commands[1] {
+        Command::SetObjectParent { object, parent } => {
+            assert_eq!(object, "d");
+            assert_eq!(parent.as_deref(), Some(process_id.as_str()));
+        }
+        other => panic!("expected SetObjectParent, got {:?}", other),
+    }
+    match &result.commands[2] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, &process_id);
+            assert_eq!(*dir, Direction::Result);
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+}
+
+#[test]
+fn object_drop_metric_request_on_process_connects_result_to_request() {
+    use polygram_core::types::ContainerDirection;
+    let geometry = Geometry {
+        rev: 1,
+        objects: vec![
+            metric_obj("m", 0, 0, 2, 2, ContainerDirection::Request),
+            proc_obj("p", 10, 10, 2, 2),
+        ],
+        edges: vec![],
+    };
+    let target = &geometry.objects[1];
+    let result = compute_metric_drop_object(
+        &geometry,
+        "m",
+        "m",
+        ContainerDirection::Request,
+        (0, 0),
+        (11, 11),
+        None,
+        (2, 2),
+        Some(target),
+    );
+    assert_eq!(result.commands.len(), 2);
+    match &result.commands[0] {
+        Command::AddMetricEntry { object, dir, name, .. } => {
+            assert_eq!(object, "p");
+            assert_eq!(*dir, Direction::Result);
+            assert_eq!(name, "m");
+        }
+        other => panic!("expected AddMetricEntry, got {:?}", other),
+    }
+    match &result.commands[1] {
+        Command::Connect { from_object, from_entry, to_object, to_entry, .. } => {
+            assert_eq!(from_object, "p");
+            assert_eq!(from_entry, "m");
+            assert_eq!(to_object, "m");
+            assert_eq!(to_entry, "m");
+        }
+        other => panic!("expected Connect, got {:?}", other),
+    }
+}
+
