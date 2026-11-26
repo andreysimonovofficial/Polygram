@@ -80,51 +80,59 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     close_modal = true;
                 }
 
-                ui.add_space(12.0);
+                ui.add_space(10.0);
 
-                // === Тело: карточка предпросмотра + поиск + сетка иконок со скроллом ===
-                let body_height = 240.0;
+                // === Тело: карточка предпросмотра + поиск (фиксировано) +
+                // сетка иконок (только она прокручивается) ===
+
+                // Карточка предпросмотра.
+                let preview_reset =
+                    preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
+                if preview_reset {
+                    reset_icon = true;
+                }
+
+                ui.add_space(10.0);
+
+                // Строка поиска.
+                modal::input_field(
+                    ui,
+                    &mut app.dialogs.cover_modal_search,
+                    "Поиск иконки",
+                    Vec2::new(ui.available_width(), 32.0),
+                    false,
+                    egui::Margin {
+                        left: 40,
+                        top: 6,
+                        right: 40,
+                        bottom: 6,
+                    },
+                );
+
+                ui.add_space(10.0);
+
+                // Сетка иконок (все уникальные варианты Lucide).
+                // Скроллбар применяется исключительно к области сетки кнопок с иконками
+                // (высота области 170 px). Карточка предпросмотра и строка поиска при
+                // прокрутке списка не сдвигаются.
+                let all_icons = all_lucide_icons();
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
-                    .max_height(body_height)
+                    .max_height(170.0)
                     .show(ui, |ui| {
                         ui.set_width(496.0);
-
-                        // Карточка предпросмотра.
-                        let preview_reset =
-                            preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
-                        if preview_reset {
-                            reset_icon = true;
-                        }
-
-                        ui.add_space(12.0);
-
-                        // Строка поиска.
-                        modal::input_field(
-                            ui,
-                            &mut app.dialogs.cover_modal_search,
-                            "Поиск иконки",
-                            Vec2::new(ui.available_width(), 32.0),
-                            false,
-                            egui::Margin {
-                                left: 40,
-                                top: 6,
-                                right: 40,
-                                bottom: 6,
-                            },
-                        );
-
-                        ui.add_space(12.0);
-
-                        // Сетка иконок (все уникальные варианты Lucide).
-                        let all_icons = all_lucide_icons();
-                        icon_grid(
+                        if let Some(rect) = icon_grid(
                             ui,
                             &app.dialogs.cover_modal_search,
                             &app.dialogs.cover_modal_icon,
                             &all_icons,
                             &mut new_icon,
-                        );
+                        ) {
+                            if !app.dialogs.cover_modal_scrolled {
+                                ui.scroll_to_rect(rect, None);
+                                app.dialogs.cover_modal_scrolled = true;
+                            }
+                        }
                     });
 
                 // === Подвал (внизу) ===
@@ -268,13 +276,15 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
 
 /// Сетка иконок с возможностью выбора.
 /// Каждая иконка — уникальный вариант Lucide (все 1903 из библиотеки).
+/// Возвращает `Some(rect)` выбранной иконки (координаты относительно содержимого скролла),
+/// чтобы модальное окно могло прокрутить сетку к ней при открытии.
 fn icon_grid(
     ui: &mut egui::Ui,
     search: &str,
     selected_icon: &str,
     all_icons: &[(String, Lucide)],
     new_icon: &mut Option<Lucide>,
-) {
+) -> Option<Rect> {
     let container_bg = Color32::from_rgb(0x22, 0x22, 0x22);
     let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
     let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
@@ -292,7 +302,7 @@ fn icon_grid(
     if filtered.is_empty() {
         ui.label("Найдено: 0");
         ui.add_space(8.0);
-        return;
+        return None;
     }
 
     let step_x = GRID_STEP_X;
@@ -339,11 +349,15 @@ fn icon_grid(
         .collect();
 
     // Затем рисуем все иконки.
+    let mut selected_rect: Option<Rect> = None;
     for (idx, (_label, icon)) in filtered.iter().enumerate() {
         let btn_rect = btn_rects[idx];
         let response = &responses[idx];
 
         let is_selected = icon.name() == selected_icon;
+        if is_selected {
+            selected_rect = Some(btn_rect);
+        }
         let hovered = response.hovered();
 
         let fill = if is_selected {
@@ -383,4 +397,5 @@ fn icon_grid(
         Pos2::new(container_x, grid_start_y),
         Vec2::new(container_width, grid_h),
     ));
+    selected_rect
 }

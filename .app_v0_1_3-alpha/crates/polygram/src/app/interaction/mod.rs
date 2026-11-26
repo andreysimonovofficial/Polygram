@@ -278,6 +278,7 @@ pub fn context_menu(
                 app.dialogs.cover_modal_open = true;
                 app.dialogs.cover_modal_object = Some(id.clone());
                 app.dialogs.cover_modal_icon = obj.map(|o| o.icon.clone()).unwrap_or_default();
+                app.dialogs.cover_modal_scrolled = false;
             }
         }
         app.right_click = None;

@@ -59,6 +59,8 @@ pub struct DialogState {
     pub cover_modal_object: Option<String>,
     pub cover_modal_icon: String,
     pub cover_modal_search: String,
+    /// Сетка иконок уже прокручена к выбранной иконке при открытии модального окна.
+    pub cover_modal_scrolled: bool,
 }
 
 impl DialogState {
@@ -94,6 +96,7 @@ impl DialogState {
             cover_modal_object: None,
             cover_modal_icon: String::new(),
             cover_modal_search: String::new(),
+            cover_modal_scrolled: false,
         }
     }
 
@@ -138,6 +141,7 @@ impl DialogState {
         self.cover_modal_object = None;
         self.cover_modal_icon.clear();
         self.cover_modal_search.clear();
+        self.cover_modal_scrolled = false;
     }
 
     pub fn can_add_metric(&self, object_id: &str, dir: Direction, geometry: &polygram_core::Geometry) -> bool {
