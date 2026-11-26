@@ -119,7 +119,7 @@ pub fn paint_process(
             Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
         paint_lucide(ui, cover_icon_rect, cover_icon, Color32::WHITE);
 
-        // Подпись под иконкой: duas строки — имя объекта и #ID.
+        // Подпись под иконкой: две строки — имя объекта и #ID в плашке.
         let name_sig = format!("{}", object.name);
         let id_sig = format!("#{}", object.id);
         let name_size = 13.0 * zoom;
@@ -131,9 +131,31 @@ pub fn paint_process(
             Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 8.0 * zoom),
             Vec2::new(sig_w, name_size * 1.5),
         );
-        let id_rect = Rect::from_center_size(
-            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 8.0 * zoom + name_size + 4.0 * zoom),
-            Vec2::new(sig_w, id_size * 1.5),
+        // Плашка под именем: скруглённые углы, тёмный фон, рамка.
+        let pill_h = id_size * 1.8;
+        let pill_w = cover_icon_side * 1.4;
+        let pill_rect = Rect::from_center_size(
+            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 8.0 * zoom + name_size + 6.0 * zoom + pill_h / 2.0),
+            Vec2::new(pill_w, pill_h),
+        );
+        let pill_hovered = false;
+        painter.rect_filled(
+            pill_rect,
+            pill_h / 2.0,
+            Color32::from_rgb(0x25, 0x25, 0x25),
+        );
+        painter.rect_stroke(
+            pill_rect,
+            pill_h / 2.0,
+            Stroke::new(1.0, Color32::from_rgb(0x37, 0x38, 0x39)),
+            StrokeKind::Middle,
+        );
+        painter.text(
+            pill_rect.center(),
+            Align2::CENTER_CENTER,
+            &id_sig,
+            FontId::new(id_size, FontFamily::Name("inter_medium".into())),
+            id_color,
         );
         painter.text(
             name_rect.center(),
@@ -142,12 +164,12 @@ pub fn paint_process(
             FontId::new(name_size, FontFamily::Name("inter_semibold".into())),
             name_color,
         );
-        painter.text(
-            id_rect.center(),
+        ui.painter().text(
+            name_rect.center(),
             Align2::CENTER_CENTER,
-            &id_sig,
-            FontId::new(id_size, FontFamily::Name("inter_medium".into())),
-            id_color,
+            &name_sig,
+            FontId::new(name_size, FontFamily::Name("inter_semibold".into())),
+            name_color,
         );
 
         return ProcessPaintResult {
