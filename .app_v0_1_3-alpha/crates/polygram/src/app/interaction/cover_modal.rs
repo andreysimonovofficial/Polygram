@@ -229,6 +229,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
     );
 
     // Кнопка «Сбросить» справа на том же горизонтальном уровне (внутри карточки).
+    let preview_start_y = ui.cursor().min.y;
     let reset_hovered = reset_response.hovered();
     ui.painter().rect_filled(
         reset_rect,
@@ -253,7 +254,10 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
         Color32::from_rgb(0xD4, 0xD4, 0xD8),
     );
 
-    ui.advance_cursor_after_rect(card_rect);
+    ui.advance_cursor_after_rect(Rect::from_min_size(
+        Pos2::new(card_rect.min.x, preview_start_y),
+        Vec2::new(available_width, card_h),
+    ));
     ui.add_space(8.0);
 
     reset_response.clicked()
@@ -293,9 +297,10 @@ fn icon_grid(
     let max_cols = ((container_width / step_x).floor() as usize).max(1);
     let rows = (filtered.len() + max_cols - 1) / max_cols;
     let grid_h = rows as f32 * step_y;
+    let grid_start_y = ui.cursor().min.y;
 
     let grid_rect = Rect::from_min_size(
-        Pos2::new(container_x, ui.cursor().min.y),
+        Pos2::new(container_x, grid_start_y),
         Vec2::new(container_width, grid_h),
     );
     ui.painter().rect_filled(grid_rect, 2.0, container_bg);
@@ -372,7 +377,7 @@ fn icon_grid(
     }
 
     ui.advance_cursor_after_rect(Rect::from_min_size(
-        Pos2::new(container_x, ui.cursor().min.y),
+        Pos2::new(container_x, grid_start_y),
         Vec2::new(container_width, grid_h),
     ));
 }
