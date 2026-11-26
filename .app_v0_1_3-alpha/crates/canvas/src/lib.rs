@@ -340,6 +340,12 @@ impl Canvas {
             if !is_hovered {
                 continue; // Nicht-hovered отделы рисуются обложкой в третьем проходе (поверх детей).
             }
+            // Отдел, прикрытый обложкой не наведённого родительского отдела,
+            // не рисуется своим содержимым — родительская обложка (третий проход)
+            // перекрывает всё его содержимое, как у дочерних процессов.
+            if self.department_covered_by_cover(pointer_pos, object) {
+                continue;
+            }
             let process_count = self.objects.iter()
                 .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
                 .count();
@@ -454,6 +460,11 @@ impl Canvas {
             if is_hovered {
                 continue; // Наведённый отдел уже нарисован в первом проходе (обычное содержимое).
             }
+            // Отдел, прикрытый обложкой не наведённого родительского отдела,
+            // не рисуется своей обложкой — родительская обложка уже перекрывает его.
+            if self.department_covered_by_cover(pointer_pos, object) {
+                continue;
+            }
             let process_count = self.objects.iter()
                 .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
                 .count();
@@ -482,6 +493,36 @@ impl Canvas {
             self.cell_size,
             drag_visual,
         );
+    }
+
+    /// Является ли отдел `obj` прикрыт обложкой не наведённого родительского отдела.
+    /// Если какой-то departamentos-предок не наведён, его обложка (третий проход `paint`)
+    /// перекрывает всё содержимое отдела, включая сам этот отдел — так же, как дочерние
+    /// процессы скрываются обложкой не наведённого родителя.
+    fn department_covered_by_cover(&self, pointer_pos: Option<Pos2>, obj: &ObjectGeom) -> bool {
+        let cell_px = self.cell_px();
+        let mut parent_id = obj.parent.clone();
+        while let Some(pid) = parent_id {
+            if let Some(parent) = self.objects.iter().find(|o| o.id == pid) {
+                if parent.kind == NodeKind::Department {
+                    let pr = &parent.rect;
+                    let prect = Rect::from_min_size(
+                        self.cell_to_screen(pr.x, pr.y),
+                        Vec2::new(pr.w as f32 * cell_px, pr.h as f32 * cell_px),
+                    );
+                    let p_hovered = pointer_pos.map_or(false, |p| prect.contains(p));
+                    if !p_hovered {
+                        return true;
+                    }
+                    parent_id = parent.parent.clone();
+                } else {
+                    parent_id = parent.parent.clone();
+                }
+            } else {
+                break;
+            }
+        }
+        false
     }
 
     /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.
@@ -564,5 +605,50 @@ impl Canvas {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use polygram_core::layout::Rect;
+    use polygram_core::types::NodeKind;
+
+    fn dept(id: &str, rect: Rect, parent: Option<&str>) -> ObjectGeom {
+        ObjectGeom {
+            ix: 0,
+            id: id.to_owned(),
+            name: id.to_owned(),
+            kind: NodeKind::Department,
+            rect,
+            direction: None,
+            requests: Vec::new(),
+            results: Vec::new(),
+            parent: parent.map(|p| p.to_owned()),
+            icon: String::new(),
+        }
+    }
+
+    #[test]
+    fn child_department_covered_by_non_hovered_parent() {
+        let mut canvas = Canvas::new();
+        canvas.objects.push(dept("d1", Rect::new(0, 0, 30, 30), None));
+        canvas.objects.push(dept("d2", Rect::new(5, 5, 16, 16), Some("d1")));
+        let d2 = &canvas.objects[1];
+
+        // Без наведения оба отдела не наведены: дочерний d2 прикрыт обложкой родителя d1.
+        assert!(canvas.department_covered_by_cover(None, d2));
+
+        // Наведён родитель d1 — обложка родителя не показывается, дочерний d2 не прикрыт.
+        let pos = canvas.cell_to_screen(15, 15); // внутри rect d1
+        assert!(!canvas.department_covered_by_cover(Some(pos), d2));
+    }
+
+    #[test]
+    fn top_level_department_not_covered() {
+        let mut canvas = Canvas::new();
+        canvas.objects.push(dept("d1", Rect::new(0, 0, 30, 30), None));
+        let d1 = &canvas.objects[0];
+        assert!(!canvas.department_covered_by_cover(None, d1));
     }
 }
