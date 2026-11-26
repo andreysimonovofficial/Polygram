@@ -50,8 +50,8 @@ pub fn paint_department_frame(
         let cover_icon = default_icon_for(object.kind, &object.icon);
         let center = rect_px.center();
 
-        // Имя объекта и #ID — в одну горизонтальную строку с иконкой,
-        // весь ряд центрируется относительно центра обложки.
+        // Имя объекта и #ID — в вертикальный стек с иконкой, весь стек
+        // центрируется относительно центра обложки.
         let name_sig = format!("{}", object.name);
         let id_sig = format!("#{}", object.id);
         let name_size = 13.0 * zoom * cover_scale;
@@ -62,38 +62,34 @@ pub fn paint_department_frame(
 
         let name_font = FontId::new(name_size, FontFamily::Name("inter_semibold".into()));
         let id_font = FontId::new(id_size, FontFamily::Name("inter_medium".into()));
-
-        // Приблизительная ширина текста (Inter, оценка по размеру шрифта и длине строки).
-        let name_w = name_sig.len() as f32 * name_size * 0.58;
-        let id_text_w = id_sig.len() as f32 * id_size * 0.52;
         let pill_h = id_size * 1.4;
-        let pill_w = (id_text_w + 8.0 * zoom * cover_scale).max(id_size * 2.0);
+        let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom * cover_scale;
+        let pill_w = pill_w.max(id_size * 2.0);
 
-        let row_w = cover_icon_side + gap + name_w + gap + pill_w;
-        let start_x = center.x - row_w / 2.0;
+        let stack_h = cover_icon_side + gap + name_size + gap + pill_h;
+        let start_y = center.y - stack_h / 2.0;
 
-        // Иконка — слева, по вертикальному центру обложки.
+        // Иконка — сверху стека, по горизонтали по центру обложки.
         let icon_rect = Rect::from_center_size(
-            Pos2::new(start_x + cover_icon_side / 2.0, center.y),
+            Pos2::new(center.x, start_y + cover_icon_side / 2.0),
             Vec2::splat(cover_icon_side),
         );
         paint_lucide(ui, icon_rect, cover_icon, Color32::WHITE);
 
-        // Название объекта — по центру строки, по вертикальному центру обложки.
+        // Название объекта — по центру стека, по горизонтали по центру обложки.
+        let name_y = start_y + cover_icon_side + gap + name_size / 2.0;
         painter.text(
-            Pos2::new(start_x + cover_icon_side + gap + name_w / 2.0, center.y),
+            Pos2::new(center.x, name_y),
             Align2::CENTER_CENTER,
             &name_sig,
             name_font,
             name_color,
         );
 
-        // Плашка #ID — справа, по вертикальному центру обложки.
+        // Плашка #ID — снизу стека, по горизонтали по центру обложки.
+        let pill_y = start_y + cover_icon_side + gap + name_size + gap + pill_h / 2.0;
         let pill_rect = Rect::from_center_size(
-            Pos2::new(
-                start_x + cover_icon_side + gap + name_w + gap + pill_w / 2.0,
-                center.y,
-            ),
+            Pos2::new(center.x, pill_y),
             Vec2::new(pill_w, pill_h),
         );
         painter.rect_filled(
