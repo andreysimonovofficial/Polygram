@@ -5,87 +5,11 @@
 use crate::app::PolygramApp;
 use polygram_core::types::NodeKind;
 use polygram_canvas::modal;
-use polygram_canvas::{default_icon_for, lucide_by_name, paint_lucide};
+use polygram_canvas::{default_icon_for, paint_lucide};
 use egui::{
     Align2, Color32, FontFamily, FontId, Pos2, Rect, Sense, Vec2, Stroke, StrokeKind,
 };
 use egui_lucide::Lucide;
-
-/// Полный набор иконок для обложки (без дублей).
-/// Каждый вариант Lucide встречается строго один раз.
-const COVER_ICONS: &[(&str, &str)] = &[
-    ("Иконка Процесса", "BookUp2"),
-    ("Иконка Отдела", "GraphHub"),
-    ("Аналитика", "Activity"),
-    ("Финансы", "DollarSign"),
-    ("Цель", "Target"),
-    ("Команда", "Users"),
-    ("Сделки", "ShoppingCart"),
-    ("Договор", "FileText"),
-    ("Заказы", "ShoppingBag"),
-    ("Логистика", "Truck"),
-    ("Маркетинг", "Megaphone"),
-    ("Поддержка", "Headphones"),
-    ("Разработка", "Code"),
-    ("База данных", "Database"),
-    ("Безопасность", "Shield"),
-    ("Операции", "Command"),
-    ("Автоматизация", "Zap"),
-    ("Планирование", "Calendar"),
-    ("SLA и сроки", "Clock"),
-    ("Почта", "Mail"),
-    ("Сайт и веб", "Globe"),
-    ("Архив", "Archive"),
-    ("Приоритет", "Flag"),
-    ("Звонки", "Phone"),
-    ("Коммуникации", "MessageCircle"),
-    ("Доступ", "Key"),
-    ("Теги", "Tag"),
-    ("Слои", "Layers"),
-    ("Продукт", "Box"),
-    ("Контроль качества", "Check"),
-    ("Входящие", "Inbox"),
-    ("Камера", "Camera"),
-    ("Карта", "Map"),
-    ("Кошелёк", "Wallet"),
-    ("Меню", "Menu"),
-    ("Монитор", "Monitor"),
-    ("Музыка", "Music"),
-    ("Облако", "Cloud"),
-    ("Отчёты", "BarChart3"),
-    ("Папка", "Folder"),
-    ("Подпись", "Signature"),
-    ("Поиск", "Search"),
-    ("Презентация", "Presentation"),
-    ("Принтер", "Printer"),
-    ("Профиль", "User"),
-    ("Радио", "Radio"),
-    ("Разделение", "Divide"),
-    ("Радар", "Radar"),
-    ("Рекомендация", "ThumbsUp"),
-    ("Сборка", "GitMerge"),
-    ("Сеть", "Wifi"),
-    ("Сообщение", "MessageCircle"),
-    ("Солнце", "Sun"),
-    ("Спецификация", "FileText"),
-    ("Статистика", "PieChart"),
-    ("Студия", "Studio"),
-    ("Таблица", "Tablet"),
-    ("Телефон", "Phone"),
-    ("Тикет", "Ticket"),
-    ("Токен", "Token"),
-    ("Тренд", "TrendingUp"),
-    ("Уведомление", "Bell"),
-    ("Управление", "Settings"),
-    ("Файл", "File"),
-    ("Фильтр", "Filter"),
-    ("Фото", "Image"),
-    ("Часы", "Clock"),
-    ("Чеклист", "CheckCircle"),
-    ("Штрихкод", "Barcode"),
-    ("Экран", "Tv"),
-    ("Ютуб", "Youtube"),
-];
 
 /// Размер иконки в сетке выбора (пиксели).
 const GRID_ICON_SIZE: f32 = 16.0;
@@ -94,6 +18,12 @@ const GRID_BTN_SIZE: Vec2 = Vec2::new(54.0, 38.0);
 /// Шаг сетки по горизонтали / вертикали (пиксели).
 const GRID_STEP_X: f32 = 60.0;
 const GRID_STEP_Y: f32 = 44.0;
+
+/// Все уникальные иконки Lucide без дублей.
+/// Берём diretamente из `Lucide::ALL` (все 1903 иконки библиотеки).
+fn all_lucide_icons() -> Vec<(String, Lucide)> {
+    Lucide::ALL.iter().copied().map(|icon| (icon.name().to_owned(), icon)).collect()
+}
 
 /// Рисование модального окна «Настроить обложку».
 /// Вертикальный поток: шапка (modal::header) → тело (предпросмотр + поиск + сетка со скроллом) → подвал (modal::footer).
@@ -121,7 +51,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     let mut close_modal = false;
     let mut save_modal = false;
     let mut reset_icon = false;
-    let mut new_icon: Option<String> = None;
+    let mut new_icon: Option<Lucide> = None;
 
     // Центрируем окно по центру экрана (горизонталь + вертикаль).
     let screen_rect = ctx.viewport_rect();
@@ -185,8 +115,15 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
 
                         ui.add_space(12.0);
 
-                        // Сетка иконок.
-                        icon_grid(ui, &app.dialogs.cover_modal_search, &app.dialogs.cover_modal_icon, &mut new_icon);
+                        // Сетка иконок (все уникальные варианты Lucide).
+                        let all_icons = all_lucide_icons();
+                        icon_grid(
+                            ui,
+                            &app.dialogs.cover_modal_search,
+                            &app.dialogs.cover_modal_icon,
+                            &all_icons,
+                            &mut new_icon,
+                        );
                     });
 
                 // === Подвал (внизу) ===
@@ -198,14 +135,14 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
 
     if reset_icon {
         let default_icon = match object_kind {
-            NodeKind::Process => "BookUp2".to_owned(),
-            NodeKind::Department => "GraphHub".to_owned(),
-            _ => "BookUp2".to_owned(),
+            NodeKind::Process => Lucide::BookUp2,
+            NodeKind::Department => Lucide::GraphHub,
+            _ => Lucide::BookUp2,
         };
-        app.dialogs.cover_modal_icon = default_icon;
+        app.dialogs.cover_modal_icon = default_icon.name().to_owned();
     }
     if let Some(icon) = new_icon {
-        app.dialogs.cover_modal_icon = icon;
+        app.dialogs.cover_modal_icon = icon.name().to_owned();
     }
 
     if close_modal {
@@ -232,6 +169,20 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
     let available_width = ui.available_width();
     let card_h = 72.0;
     let card_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(available_width, card_h));
+
+    // Всегда выделяем регионы взаимодействия СНАЧАЛА (корректный порядок ID в egui).
+    let reset_w = 72.0;
+    let reset_h = 30.0;
+    let reset_rect = Rect::from_min_size(
+        Pos2::new(
+            card_rect.max.x - reset_w - 12.0,
+            card_rect.center().y - reset_h / 2.0,
+        ),
+        Vec2::new(reset_w, reset_h),
+    );
+    let reset_response = ui.allocate_rect(reset_rect, Sense::click());
+
+    // Затем рисуем.
     ui.painter().rect_filled(card_rect, 4.0, card_bg);
     ui.painter().rect_stroke(
         card_rect,
@@ -280,18 +231,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
     );
 
     // Кнопка «Сбросить» справа на том же горизонтальном уровне (внутри карточки).
-    let reset_w = 72.0;
-    let reset_h = 30.0;
-    let reset_rect = Rect::from_min_size(
-        Pos2::new(
-            card_rect.max.x - reset_w - 12.0,
-            card_rect.center().y - reset_h / 2.0,
-        ),
-        Vec2::new(reset_w, reset_h),
-    );
-    let reset_hovered = reset_rect.contains(
-        ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
-    );
+    let reset_hovered = reset_response.hovered();
     ui.painter().rect_filled(
         reset_rect,
         4.0,
@@ -314,7 +254,6 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
         FontId::new(12.0, FontFamily::Name("inter_medium".into())),
         Color32::from_rgb(0xD4, 0xD4, 0xD8),
     );
-    let reset_response = ui.allocate_rect(reset_rect, Sense::click());
 
     ui.advance_cursor_after_rect(card_rect);
     ui.add_space(8.0);
@@ -323,12 +262,13 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
 }
 
 /// Сетка иконок с возможностью выбора.
-/// Каждая кнопка получает уникальный ID через ui.allocate_rect (автогенерация).
+/// Каждая иконка — уникальный вариант Lucide (все 1903 из библиотеки).
 fn icon_grid(
     ui: &mut egui::Ui,
     search: &str,
     selected_icon: &str,
-    new_icon: &mut Option<String>,
+    all_icons: &[(String, Lucide)],
+    new_icon: &mut Option<Lucide>,
 ) {
     let container_bg = Color32::from_rgb(0x22, 0x22, 0x22);
     let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
@@ -337,12 +277,11 @@ fn icon_grid(
     let container_width = ui.available_width();
     let container_x = ui.cursor().min.x;
 
-    // Фильтрация иконок по поиску.
+    // Фильтрация иконок по поиску (по kebab-case имени Lucide).
     let filter = search.to_lowercase();
-    let filtered: Vec<(&str, &str)> = COVER_ICONS
+    let filtered: Vec<&(String, Lucide)> = all_icons
         .iter()
-        .copied()
-        .filter(|(label, _)| filter.is_empty() || label.to_lowercase().contains(&filter))
+        .filter(|(name, _)| filter.is_empty() || name.to_lowercase().contains(&filter))
         .collect();
 
     if filtered.is_empty() {
@@ -372,55 +311,65 @@ fn icon_grid(
     let btn_size = GRID_BTN_SIZE;
     let icon_size = GRID_ICON_SIZE;
 
+    // Сначала выделяем все регионы взаимодействия (уникальные ID через allocate_rect).
+    let mut btn_rects: Vec<Rect> = Vec::with_capacity(filtered.len());
     for row in 0..rows {
         for col in 0..max_cols {
             let idx = row * max_cols + col;
             if idx >= filtered.len() {
                 break;
             }
-            let (_label, name) = filtered[idx];
             let btn_x = container_x + col as f32 * step_x + (step_x - btn_size.x) / 2.0;
             let btn_y = grid_rect.min.y + row as f32 * step_y + (step_y - btn_size.y) / 2.0;
             let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
+            btn_rects.push(btn_rect);
+        }
+    }
 
-            let is_selected = name == selected_icon;
-            let hovered = btn_rect.contains(
-                ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
-            );
+    // Регистрируем все интерактивные зоны.
+    let responses: Vec<egui::Response> = btn_rects
+        .iter()
+        .map(|rect| ui.allocate_rect(*rect, Sense::click()))
+        .collect();
 
-            let fill = if is_selected {
-                Color32::from_rgb(0x34, 0x34, 0x34)
-            } else if hovered {
-                Color32::from_rgb(0x28, 0x28, 0x28)
-            } else {
-                input_bg
-            };
-            let border = if is_selected {
-                Color32::WHITE
-            } else {
-                container_border
-            };
-            ui.painter().rect_filled(btn_rect, 2.0, fill);
-            ui.painter().rect_stroke(
-                btn_rect,
-                2.0,
-                Stroke::new(1.0, border),
-                StrokeKind::Middle,
-            );
+    // Затем рисуем все иконки.
+    for (idx, (name, icon)) in filtered.iter().enumerate() {
+        let btn_rect = btn_rects[idx];
+        let response = &responses[idx];
 
-            let icon = lucide_by_name(name);
-            let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
-            let icon_color = if is_selected {
-                Color32::WHITE
-            } else {
-                Color32::from_rgb(0xD4, 0xD4, 0xD8)
-            };
-            paint_lucide(ui, icon_rect, icon, icon_color);
+        let is_selected = icon.name() == selected_icon;
+        let hovered = response.hovered();
 
-            let response = ui.allocate_rect(btn_rect, Sense::click());
-            if response.clicked() {
-                *new_icon = Some(name.to_owned());
-            }
+        let fill = if is_selected {
+            Color32::from_rgb(0x34, 0x34, 0x34)
+        } else if hovered {
+            Color32::from_rgb(0x28, 0x28, 0x28)
+        } else {
+            input_bg
+        };
+        let border = if is_selected {
+            Color32::WHITE
+        } else {
+            container_border
+        };
+        ui.painter().rect_filled(btn_rect, 2.0, fill);
+        ui.painter().rect_stroke(
+            btn_rect,
+            2.0,
+            Stroke::new(1.0, border),
+            StrokeKind::Middle,
+        );
+
+        let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
+        let icon_color = if is_selected {
+            Color32::WHITE
+        } else {
+            Color32::from_rgb(0xD4, 0xD4, 0xD8)
+        };
+        paint_lucide(ui, icon_rect, *icon, icon_color);
+
+        if response.clicked() {
+            *new_icon = Some(*icon);
         }
     }
 
