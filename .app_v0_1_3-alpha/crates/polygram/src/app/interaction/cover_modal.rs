@@ -80,7 +80,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     close_modal = true;
                 }
 
-                ui.add_space(10.0);
+                ui.add_space(6.0);
 
                 // === Тело: карточка предпросмотра + поиск (фиксировано) +
                 // сетка иконок (только она прокручивается) ===
@@ -92,7 +92,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     reset_icon = true;
                 }
 
-                ui.add_space(10.0);
+                ui.add_space(6.0);
 
                 // Строка поиска.
                 modal::input_field(
@@ -109,7 +109,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     },
                 );
 
-                ui.add_space(10.0);
+                ui.add_space(6.0);
 
                 // Сетка иконок (все уникальные варианты Lucide).
                 // Скроллбар применяется исключительно к области сетки кнопок с иконками
