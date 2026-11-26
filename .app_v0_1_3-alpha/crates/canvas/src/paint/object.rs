@@ -118,6 +118,23 @@ pub fn paint_process(
         let cover_icon_rect =
             Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
         paint_lucide(ui, cover_icon_rect, cover_icon, Color32::WHITE);
+
+        // Подпись под иконкой: "{Имя} #{ID}".
+        let signature = format!("'{}' #{}", object.name, object.id);
+        let signature_size = 11.0 * zoom;
+        let signature_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
+        let signature_rect = Rect::from_center_size(
+            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 10.0 * zoom),
+            Vec2::new(cover_icon_side * 1.5, signature_size * 1.5),
+        );
+        painter.text(
+            signature_rect.center(),
+            Align2::CENTER_CENTER,
+            &signature,
+            FontId::new(signature_size, FontFamily::Name("inter_medium".into())),
+            signature_color,
+        );
+
         return ProcessPaintResult {
             total_height,
             add_hotspots: Vec::new(),
