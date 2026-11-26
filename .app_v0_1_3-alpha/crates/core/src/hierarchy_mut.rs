@@ -36,6 +36,7 @@ impl Hierarchy {
             results: Vec::new(),
             entry_ix: None,
             alive: true,
+            icon: String::new(),
         });
         self.children.push(Vec::new());
         self.by_ext_object.insert(ext_id, ix);
@@ -157,6 +158,7 @@ impl Hierarchy {
             results: Vec::new(),
             entry_ix: Some(eix),
             alive: true,
+            icon: String::new(),
         });
         self.children.push(Vec::new());
         self.objects[oix.idx()].children.push(metric_ix);

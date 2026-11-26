@@ -1,14 +1,17 @@
 //! Рисование рамки отдела по CSS спецификации.
 //! Отдел: background #1E1E1E, border #373839, border-radius 8px, padding 8px.
 //! Шапка: высота 80px, иконка graph-hub, шрифт 22px.
+//! Обложка (когда не наведено): фон отдела + центрированная иконка 10 клеток.
 
+use crate::icons::{default_icon_for, paint_lucide};
 use crate::theme::Theme;
-use crate::icons::paint_lucide;
 use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind, Color32};
 use polygram_core::ObjectGeom;
 use egui_lucide::Lucide;
 
 /// Нарисовать рамку отдела по CSS спецификации.
+/// Когда мышь не наведена — отображается обложка (фон + иконка по центру).
+/// Когда наведена — обычный заголовок и содержимое.
 pub fn paint_department_frame(
     painter: &Painter,
     ui: &egui::Ui,
@@ -16,7 +19,7 @@ pub fn paint_department_frame(
     rect_px: Rect,
     zoom: f32,
     theme: &Theme,
-    _is_highlighted: bool,
+    is_hovered: bool,
     process_count: usize,
 ) {
     // CSS значения (масштабируются под zoom).
@@ -26,6 +29,25 @@ pub fn paint_department_frame(
     let icon_size = 16.0 * zoom;
     let padding = 8.0 * zoom;
     let gap = 8.0 * zoom;
+
+    if !is_hovered {
+        // === Обложка отдела ===
+        // Фон полностью перекрывает площадь отдела.
+        painter.rect_filled(rect_px, corner_radius, theme.object_bg);
+        // Контур обложки.
+        painter.rect_stroke(
+            rect_px,
+            corner_radius,
+            Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
+            StrokeKind::Middle,
+        );
+        // Иконка обложки: квадрат 10 клеток, строго по центру, белый цвет.
+        let cover_icon_side = 10.0 * theme.cell_size * zoom;
+        let cover_icon = default_icon_for(object.kind, &object.icon);
+        let cover_icon_rect = Rect::from_center_size(rect_px.center(), Vec2::splat(cover_icon_side));
+        paint_lucide(ui, cover_icon_rect, cover_icon, Color32::WHITE);
+        return;
+    }
 
     // Фон отдела #1E1E1E (всегда, без переопределения при наведении).
     painter.rect_filled(rect_px, corner_radius, Color32::from_rgb(30, 30, 30));

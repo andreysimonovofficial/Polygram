@@ -6,7 +6,7 @@ use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, Stroke
 use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 
-use crate::icons::paint_lucide;
+use crate::icons::{default_icon_for, paint_lucide};
 use crate::paint::constants::{
     CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX,
     PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX,
@@ -98,6 +98,34 @@ pub fn paint_process(
     let total_height = process_total_height(object, dynamic, zoom, card_w);
 
     let card_rect = Rect::from_min_size(Pos2::new(ox, oy), Vec2::new(card_w, total_height));
+
+    // === Обложка процесса (когда не наведено) ===
+    let is_hovered = mouse_pos.map_or(false, |p| card_rect.contains(p));
+    if !is_hovered {
+        // Фон полностью перекрывает площадь процесса.
+        painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));
+        // Контур обложки.
+        let border_width = 1.0 * zoom;
+        painter.rect_stroke(
+            card_rect,
+            process_radius,
+            Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
+            StrokeKind::Middle,
+        );
+        // Иконка обложки: квадрат 10 клеток, строго по центру, белый цвет.
+        let cover_icon_side = 10.0 * (theme.cell_size * zoom);
+        let cover_icon = default_icon_for(object.kind, &object.icon);
+        let cover_icon_rect =
+            Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
+        paint_lucide(ui, cover_icon_rect, cover_icon, Color32::WHITE);
+        return ProcessPaintResult {
+            total_height,
+            add_hotspots: Vec::new(),
+            menu_hotspots: Vec::new(),
+            drag_hotspots: Vec::new(),
+            header_hotspots: Vec::new(),
+        };
+    }
 
     // Фон карточки процесса #202020.
     painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));

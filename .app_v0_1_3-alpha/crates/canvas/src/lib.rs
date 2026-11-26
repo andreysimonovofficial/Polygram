@@ -8,7 +8,7 @@ pub mod theme;
 pub mod modal;
 pub mod routing;
 
-pub use icons::paint_lucide;
+pub use icons::{paint_lucide, default_icon_for, lucide_by_name};
 pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
 pub use paint_department::paint_department_frame;
 pub use theme::{status_dot_color, status_label_ru, Theme};
@@ -226,17 +226,18 @@ impl Canvas {
         let id = allocate_id(&existing_ids);
         let name = name.into();
         let ix = self.objects.len() as u32;
-        self.objects.push(ObjectGeom {
-            ix,
-            id: id.clone(),
-            name,
-            kind: NodeKind::Department,
-            rect: polygram_core::layout::Rect::new(cell_x, cell_y, 30, 30),
-            direction: None,
-            requests: Vec::new(),
-            results: Vec::new(),
-            parent: None,
-        });
+            self.objects.push(ObjectGeom {
+                ix,
+                id: id.clone(),
+                name,
+                kind: NodeKind::Department,
+                rect: polygram_core::layout::Rect::new(cell_x, cell_y, 30, 30),
+                direction: None,
+                requests: Vec::new(),
+                results: Vec::new(),
+                parent: None,
+                icon: String::new(),
+            });
         id
     }
 
@@ -246,17 +247,18 @@ impl Canvas {
         let id = allocate_id(&existing_ids);
         let name = name.into();
         let ix = self.objects.len() as u32;
-        self.objects.push(ObjectGeom {
-            ix,
-            id: id.clone(),
-            name,
-            kind: NodeKind::Process,
-            rect: polygram_core::layout::Rect::new(cell_x, cell_y, 16, 16),
-            direction: None,
-            requests: Vec::new(),
-            results: Vec::new(),
-            parent: None,
-        });
+            self.objects.push(ObjectGeom {
+                ix,
+                id: id.clone(),
+                name,
+                kind: NodeKind::Process,
+                rect: polygram_core::layout::Rect::new(cell_x, cell_y, 16, 16),
+                direction: None,
+                requests: Vec::new(),
+                results: Vec::new(),
+                parent: None,
+                icon: String::new(),
+            });
         id
     }
 
@@ -334,7 +336,7 @@ impl Canvas {
                 continue;
             }
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
-            let is_highlighted = is_selected || pointer_pos.map_or(false, |p| rect_px.contains(p));
+            let is_hovered = pointer_pos.map_or(false, |p| rect_px.contains(p));
             // Подсчитать процессы внутри отдела.
             let process_count = self.objects.iter()
                 .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
@@ -346,7 +348,7 @@ impl Canvas {
                 rect_px,
                 zoom,
                 &self.theme,
-                is_highlighted,
+                is_hovered,
                 process_count,
             );
         }

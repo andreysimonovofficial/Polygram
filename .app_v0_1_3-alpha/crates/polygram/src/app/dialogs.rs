@@ -54,6 +54,11 @@ pub struct DialogState {
     pub delete_confirm: Option<Vec<String>>,
     pub show_metrics_screen: bool,
     pub metrics_target_object: Option<String>,
+    /// Состояние модального окна «Настроить обложку».
+    pub cover_modal_open: bool,
+    pub cover_modal_object: Option<String>,
+    pub cover_modal_icon: String,
+    pub cover_modal_search: String,
 }
 
 impl DialogState {
@@ -85,6 +90,10 @@ impl DialogState {
             delete_confirm: None,
             show_metrics_screen: false,
             metrics_target_object: None,
+            cover_modal_open: false,
+            cover_modal_object: None,
+            cover_modal_icon: String::new(),
+            cover_modal_search: String::new(),
         }
     }
 
@@ -122,6 +131,13 @@ impl DialogState {
         self.container_menu_api_expanded = None;
         self.show_metrics_screen = false;
         self.metrics_target_object = None;
+    }
+
+    pub fn reset_cover_modal(&mut self) {
+        self.cover_modal_open = false;
+        self.cover_modal_object = None;
+        self.cover_modal_icon.clear();
+        self.cover_modal_search.clear();
     }
 
     pub fn can_add_metric(&self, object_id: &str, dir: Direction, geometry: &polygram_core::Geometry) -> bool {

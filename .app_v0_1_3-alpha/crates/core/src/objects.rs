@@ -16,6 +16,8 @@ pub struct ObjectData {
     pub requests: Vec<EntryIx>,
     pub results: Vec<EntryIx>,
     pub alive: bool,
+    /// Имя иконки Lucide для обложки объекта (пусто = иконка по умолчанию для типа).
+    pub icon: String,
 }
 
 /// Команды объектов: AddObject, RemoveObject, RenameObject, SetObjectParent.
@@ -294,5 +296,23 @@ pub fn handle_set_object_parent(
             gx: engine.layout.rect_of(object_ix).x,
             gy: engine.layout.rect_of(object_ix).y,
         });
+    Ok(Applied::default())
+}
+
+/// Установить иконку обложки для объекта (Процесс или Отдел).
+pub fn handle_set_object_icon(engine: &mut Engine, object: &str, icon: String) -> Result<Applied> {
+    let object_ix = engine.find_object(object)?;
+    let o = engine.hier.object(object_ix);
+    if !matches!(o.kind, NodeKind::Process | NodeKind::Department) {
+        return Err(crate::error::EngineError::ObjectNotFound(
+            "иконку обложки можно назначить только Процессу или Отделу".to_owned(),
+        ));
+    }
+    engine.hier.objects[object_ix.idx()].icon = icon;
+    engine.pending.push(crate::event::EventKind::ObjectMoved {
+        object: object_ix.0,
+        gx: engine.layout.rect_of(object_ix).x,
+        gy: engine.layout.rect_of(object_ix).y,
+    });
     Ok(Applied::default())
 }

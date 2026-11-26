@@ -2,6 +2,7 @@
 
 pub mod add_metric;
 pub mod container_menu;
+pub mod cover_modal;
 pub mod place_object;
 pub mod rename;
 
@@ -29,11 +30,13 @@ pub fn context_menu(
     if let Some(ref object_id) = app.right_click_object {
         if let Some(obj) = app.canvas.objects.iter().find(|o| o.id == *object_id) {
             if obj.kind == polygram_core::types::NodeKind::Process {
+                items.push(("Настроить иконку", egui_lucide::Lucide::Image));
                 items.push(("Добавить в Запрос", egui_lucide::Lucide::Plus));
                 items.push(("Добавить в Результат", egui_lucide::Lucide::Plus));
                 items.push(("Показатели", egui_lucide::Lucide::Settings));
                 items.push(("Переименовать", egui_lucide::Lucide::Pencil));
-            } else {
+            } else if obj.kind == polygram_core::types::NodeKind::Department {
+                items.push(("Настроить иконку", egui_lucide::Lucide::Image));
                 items.push(("Переименовать", egui_lucide::Lucide::Pencil));
             }
         }
@@ -42,6 +45,7 @@ pub fn context_menu(
     let mut create_department = false;
     let mut create_process = false;
     let mut rename = false;
+    let mut open_cover_modal = false;
 
     let mut item_rects: Vec<egui::Rect> = Vec::with_capacity(items.len());
     let mut need_clamp = false;
@@ -159,6 +163,8 @@ pub fn context_menu(
                         add_metric_result = true;
                     } else if *item == "Показатели" {
                         open_metrics = true;
+                    } else if *item == "Настроить иконку" {
+                        open_cover_modal = true;
                     }
                 }
 
@@ -261,6 +267,18 @@ pub fn context_menu(
         if let Some(id) = &app.right_click_object {
             app.dialogs.container_menu_target = Some(id.clone());
             container_menu::handle_container_menu_dialog(app, published, theme);
+        }
+        app.right_click = None;
+    }
+
+    if open_cover_modal {
+        if let Some(id) = &app.right_click_object {
+            let obj = app.canvas.objects.iter().find(|o| o.id == *id);
+            if matches!(obj.map(|o| o.kind), Some(polygram_core::types::NodeKind::Process) | Some(polygram_core::types::NodeKind::Department)) {
+                app.dialogs.cover_modal_open = true;
+                app.dialogs.cover_modal_object = Some(id.clone());
+                app.dialogs.cover_modal_icon = obj.map(|o| o.icon.clone()).unwrap_or_default();
+            }
         }
         app.right_click = None;
     }

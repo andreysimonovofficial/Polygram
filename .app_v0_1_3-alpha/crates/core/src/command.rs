@@ -36,6 +36,8 @@ pub enum Command {
     MoveObject { object: String, at: [i32; 2] },
     SetObjectParent { object: String, #[serde(default)] parent: Option<String> },
 
+    SetObjectIcon { object: String, icon: String },
+
     AddMetricDef {
         #[serde(default)]
         id: Option<String>,

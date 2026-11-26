@@ -24,6 +24,8 @@ pub struct ObjectGeom {
     pub requests: Vec<EntryGeom>,
     pub results: Vec<EntryGeom>,
     pub parent: Option<String>,
+    /// Имя иконки Lucide для обложки (пусто = иконка по умолчанию для типа объекта).
+    pub icon: String,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

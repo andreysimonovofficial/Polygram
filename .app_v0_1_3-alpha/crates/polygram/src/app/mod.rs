@@ -196,6 +196,7 @@ impl eframe::App for PolygramApp {
         interaction::rename_dialog(self, ui.ctx());
         interaction::rename::inline_rename_editor(self, ui.ctx(), &published);
         interaction::place_object::handle_place_object_confirm(self, ui.ctx(), &published);
+        interaction::cover_modal::render_cover_modal(self, ui.ctx());
 
         // request_repaint() НЕ вызывается безусловно каждый кадр.
         // Вызывается только при реальном изменении состояния:

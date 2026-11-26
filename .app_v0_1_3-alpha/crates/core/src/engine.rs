@@ -283,6 +283,7 @@ impl Engine {
                     requests,
                     results,
                     parent: o.parent.map(|p| self.hier.object(p).id.clone()),
+                    icon: o.icon.clone(),
                 }
             })
             .collect();
