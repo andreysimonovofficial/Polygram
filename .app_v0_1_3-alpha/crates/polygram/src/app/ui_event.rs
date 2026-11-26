@@ -78,13 +78,8 @@ impl PolygramApp {
             if let Some(pos) = canvas_response.interact_pointer_pos() {
                 self.selection_box_start = None;
                 self.right_click = Some(pos);
-                self.right_click_object = self.object_under(pos);
-                if self.right_click_object.is_none() {
-                    // Проверяем, не попали ли в процесс (вне отделов).
-                    if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
-                        self.right_click_object = Some(obj_id);
-                    }
-                }
+                self.right_click_object = self.process_under(pos, &published.dynamic)
+                    .or_else(|| self.object_under(pos));
                 self.menu_just_opened = true;
             }
         }
