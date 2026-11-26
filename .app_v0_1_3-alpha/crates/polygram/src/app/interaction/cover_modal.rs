@@ -56,6 +56,8 @@ const GRID_STEP_X: f32 = 60.0;
 const GRID_STEP_Y: f32 = 44.0;
 
 /// Рисование модального окна «Настроить обложку».
+/// Элементы выстраиваются строго по вертикали:
+/// шапка → карточка предпросмотра → строка поиска + сетка иконок (со скроллом) → подвал.
 pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     if !app.dialogs.cover_modal_open {
         return;
@@ -82,7 +84,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     let mut reset_icon = false;
     let mut new_icon: Option<String> = None;
 
-    // Центрируем окно по центру экрана (по горизонтали и вертикали).
+    // Центрируем окно по центру экрана (горизонталь + вертикаль).
     let screen_rect = ctx.viewport_rect();
     let win_w = 540.0;
     let win_h = 441.0;
@@ -97,9 +99,9 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
         .fixed_size([win_w, win_h])
         .show(ctx, |ui| {
             modal::modal_frame().show(ui, |ui| {
-                // === Шапка ===
-                // Горизонтальная строка с разнесением по краям:
-                // слева — заголовок + подзаголовок, справа — кнопка закрытия.
+                ui.set_width(500.0);
+
+                // === Шапка (вверху) ===
                 {
                     let header_rect = ui.available_rect_before_wrap();
                     ui.allocate_rect(header_rect, Sense::hover());
@@ -129,36 +131,34 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     });
                 }
 
-                ui.separator();
+                ui.add_space(12.0);
 
-                // === Тело (с прокруткой) ===
+                // === Карточка предпросмотра ===
+                let preview_reset = preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
+                if preview_reset {
+                    reset_icon = true;
+                }
+
+                ui.add_space(12.0);
+
+                // === Блок выбора иконки (строка поиска + сетка со скроллом) ===
+                let body_height = 240.0;
+
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
+                    .max_height(body_height)
                     .show(ui, |ui| {
                         ui.set_width(500.0);
-
-                        // --- Блок предпросмотра (горизонтальная карточка) ---
-                        preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
-                        if ui.button("Сбросить").clicked() {
-                            reset_icon = true;
-                        }
-
-                        ui.separator();
-
-                        // --- Блок выбора иконки ---
-                        selection_block(
-                            ui,
-                            &mut app.dialogs.cover_modal_search,
-                            &app.dialogs.cover_modal_icon,
-                            &mut new_icon,
-                        );
+                        search_input(ui, &mut app.dialogs.cover_modal_search);
+                        ui.add_space(12.0);
+                        icon_grid(ui, &app.dialogs.cover_modal_search, &app.dialogs.cover_modal_icon, &mut new_icon);
                     });
-
-                // === Подвал ===
-                if modal::footer(ui) {
-                    save_modal = true;
-                }
             });
+
+            // === Подвал (внизу) ===
+            if modal::footer(ui) {
+                save_modal = true;
+            }
         });
 
     if reset_icon {
@@ -187,9 +187,56 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     }
 }
 
-/// Блок предпросмотра обложки: горизонтальная карточка.
+/// Строка поиска иконки: поле 32px, скругление 2px, лупа + текст по вертикальному центру.
+fn search_input(ui: &mut egui::Ui, search: &mut String) {
+    let container_width = ui.available_width();
+    let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
+    let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
+
+    let search_rect = Rect::from_min_size(
+        ui.cursor().min,
+        Vec2::new(container_width, 32.0),
+    );
+    ui.painter().rect_filled(search_rect, 2.0, input_bg);
+    ui.painter().rect_stroke(
+        search_rect,
+        2.0,
+        Stroke::new(1.0, container_border),
+        StrokeKind::Middle,
+    );
+    // Лупа слева.
+    let search_icon_rect = Rect::from_center_size(
+        Pos2::new(search_rect.min.x + 12.0, search_rect.center().y),
+        Vec2::splat(14.0),
+    );
+    paint_lucide(ui, search_icon_rect, Lucide::Search, Color32::from_rgb(0x71, 0x71, 0x7A));
+    // Текст-подсказка.
+    let search_text_x = search_icon_rect.max.x + 10.0;
+    ui.painter().text(
+        Pos2::new(search_text_x, search_rect.center().y),
+        Align2::LEFT_CENTER,
+        "Поиск иконки",
+        FontId::new(13.0, FontFamily::Name("inter_medium".into())),
+        Color32::from_rgb(0x71, 0x71, 0x7A),
+    );
+    // Реальное поле ввода поверх всего.
+    egui::TextEdit::singleline(search)
+        .font(FontId::new(13.0, FontFamily::Name("inter_medium".into())))
+        .text_color(Color32::from_rgb(0x71, 0x71, 0x7A))
+        .hint_text("")
+        .frame(
+            egui::Frame::new()
+                .fill(Color32::TRANSPARENT)
+                .stroke(egui::Stroke::new(0.0, Color32::TRANSPARENT)),
+        )
+        .show(ui);
+    ui.advance_cursor_after_rect(search_rect);
+}
+
+/// Карточка предпросмотра обложки: горизонтальная карточка.
 /// Слева — иконка в рамке, в центре — текстовый блок, справа — кнопка «Сбросить» на том же уровне.
-fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
+/// Возвращает `true`, если нажата кнопка «Сбросить».
+fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> bool {
     let card_bg = Color32::from_rgb(0x22, 0x22, 0x22);
     let card_border = Color32::from_rgb(0x37, 0x38, 0x39);
 
@@ -243,7 +290,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
         Color32::from_rgb(0xA1, 0xA1, 0xAA),
     );
 
-    // Кнопка «Сбросить» справа на том же горизонтальном уровне.
+    // Кнопка «Сбросить» справа на том же горизонтальном уровне (внутри карточки).
     let reset_w = 72.0;
     let reset_h = 30.0;
     let reset_rect = Rect::from_min_size(
@@ -278,15 +325,18 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
         FontId::new(12.0, FontFamily::Name("inter_medium".into())),
         Color32::from_rgb(0xD4, 0xD4, 0xD8),
     );
+    let reset_response = ui.interact(reset_rect, ui.scope_id().with("cover_reset"), Sense::click());
 
     ui.advance_cursor_after_rect(card_rect);
-    ui.add_space(12.0);
+    ui.add_space(8.0);
+
+    reset_response.clicked()
 }
 
-/// Блок выбора иконки: строка поиска + сетка иконок.
-fn selection_block(
+/// Сетка иконок с возможностью выбора.
+fn icon_grid(
     ui: &mut egui::Ui,
-    search: &mut String,
+    search: &str,
     selected_icon: &str,
     new_icon: &mut Option<String>,
 ) {
@@ -297,49 +347,7 @@ fn selection_block(
     let container_width = ui.available_width();
     let container_x = ui.cursor().min.x;
 
-    // Строка поиска: высота 32px, скругление 2px, лупа + текст на одной линии по вертикальному центру.
-    let search_rect = Rect::from_min_size(
-        ui.cursor().min,
-        Vec2::new(container_width, 32.0),
-    );
-    ui.painter().rect_filled(search_rect, 2.0, input_bg);
-    ui.painter().rect_stroke(
-        search_rect,
-        2.0,
-        Stroke::new(1.0, container_border),
-        StrokeKind::Middle,
-    );
-    // Лупа слева.
-    let search_icon_rect = Rect::from_center_size(
-        Pos2::new(search_rect.min.x + 12.0, search_rect.center().y),
-        Vec2::splat(14.0),
-    );
-    paint_lucide(ui, search_icon_rect, Lucide::Search, Color32::from_rgb(0x71, 0x71, 0x7A));
-    // Текст-подсказка справа от лупы.
-    let search_text_x = search_icon_rect.max.x + 10.0;
-    ui.painter().text(
-        Pos2::new(search_text_x, search_rect.center().y),
-        Align2::LEFT_CENTER,
-        "Поиск иконки",
-        FontId::new(13.0, FontFamily::Name("inter_medium".into())),
-        Color32::from_rgb(0x71, 0x71, 0x7A),
-    );
-    // Реальное поле ввода поверх всего.
-    egui::TextEdit::singleline(search)
-        .font(FontId::new(13.0, FontFamily::Name("inter_medium".into())))
-        .text_color(Color32::from_rgb(0x71, 0x71, 0x7A))
-        .hint_text("")
-        .frame(
-            egui::Frame::new()
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::new(0.0, Color32::TRANSPARENT)),
-        )
-        .show(ui);
-    ui.advance_cursor_after_rect(search_rect);
-
-    ui.add_space(12.0);
-
-    // Сетка иконок.
+    // Фильтрация иконок по поиску.
     let filter = search.to_lowercase();
     let filtered: Vec<(&str, &str)> = COVER_ICONS
         .iter()
@@ -350,101 +358,88 @@ fn selection_block(
     if filtered.is_empty() {
         ui.label("Найдено: 0");
         ui.add_space(8.0);
-    } else {
-        let step_x = GRID_STEP_X;
-        let step_y = GRID_STEP_Y;
-        let max_cols = ((container_width / step_x).floor() as usize).max(1);
-        let rows = (filtered.len() + max_cols - 1) / max_cols;
-        let grid_h = rows as f32 * step_y;
+        return;
+    }
 
-        let grid_rect = Rect::from_min_size(
-            Pos2::new(container_x, ui.cursor().min.y),
-            Vec2::new(container_width, grid_h),
-        );
-        ui.painter().rect_filled(grid_rect, 2.0, container_bg);
-        ui.painter().rect_stroke(
-            grid_rect,
-            2.0,
-            Stroke::new(1.0, container_border),
-            StrokeKind::Middle,
-        );
+    let step_x = GRID_STEP_X;
+    let step_y = GRID_STEP_Y;
+    let max_cols = ((container_width / step_x).floor() as usize).max(1);
+    let rows = (filtered.len() + max_cols - 1) / max_cols;
+    let grid_h = rows as f32 * step_y;
 
-        let btn_size = GRID_BTN_SIZE;
-        let icon_size = GRID_ICON_SIZE;
+    let grid_rect = Rect::from_min_size(
+        Pos2::new(container_x, ui.cursor().min.y),
+        Vec2::new(container_width, grid_h),
+    );
+    ui.painter().rect_filled(grid_rect, 2.0, container_bg);
+    ui.painter().rect_stroke(
+        grid_rect,
+        2.0,
+        Stroke::new(1.0, container_border),
+        StrokeKind::Middle,
+    );
 
-        // Найдём индекс выбранной иконки для автопрокрутки.
-        let selected_idx = filtered.iter().position(|(_, n)| *n == selected_icon);
+    let btn_size = GRID_BTN_SIZE;
+    let icon_size = GRID_ICON_SIZE;
 
-        for row in 0..rows {
-            for col in 0..max_cols {
-                let idx = row * max_cols + col;
-                if idx >= filtered.len() {
-                    break;
-                }
-                let (_label, name) = filtered[idx];
-                let btn_x = container_x + col as f32 * step_x + (step_x - btn_size.x) / 2.0;
-                let btn_y = grid_rect.min.y + row as f32 * step_y + (step_y - btn_size.y) / 2.0;
-                let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
-
-                let is_selected = name == selected_icon;
-                let hovered = btn_rect.contains(
-                    ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
-                );
-
-                let fill = if is_selected {
-                    Color32::from_rgb(0x34, 0x34, 0x34)
-                } else if hovered {
-                    Color32::from_rgb(0x28, 0x28, 0x28)
-                } else {
-                    input_bg
-                };
-                let border = if is_selected {
-                    Color32::WHITE
-                } else {
-                    container_border
-                };
-                ui.painter().rect_filled(btn_rect, 2.0, fill);
-                ui.painter().rect_stroke(
-                    btn_rect,
-                    2.0,
-                    Stroke::new(1.0, border),
-                    StrokeKind::Middle,
-                );
-
-                let icon = lucide_by_name(name);
-                let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
-                let icon_color = if is_selected {
-                    Color32::WHITE
-                } else {
-                    Color32::from_rgb(0xD4, 0xD4, 0xD8)
-                };
-                paint_lucide(ui, icon_rect, icon, icon_color);
-
-                let response = ui.interact(
-                    btn_rect,
-                    ui.scope_id().with(name),
-                    Sense::click(),
-                );
-                if response.clicked() {
-                    *new_icon = Some(name.to_owned());
-                }
+    for row in 0..rows {
+        for col in 0..max_cols {
+            let idx = row * max_cols + col;
+            if idx >= filtered.len() {
+                break;
             }
-        }
+            let (_label, name) = filtered[idx];
+            let btn_x = container_x + col as f32 * step_x + (step_x - btn_size.x) / 2.0;
+            let btn_y = grid_rect.min.y + row as f32 * step_y + (step_y - btn_size.y) / 2.0;
+            let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
 
-        ui.advance_cursor_after_rect(Rect::from_min_size(
-            Pos2::new(container_x, ui.cursor().min.y),
-            Vec2::new(container_width, grid_h),
-        ));
+            let is_selected = name == selected_icon;
+            let hovered = btn_rect.contains(
+                ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
+            );
 
-        // Автопрокрутка к выбранной иконке при открытии модального окна.
-        if let Some(idx) = selected_idx {
-            let row = idx / max_cols;
-            let target_y = grid_rect.min.y + row as f32 * step_y;
-            let cursor_y = ui.cursor().min.y;
-            // Если выбранная иконка за пределами видимой области — прокручиваем.
-            if target_y < cursor_y || target_y > cursor_y + 400.0 {
-                ui.ctx().request_repaint();
+            let fill = if is_selected {
+                Color32::from_rgb(0x34, 0x34, 0x34)
+            } else if hovered {
+                Color32::from_rgb(0x28, 0x28, 0x28)
+            } else {
+                input_bg
+            };
+            let border = if is_selected {
+                Color32::WHITE
+            } else {
+                container_border
+            };
+            ui.painter().rect_filled(btn_rect, 2.0, fill);
+            ui.painter().rect_stroke(
+                btn_rect,
+                2.0,
+                Stroke::new(1.0, border),
+                StrokeKind::Middle,
+            );
+
+            let icon = lucide_by_name(name);
+            let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
+            let icon_color = if is_selected {
+                Color32::WHITE
+            } else {
+                Color32::from_rgb(0xD4, 0xD4, 0xD8)
+            };
+            paint_lucide(ui, icon_rect, icon, icon_color);
+
+            let response = ui.interact(
+                btn_rect,
+                ui.scope_id().with(name),
+                Sense::click(),
+            );
+            if response.clicked() {
+                *new_icon = Some(name.to_owned());
             }
         }
     }
+
+    ui.advance_cursor_after_rect(Rect::from_min_size(
+        Pos2::new(container_x, ui.cursor().min.y),
+        Vec2::new(container_width, grid_h),
+    ));
 }
