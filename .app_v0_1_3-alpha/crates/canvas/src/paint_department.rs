@@ -42,18 +42,9 @@ pub fn paint_department_frame(
             StrokeKind::Middle,
         );
         // Масштабирование содержимого обложки при отдалении камеры (RTS-принцип):
-        // при zoom < 1.0 содержимое увеличивается, чтобы сохранить размер на экране,
-        // но не выходит за границы обложки с защитным отступом.
-        let cover_scale = {
-            let base_side = 10.0 * theme.cell_size * zoom;
-            let padding = 8.0;
-            let max_side = rect_px.width().min(rect_px.height()) - 2.0 * padding;
-            if zoom < 1.0 {
-                (1.0 / zoom).min(max_side / base_side).max(1.0)
-            } else {
-                1.0
-            }
-        };
+        // при zoom < 1.0 содержимое увеличивается, чтобы остаться читабельным издалека.
+        // Содержимое не ограничено рамкой карточки объекта и может выходить за её пределы.
+        let cover_scale = if zoom < 1.0 { 1.0 / zoom } else { 1.0 };
         // Иконка обложки: 10 клеток, строго по центру, белый цвет.
         let cover_icon_side = 10.0 * theme.cell_size * zoom * cover_scale;
         let cover_icon = default_icon_for(object.kind, &object.icon);
