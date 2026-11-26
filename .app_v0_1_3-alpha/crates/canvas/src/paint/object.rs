@@ -112,12 +112,8 @@ pub fn paint_process(
                 Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
                 StrokeKind::Middle,
             );
-            // Масштабирование содержимого обложки при отдалении камеры (RTS-принцип):
-            // при zoom < 1.0 содержимое увеличивается, чтобы остаться читабельным издалека.
-            // Содержимое не ограничено рамкой карточки объекта и может выходить за её пределы.
-            let cover_scale = if zoom < 1.0 { 1.0 / zoom } else { 1.0 };
             // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
-            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * cover_scale;
+            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom);
             let cover_icon = default_icon_for(object.kind, &object.icon);
             let center = card_rect.center();
 
@@ -125,16 +121,16 @@ pub fn paint_process(
             // центрируется относительно центра обложки.
             let name_sig = format!("{}", object.name);
             let id_sig = format!("#{}", object.id);
-            let name_size = 13.0 * zoom * cover_scale;
-            let id_size = 11.0 * zoom * cover_scale;
+            let name_size = 13.0 * zoom;
+            let id_size = 11.0 * zoom;
             let name_color = Color32::WHITE;
             let id_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
-            let gap = 8.0 * zoom * cover_scale;
+            let gap = 8.0 * zoom;
 
             let name_font = FontId::new(name_size, FontFamily::Name("inter_semibold".into()));
             let id_font = FontId::new(id_size, FontFamily::Name("inter_medium".into()));
             let pill_h = id_size * 1.4;
-            let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom * cover_scale;
+            let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom;
             let pill_w = pill_w.max(id_size * 2.0);
 
             let stack_h = cover_icon_side + gap + name_size + gap + pill_h;
@@ -165,13 +161,13 @@ pub fn paint_process(
             );
             painter.rect_filled(
                 pill_rect,
-                2.0 * zoom * cover_scale,
+                2.0 * zoom,
                 Color32::from_rgb(0x25, 0x25, 0x25),
             );
             painter.rect_stroke(
                 pill_rect,
-                2.0 * zoom * cover_scale,
-                Stroke::new(1.0 * zoom * cover_scale, Color32::from_rgb(0x37, 0x38, 0x39)),
+                2.0 * zoom,
+                Stroke::new(1.0 * zoom, Color32::from_rgb(0x37, 0x38, 0x39)),
                 StrokeKind::Middle,
             );
             painter.text(
