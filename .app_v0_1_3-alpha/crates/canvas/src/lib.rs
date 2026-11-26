@@ -6,13 +6,14 @@ pub mod paint;
 mod paint_department;
 pub mod theme;
 pub mod modal;
+pub mod routing;
 
 pub use icons::paint_lucide;
 pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
 pub use paint_department::paint_department_frame;
 pub use theme::{status_dot_color, status_label_ru, Theme};
 pub use polygram_core::types::{Direction, NodeKind, StatusCode};
-pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
+pub use polygram_core::geometry::{EdgeGeom, EntryGeom, ObjectGeom};
 
 use std::collections::HashSet;
 
@@ -105,6 +106,10 @@ pub struct Canvas {
     pub cell_size: f32,
     /// Objects on the canvas (processes and departments).
     pub objects: Vec<ObjectGeom>,
+    /// Связи между показателями (ключи записей). Линии строятся из них и положения карточек.
+    pub edges: Vec<EdgeGeom>,
+    /// Кэш маршрутов линий связи (не сериализуется).
+    edge_layer: routing::EdgeLayer,
     /// Горячие зоны добавления показателя (id объекта, направление, экранный rect).
     pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
     /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
@@ -129,6 +134,8 @@ impl Canvas {
             camera: Camera::new(),
             cell_size: 16.0,
             objects: Vec::new(),
+            edges: Vec::new(),
+            edge_layer: routing::EdgeLayer::new(),
             add_metric_hotspots: Vec::new(),
             container_menu_hotspots: Vec::new(),
             container_header_hotspots: Vec::new(),
@@ -383,6 +390,20 @@ impl Canvas {
             self.drag_metric_hotspots.extend(result.drag_hotspots);
             self.container_header_hotspots.extend(result.header_hotspots);
         }
+
+        // Линии связи рисуются поверх карточек.
+        paint::edge::paint_edges(
+            painter,
+            clip_rect,
+            &self.objects,
+            &self.edges,
+            &mut self.edge_layer,
+            dynamic,
+            &self.theme,
+            &self.camera,
+            self.cell_size,
+            drag_visual,
+        );
     }
 
     /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.

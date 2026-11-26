@@ -62,6 +62,10 @@ pub struct Theme {
     pub text_muted: Color32,
     /// Радиус порта точки сцепления.
     pub port_radius: f32,
+    /// Толщина линии связи (пиксели при zoom = 1).
+    pub edge_width: f32,
+    /// Радиус скругления углов линии связи (пиксели при zoom = 1); 0 — острые углы.
+    pub line_corner_radius: f32,
 
     // ========== Статусы ==========
     /// Цвет точки статуса «Ок» (зелёный).
@@ -113,6 +117,8 @@ impl Theme {
             text: Color32::from_rgb(230, 230, 235),
             text_muted: Color32::from_rgb(150, 150, 160),
             port_radius: 3.0,
+            edge_width: 1.5,
+            line_corner_radius: 0.0,
 
             status_ok: Color32::from_rgb(76, 175, 80),
             status_warning: Color32::from_rgb(255, 152, 0),

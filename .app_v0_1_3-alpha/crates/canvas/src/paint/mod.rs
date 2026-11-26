@@ -5,9 +5,11 @@
 //! - `row.rs` — одна строка показателя, строка добавления.
 //! - `container.rs` — заголовок контейнера показателей.
 //! - `object.rs` — объект "Процесс" и пунктирная рамка.
+//! - `edge.rs` — линии связи (цвет, скругление, отсечение).
 
 pub mod container;
 pub mod constants;
+pub mod edge;
 pub mod object;
 pub mod row;
 pub mod status;

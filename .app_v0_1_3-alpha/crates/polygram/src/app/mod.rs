@@ -131,6 +131,7 @@ impl PolygramApp {
         let mut geometry = self.engine.geometry();
         // Отдел не имеет фиксированного размера: рамка обтягивается под детей.
         crate::app::departments::fit_departments_to_children(&mut geometry, None);
+        self.canvas.edges = geometry.edges;
         self.canvas.objects = geometry.objects;
         self.cached_geometry = None;
     }

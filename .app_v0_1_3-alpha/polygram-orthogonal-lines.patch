@@ -1,0 +1,2132 @@
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/lib.rs b/crates/canvas/src/lib.rs
+--- a/crates/canvas/src/lib.rs	2026-11-25 09:39:22.446304507 +0000
++++ b/crates/canvas/src/lib.rs	2026-11-25 09:17:34.000000000 +0000
+@@ -6,13 +6,14 @@
+ mod paint_department;
+ pub mod theme;
+ pub mod modal;
++pub mod routing;
+ 
+ pub use icons::paint_lucide;
+ pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
+ pub use paint_department::paint_department_frame;
+ pub use theme::{status_dot_color, status_label_ru, Theme};
+ pub use polygram_core::types::{Direction, NodeKind, StatusCode};
+-pub use polygram_core::geometry::{EntryGeom, ObjectGeom};
++pub use polygram_core::geometry::{EdgeGeom, EntryGeom, ObjectGeom};
+ 
+ use std::collections::HashSet;
+ 
+@@ -105,6 +106,10 @@
+     pub cell_size: f32,
+     /// Objects on the canvas (processes and departments).
+     pub objects: Vec<ObjectGeom>,
++    /// Связи между показателями (ключи записей). Линии строятся из них и положения карточек.
++    pub edges: Vec<EdgeGeom>,
++    /// Кэш маршрутов линий связи (не сериализуется).
++    edge_layer: routing::EdgeLayer,
+     /// Горячие зоны добавления показателя (id объекта, направление, экранный rect).
+     pub add_metric_hotspots: Vec<(String, Direction, Rect)>,
+     /// Горячие зоны кнопки меню контейнера (id объекта, направление, экранный rect кнопки ≡).
+@@ -129,6 +134,8 @@
+             camera: Camera::new(),
+             cell_size: 16.0,
+             objects: Vec::new(),
++            edges: Vec::new(),
++            edge_layer: routing::EdgeLayer::new(),
+             add_metric_hotspots: Vec::new(),
+             container_menu_hotspots: Vec::new(),
+             container_header_hotspots: Vec::new(),
+@@ -383,6 +390,20 @@
+             self.drag_metric_hotspots.extend(result.drag_hotspots);
+             self.container_header_hotspots.extend(result.header_hotspots);
+         }
++
++        // Линии связи рисуются поверх карточек.
++        paint::edge::paint_edges(
++            painter,
++            clip_rect,
++            &self.objects,
++            &self.edges,
++            &mut self.edge_layer,
++            dynamic,
++            &self.theme,
++            &self.camera,
++            self.cell_size,
++            drag_visual,
++        );
+     }
+ 
+     /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/paint/constants.rs b/crates/canvas/src/paint/constants.rs
+--- a/crates/canvas/src/paint/constants.rs	2026-11-25 09:39:22.446600903 +0000
++++ b/crates/canvas/src/paint/constants.rs	2026-11-25 09:16:53.000000000 +0000
+@@ -40,3 +40,8 @@
+ pub const CONTAINER_BORDER_RADIUS_PX: f32 = 4.0;
+ /// Скругление угла строки показателя (пиксели при zoom = 1).
+ pub const ROW_BORDER_RADIUS_PX: f32 = 2.0;
++
++// ========== Линии связи ==========
++
++/// Ширина карточки процесса (пиксели при zoom = 1). Определяет и размер препятствия для линий.
++pub const PROCESS_CARD_W_PX: f32 = 512.0;
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/paint/edge.rs b/crates/canvas/src/paint/edge.rs
+--- a/crates/canvas/src/paint/edge.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/paint/edge.rs	2026-11-25 09:17:27.000000000 +0000
+@@ -0,0 +1,128 @@
++//! Отрисовка линий связи: цвет по статусам, ломаная со скруглёнными углами, отсечение невидимых.
++
++use std::collections::HashSet;
++
++use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, Vec2};
++use polygram_core::geometry::{EdgeGeom, ObjectGeom};
++use polygram_core::types::{Direction, StatusCode};
++use polygram_core::DynamicState;
++
++use crate::routing::screen::route_to_screen;
++use crate::routing::{EdgeLayer, Side};
++use crate::theme::{status_dot_color, Theme};
++use crate::Camera;
++
++/// Запас видимости вокруг рамки пары карточек (клетки).
++pub const VISIBILITY_MARGIN_CELLS: f32 = 30.0;
++
++/// Цвет линии по статусам показателей.
++/// Источник «В процессе» или «Ожидается» — цвет статуса результата; иначе цель «Ожидается» —
++/// цвет статуса запроса; иначе «Обеспечено». «Избыток» линию не окрашивает.
++pub fn edge_color(theme: &Theme, src: StatusCode, dst: StatusCode) -> Color32 {
++    if matches!(src, StatusCode::InProgress | StatusCode::Expected) {
++        status_dot_color(src, Direction::Result, theme)
++    } else if dst == StatusCode::Expected {
++        status_dot_color(dst, Direction::Request, theme)
++    } else {
++        theme.status_ok
++    }
++}
++
++/// Нарисовать ломаную. При `radius > 0` углы скругляются дугой, касающейся обоих отрезков;
++/// радиус ограничен половиной самого короткого отрезка. Начало и конец не скругляются.
++pub fn paint_polyline(painter: &Painter, pts: &[Pos2], color: Color32, width: f32, radius: f32) {
++    if pts.len() < 2 {
++        return;
++    }
++    let stroke = Stroke::new(width, color);
++    painter.add(Shape::line(rounded_points(pts, radius), stroke));
++}
++
++/// Точки ломаной после скругления углов (8 отрезков на дугу).
++pub fn rounded_points(pts: &[Pos2], radius: f32) -> Vec<Pos2> {
++    if radius <= 0.0 || pts.len() < 3 {
++        return pts.to_vec();
++    }
++    let min_len = pts.windows(2).map(|w| (w[1] - w[0]).length()).fold(f32::MAX, f32::min);
++    let r = radius.min(min_len / 2.0);
++    if r <= 0.0 {
++        return pts.to_vec();
++    }
++    let mut out = vec![pts[0]];
++    for i in 1..pts.len() - 1 {
++        let (p0, p1, p2) = (pts[i - 1], pts[i], pts[i + 1]);
++        let din = (p1 - p0).normalized();
++        let dout = (p2 - p1).normalized();
++        let center = p1 - din * r + dout * r;
++        let u = -dout * r;
++        let v = din * r;
++        const STEPS: usize = 8;
++        for k in 0..=STEPS {
++            let phi = k as f32 / STEPS as f32 * std::f32::consts::FRAC_PI_2;
++            out.push(center + u * phi.cos() + v * phi.sin());
++        }
++    }
++    out.push(*pts.last().unwrap());
++    out
++}
++
++/// Нарисовать все видимые линии связи поверх карточек.
++#[allow(clippy::too_many_arguments)]
++pub fn paint_edges(
++    painter: &Painter,
++    clip: Rect,
++    objects: &[ObjectGeom],
++    edges: &[EdgeGeom],
++    layer: &mut EdgeLayer,
++    dynamic: &DynamicState,
++    theme: &Theme,
++    camera: &Camera,
++    cell_size: f32,
++    drag_visual: Option<(Vec2, &HashSet<String>)>,
++) {
++    layer.sync(objects, edges, cell_size);
++    let zoom = camera.zoom;
++    let offset = (camera.offset.x, camera.offset.y);
++    let to_screen = |cx: f32, cy: f32| Pos2::new((cx * cell_size + offset.0) * zoom, (cy * cell_size + offset.1) * zoom);
++
++    let refs: Vec<_> = layer.edges().to_vec();
++    for e in refs {
++        let Some(frame) = layer.pair_frame(&e) else { continue };
++        let margin = VISIBILITY_MARGIN_CELLS;
++        let screen_frame = Rect::from_min_max(
++            to_screen(frame.x as f32 - margin, frame.y as f32 - margin),
++            to_screen((frame.x + frame.w) as f32 + margin, (frame.y + frame.h) as f32 + margin),
++        );
++        if !screen_frame.intersects(clip) {
++            continue;
++        }
++        let Some(route) = layer.route(&e) else { continue };
++        let (Some(src_e), Some(dst_e)) = (layer.entry(e.from).copied(), layer.entry(e.to).copied()) else {
++            continue;
++        };
++
++        let port_screen = |layer: &EdgeLayer, entry: &crate::routing::EntryRef, side: Side| -> Pos2 {
++            let card = layer.card(entry.card);
++            let mut origin = to_screen(card.rect.x as f32, card.rect.y as f32);
++            if let Some((shift, ids)) = &drag_visual {
++                if ids.contains(&card.id) {
++                    origin += *shift;
++                }
++            }
++            let (ox, oy) = layer.port_offset_px(entry, side);
++            origin + Vec2::new(ox, oy) * zoom
++        };
++        let src_port = port_screen(layer, &src_e, route.src_side);
++        let dst_port = port_screen(layer, &dst_e, route.dst_side);
++        let pts = route_to_screen(&route.points, cell_size, offset, zoom, src_port, dst_port);
++
++        let status = |ix: u32| dynamic.status.get(ix as usize).copied().unwrap_or(StatusCode::Ok);
++        let color = edge_color(theme, status(e.from), status(e.to));
++        paint_polyline(painter, &pts, color, theme.edge_width * zoom, theme.line_corner_radius * zoom);
++        let dot = theme.port_radius * zoom;
++        if let (Some(a), Some(b)) = (pts.first(), pts.last()) {
++            painter.circle_filled(*a, dot, color);
++            painter.circle_filled(*b, dot, color);
++        }
++    }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/paint/mod.rs b/crates/canvas/src/paint/mod.rs
+--- a/crates/canvas/src/paint/mod.rs	2026-11-25 09:39:22.446860385 +0000
++++ b/crates/canvas/src/paint/mod.rs	2026-11-25 09:17:27.000000000 +0000
+@@ -5,9 +5,11 @@
+ //! - `row.rs` — одна строка показателя, строка добавления.
+ //! - `container.rs` — заголовок контейнера показателей.
+ //! - `object.rs` — объект "Процесс" и пунктирная рамка.
++//! - `edge.rs` — линии связи (цвет, скругление, отсечение).
+ 
+ pub mod container;
+ pub mod constants;
++pub mod edge;
+ pub mod object;
+ pub mod row;
+ pub mod status;
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/cost.rs b/crates/canvas/src/routing/cost.rs
+--- a/crates/canvas/src/routing/cost.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/cost.rs	2026-11-25 09:15:01.000000000 +0000
+@@ -0,0 +1,21 @@
++//! Веса стоимости. Приоритет строгий: длина → колена → «прочее» (неестественность, красота).
++//! Тройка упакована в одно 64-битное число: длина × 2^40 + колена × 2^28 + прочее.
++
++/// Вес одной субклетки длины.
++pub const LEN_W: u64 = 1 << 40;
++/// Вес одного колена.
++pub const BEND_W: u64 = 1 << 28;
++/// Штраф за неестественную сторону (результат слева или вход справа).
++pub const NONNATURAL: u64 = 4096;
++/// Делитель для штрафа «красоты» (отклонение от середины между карточками).
++pub const TIE_DIV: i32 = 8;
++
++/// Длина (субклетки) из упакованной стоимости.
++pub fn cost_len(c: u64) -> u64 {
++    c >> 40
++}
++
++/// Число колен из упакованной стоимости.
++pub fn cost_bends(c: u64) -> u64 {
++    (c >> 28) & 0xFFF
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/direct.rs b/crates/canvas/src/routing/direct.rs
+--- a/crates/canvas/src/routing/direct.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/direct.rs	2026-11-25 09:15:20.000000000 +0000
+@@ -0,0 +1,87 @@
++//! Прямые варианты без поиска: прямая линия и «Z».
++
++use super::cost::{BEND_W, LEN_W, NONNATURAL, TIE_DIV};
++use super::model::{Pt, Side, Terminal, U};
++use super::obstacles::{h_free, v_free, Obstacle, Own};
++use super::stubs::columns;
++
++/// Допуск «порты на одной высоте» (субклетки).
++pub const SAME_Y: i32 = 2;
++
++/// Кандидат маршрута: стороны, точки, упакованная стоимость и длина.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct Candidate {
++    /// Сторона источника.
++    pub src_side: Side,
++    /// Сторона цели.
++    pub dst_side: Side,
++    /// Точки маршрута (субклетки).
++    pub points: Vec<Pt>,
++    /// Упакованная стоимость.
++    pub cost: u64,
++    /// Длина (субклетки).
++    pub len: i64,
++}
++
++/// Середина между карточками (субклетки) по естественной паре портов:
++/// целое деление с отсечением к нулю.
++pub fn mid(src: &Terminal, dst: &Terminal) -> (i32, i32) {
++    let (a, b) = (src.right, dst.left);
++    ((a.x + b.x) / 2, (a.y + b.y) / 2)
++}
++
++/// Лучший прямой вариант среди четырёх пар сторон. При равной цене побеждает найденный первым.
++pub fn best(obs: &[Obstacle], src: &Terminal, dst: &Terminal, min_stub: i32) -> Option<Candidate> {
++    let (xmid, _) = mid(src, dst);
++    let mut best: Option<Candidate> = None;
++    for s in Side::BOTH {
++        for t in Side::BOTH {
++            let (ps, pt) = (src.port(s), dst.port(t));
++            let dy = (pt.y - ps.y).abs();
++            let nonnat = if s == Side::Right && t == Side::Left { 0 } else { NONNATURAL };
++            if dy <= SAME_Y {
++                let facing = (s == Side::Right && t == Side::Left && pt.x > ps.x)
++                    || (s == Side::Left && t == Side::Right && pt.x < ps.x);
++                if !facing {
++                    continue;
++                }
++                let len = (pt.x - ps.x).abs();
++                if len < 2 * U || !h_free(obs, ps.y, ps.x, pt.x, &[Own::Src, Own::Dst]) {
++                    continue;
++                }
++                let cost = len as u64 * LEN_W + nonnat;
++                consider(&mut best, Candidate { src_side: s, dst_side: t, points: vec![ps, pt], cost, len: len as i64 });
++            } else {
++                let Some(cs) = columns(obs, Own::Src, src.edge_x(s), s, ps.y, min_stub, None) else { continue };
++                let Some(ct) = columns(obs, Own::Dst, dst.edge_x(t), t, pt.y, min_stub, None) else { continue };
++                let (lo, hi) = (cs.0.max(ct.0), cs.1.min(ct.1));
++                for v in lo..=hi {
++                    if !v_free(obs, v, ps.y, pt.y) {
++                        continue;
++                    }
++                    let vx = v * U;
++                    let len = (vx - ps.x).abs() + dy + (vx - pt.x).abs();
++                    let beauty = ((vx - xmid).abs() / TIE_DIV) as u64 * ((dy / U).max(1) as u64);
++                    let cost = len as u64 * LEN_W + 2 * BEND_W + nonnat + beauty;
++                    consider(
++                        &mut best,
++                        Candidate {
++                            src_side: s,
++                            dst_side: t,
++                            points: vec![ps, Pt::new(vx, ps.y), Pt::new(vx, pt.y), pt],
++                            cost,
++                            len: len as i64,
++                        },
++                    );
++                }
++            }
++        }
++    }
++    best
++}
++
++fn consider(best: &mut Option<Candidate>, c: Candidate) {
++    if best.as_ref().map_or(true, |b| c.cost < b.cost) {
++        *best = Some(c);
++    }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/layer.rs b/crates/canvas/src/routing/layer.rs
+--- a/crates/canvas/src/routing/layer.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/layer.rs	2026-11-25 09:17:27.000000000 +0000
+@@ -0,0 +1,257 @@
++//! Слой линий: кэш маршрутов и ленивый пересчёт.
++//!
++//! Маршрутизатор — чистая функция; всё, что связано с хранением результатов, живёт здесь.
++//! Слой не хранится в документе и не передаётся наружу.
++
++use std::collections::hash_map::DefaultHasher;
++use std::collections::HashMap;
++use std::hash::{Hash, Hasher};
++
++use polygram_core::geometry::{EdgeGeom, ObjectGeom};
++use polygram_core::layout::Rect;
++use polygram_core::types::{Direction, NodeKind};
++
++use super::model::{round_away, union_rect, Pt, Route, Side, Terminal, U};
++use super::{ports, router};
++
++/// Карточка Процесса, участвующая в маршрутизации.
++#[derive(Clone, Debug)]
++pub struct CardInfo {
++    /// Идентификатор объекта.
++    pub id: String,
++    /// Занимаемый прямоугольник в клетках (округлён наружу по реальному размеру карточки).
++    pub rect: Rect,
++    /// Число строк в контейнере «Запрос».
++    pub n_req: usize,
++    /// Число строк в контейнере «Результат».
++    pub n_res: usize,
++}
++
++/// Положение показателя: карточка, контейнер, номер строки.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct EntryRef {
++    /// Индекс карточки в списке слоя.
++    pub card: usize,
++    /// Контейнер.
++    pub dir: Direction,
++    /// Номер строки с нуля.
++    pub row: usize,
++}
++
++/// Связь между двумя показателями.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct EdgeRef {
++    /// Ключ связи.
++    pub ix: u32,
++    /// Ключ показателя-источника (строка «Результат»).
++    pub from: u32,
++    /// Ключ показателя-цели (строка «Запрос»).
++    pub to: u32,
++}
++
++struct Cached {
++    route: Route,
++    key: u64,
++    checked: u64,
++}
++
++/// Кэш маршрутов и описание карточек/показателей для текущей геометрии.
++#[derive(Default)]
++pub struct EdgeLayer {
++    fingerprint: Option<u64>,
++    cell_size: f32,
++    generation: u64,
++    cards: Vec<CardInfo>,
++    entries: HashMap<u32, EntryRef>,
++    edges: Vec<EdgeRef>,
++    routes: HashMap<u32, Cached>,
++    /// Сколько раз запускался маршрутизатор (для тестов и отладки).
++    pub route_calls: u64,
++}
++
++fn kind_tag(k: NodeKind) -> u8 {
++    match k {
++        NodeKind::Process => 0,
++        NodeKind::Department => 1,
++        NodeKind::Container => 2,
++        NodeKind::Metric => 3,
++        #[allow(unreachable_patterns)]
++        _ => 255,
++    }
++}
++
++fn hash_rect(h: &mut DefaultHasher, r: &Rect) {
++    r.x.hash(h);
++    r.y.hash(h);
++    r.w.hash(h);
++    r.h.hash(h);
++}
++
++fn hash_pt(h: &mut DefaultHasher, p: &Pt) {
++    p.hash(h);
++}
++
++impl EdgeLayer {
++    /// Создать пустой слой.
++    pub fn new() -> Self {
++        Self::default()
++    }
++
++    /// Рёбра текущего снимка.
++    pub fn edges(&self) -> &[EdgeRef] {
++        &self.edges
++    }
++
++    /// Карточка по индексу.
++    pub fn card(&self, i: usize) -> &CardInfo {
++        &self.cards[i]
++    }
++
++    /// Положение показателя по ключу.
++    pub fn entry(&self, ix: u32) -> Option<&EntryRef> {
++        self.entries.get(&ix)
++    }
++
++    /// Поколение геометрии (растёт при любом изменении карточек и связей).
++    pub fn generation(&self) -> u64 {
++        self.generation
++    }
++
++    /// Смещение порта показателя от левого верхнего угла карточки (пиксели, масштаб 1).
++    pub fn port_offset_px(&self, e: &EntryRef, side: Side) -> (f32, f32) {
++        ports::row_port_px(self.cards[e.card].n_req, e.dir, e.row, side)
++    }
++
++    /// Рамка обеих карточек связи (клетки); нужна для отсечения невидимых линий.
++    pub fn pair_frame(&self, edge: &EdgeRef) -> Option<Rect> {
++        let a = self.entries.get(&edge.from)?;
++        let b = self.entries.get(&edge.to)?;
++        Some(union_rect(&self.cards[a.card].rect, &self.cards[b.card].rect))
++    }
++
++    /// Синхронизация со снимком геометрии. Вызывается перед отрисовкой линий.
++    /// Если снимок не изменился — ничего не делает.
++    pub fn sync(&mut self, objects: &[ObjectGeom], edges: &[EdgeGeom], cell_size: f32) {
++        let fp = Self::fingerprint_of(objects, edges, cell_size);
++        if self.fingerprint == Some(fp) {
++            return;
++        }
++        if self.cell_size.to_bits() != cell_size.to_bits() {
++            // Порты считаются из пикселей, поэтому смена размера клетки меняет всё.
++            self.routes.clear();
++        }
++        self.cell_size = cell_size;
++        self.fingerprint = Some(fp);
++        self.generation += 1;
++
++        self.cards.clear();
++        self.entries.clear();
++        for o in objects.iter().filter(|o| o.kind == NodeKind::Process) {
++            let (w_px, h_px) = ports::card_size_px(o.requests.len(), o.results.len());
++            // Округление наружу: линии не должны заходить на дробную часть карточки.
++            let w = (w_px / cell_size).ceil() as i32;
++            let h = (h_px / cell_size).ceil() as i32;
++            let card = self.cards.len();
++            self.cards.push(CardInfo {
++                id: o.id.clone(),
++                rect: Rect::new(o.rect.x, o.rect.y, w, h),
++                n_req: o.requests.len(),
++                n_res: o.results.len(),
++            });
++            for (row, e) in o.requests.iter().enumerate() {
++                self.entries.insert(e.ix, EntryRef { card, dir: Direction::Request, row });
++            }
++            for (row, e) in o.results.iter().enumerate() {
++                self.entries.insert(e.ix, EntryRef { card, dir: Direction::Result, row });
++            }
++        }
++        self.edges = edges.iter().map(|e| EdgeRef { ix: e.ix, from: e.from, to: e.to }).collect();
++        let alive: std::collections::HashSet<u32> = self.edges.iter().map(|e| e.ix).collect();
++        self.routes.retain(|k, _| alive.contains(k));
++    }
++
++    fn fingerprint_of(objects: &[ObjectGeom], edges: &[EdgeGeom], cell_size: f32) -> u64 {
++        let mut h = DefaultHasher::new();
++        cell_size.to_bits().hash(&mut h);
++        for o in objects {
++            o.ix.hash(&mut h);
++            kind_tag(o.kind).hash(&mut h);
++            hash_rect(&mut h, &o.rect);
++            o.requests.len().hash(&mut h);
++            for e in &o.requests {
++                e.ix.hash(&mut h);
++            }
++            u8::MAX.hash(&mut h);
++            for e in &o.results {
++                e.ix.hash(&mut h);
++            }
++            u8::MAX.hash(&mut h);
++        }
++        for e in edges {
++            (e.ix, e.from, e.to).hash(&mut h);
++        }
++        h.finish()
++    }
++
++    /// Терминал для показателя: прямоугольник карточки и оба порта строки (субклетки).
++    pub fn terminal(&self, e: &EntryRef) -> Terminal {
++        let card = &self.cards[e.card];
++        let sub = |px: f32| round_away(px * U as f32 / self.cell_size);
++        let port = |side: Side| {
++            let (ox, oy) = ports::row_port_px(card.n_req, e.dir, e.row, side);
++            Pt::new(card.rect.x * U + sub(ox), card.rect.y * U + sub(oy))
++        };
++        Terminal { card: e.card as u32, rect: card.rect, left: port(Side::Left), right: port(Side::Right) }
++    }
++
++    /// Отпечаток маршрута: оба терминала и все карточки, строго пересекающие область влияния.
++    fn route_key(&self, src: &Terminal, dst: &Terminal, region: &Rect) -> u64 {
++        let mut h = DefaultHasher::new();
++        for t in [src, dst] {
++            t.card.hash(&mut h);
++            hash_rect(&mut h, &t.rect);
++            hash_pt(&mut h, &t.left);
++            hash_pt(&mut h, &t.right);
++        }
++        for (i, c) in self.cards.iter().enumerate() {
++            if region.overlaps(&c.rect) {
++                i.hash(&mut h);
++                hash_rect(&mut h, &c.rect);
++            }
++        }
++        h.finish()
++    }
++
++    /// Маршрут связи. `None`, если связь не пригодна для линии (ключ источника не в «Результате»
++    /// или ключ цели не в «Запросе»). Пересчитывается лениво и только если изменились
++    /// терминалы или карточки в области влияния.
++    pub fn route(&mut self, edge: &EdgeRef) -> Option<Route> {
++        let src_e = *self.entries.get(&edge.from)?;
++        let dst_e = *self.entries.get(&edge.to)?;
++        if src_e.dir != Direction::Result || dst_e.dir != Direction::Request {
++            return None;
++        }
++        if let Some(c) = self.routes.get(&edge.ix) {
++            if c.checked == self.generation {
++                return Some(c.route.clone());
++            }
++        }
++        let src = self.terminal(&src_e);
++        let dst = self.terminal(&dst_e);
++        if let Some((region, key)) = self.routes.get(&edge.ix).map(|c| (c.route.region, c.key)) {
++            if self.route_key(&src, &dst, &region) == key {
++                let gen = self.generation;
++                let c = self.routes.get_mut(&edge.ix)?;
++                c.checked = gen;
++                return Some(c.route.clone());
++            }
++        }
++        let cards: Vec<(u32, Rect)> =
++            self.cards.iter().enumerate().map(|(i, c)| (i as u32, c.rect)).collect();
++        self.route_calls += 1;
++        let route = router::route(&cards, &src, &dst);
++        let key = self.route_key(&src, &dst, &route.region);
++        self.routes.insert(edge.ix, Cached { route: route.clone(), key, checked: self.generation });
++        Some(route)
++    }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/layer_tests.rs b/crates/canvas/src/routing/layer_tests.rs
+--- a/crates/canvas/src/routing/layer_tests.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/layer_tests.rs	2026-11-25 09:26:18.000000000 +0000
+@@ -0,0 +1,253 @@
++//! Тесты слоя: кэш, ленивый пересчёт, терминалы, перевод в экран, цвет и скругление.
++
++use egui::{Pos2, Vec2};
++use polygram_core::geometry::{EdgeGeom, EntryGeom, ObjectGeom};
++use polygram_core::layout::Rect;
++use polygram_core::types::{Direction, MetricValue, NodeKind, StatusCode};
++use polygram_core::DynamicState;
++
++use super::layer::{EdgeLayer, EdgeRef};
++use super::model::{Quality, Side, U};
++use super::ports;
++use super::screen::route_to_screen;
++use crate::paint::edge::{edge_color, rounded_points};
++use crate::paint::object::process_total_height;
++use crate::Theme;
++
++fn entry(ix: u32) -> EntryGeom {
++    EntryGeom {
++        ix,
++        name: format!("m{ix}"),
++        value: MetricValue::Null,
++        supplied: MetricValue::Null,
++        unit: String::new(),
++    }
++}
++
++/// Процесс: запросы получают ключи `base..base+n_req`, результаты — следующие `n_res`.
++fn process(ix: u32, x: i32, y: i32, n_req: u32, n_res: u32, base: u32) -> ObjectGeom {
++    ObjectGeom {
++        ix,
++        id: format!("p{ix}"),
++        name: format!("Процесс {ix}"),
++        kind: NodeKind::Process,
++        rect: Rect::new(x, y, 32, 17),
++        direction: None,
++        requests: (0..n_req).map(|i| entry(base + i)).collect(),
++        results: (0..n_res).map(|i| entry(base + n_req + i)).collect(),
++        parent: None,
++    }
++}
++
++fn department(ix: u32, rect: Rect) -> ObjectGeom {
++    ObjectGeom {
++        ix,
++        id: format!("d{ix}"),
++        name: "Отдел".into(),
++        kind: NodeKind::Department,
++        rect,
++        direction: None,
++        requests: vec![],
++        results: vec![],
++        parent: None,
++    }
++}
++
++/// Два процесса: источник (ключи 0..4, результат — ключ 2), цель (ключи 10..14, запрос — ключ 10).
++fn scene(dst_x: i32, dst_y: i32) -> (Vec<ObjectGeom>, Vec<EdgeGeom>) {
++    let a = process(0, 0, 0, 2, 2, 0);
++    let b = process(1, dst_x, dst_y, 2, 2, 10);
++    (vec![a, b], vec![EdgeGeom { ix: 0, from: 2, to: 10 }])
++}
++
++fn first_edge(l: &EdgeLayer) -> EdgeRef {
++    l.edges()[0]
++}
++
++#[test]
++fn card_height_matches_painter() {
++    let dynamic = DynamicState::default();
++    for (nq, nr) in [(0usize, 0usize), (1, 0), (0, 3), (2, 2), (4, 7)] {
++        let o = process(0, 0, 0, nq as u32, nr as u32, 0);
++        let painted = process_total_height(&o, &dynamic, 1.0, 512.0);
++        let (w, h) = ports::card_size_px(nq, nr);
++        assert!((painted - h).abs() < 1e-3, "{nq}/{nr}: {painted} vs {h}");
++        assert_eq!(w, 512.0);
++    }
++}
++
++#[test]
++fn ports_sit_on_row_edges_at_row_centers() {
++    // Запрос 0: контейнер начинается на 80, строка — на 80+8+48 = 136, центр 152.
++    assert_eq!(ports::row_port_px(2, Direction::Request, 0, Side::Left), (16.0, 152.0));
++    assert_eq!(ports::row_port_px(2, Direction::Request, 1, Side::Right), (496.0, 192.0));
++    // Результат при двух запросах: 80 + (56+80) + 8 = 224; центр строки 0 = 224+8+48+16 = 296.
++    assert_eq!(ports::row_port_px(2, Direction::Result, 0, Side::Left), (16.0, 296.0));
++}
++
++#[test]
++fn route_is_cached_until_geometry_changes() {
++    let (objs, edges) = scene(40, 6);
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let e = first_edge(&l);
++    let r1 = l.route(&e).expect("маршрут");
++    assert_eq!(l.route_calls, 1);
++    assert_eq!(r1.quality, Quality::Clean);
++
++    // Тот же снимок — ничего не пересчитывается.
++    l.sync(&objs, &edges, 16.0);
++    let r2 = l.route(&e).unwrap();
++    assert_eq!(r1, r2);
++    assert_eq!(l.route_calls, 1);
++
++    // Сдвиг карточки цели по Y меняет маршрут.
++    let (objs2, edges2) = scene(40, 18);
++    l.sync(&objs2, &edges2, 16.0);
++    let r3 = l.route(&e).unwrap();
++    assert_eq!(l.route_calls, 2);
++    assert_ne!(r1.points, r3.points);
++}
++
++#[test]
++fn far_card_does_not_recompute_but_own_card_does() {
++    let (mut objs, edges) = scene(40, 6);
++    objs.push(process(2, 900, 900, 1, 1, 20));
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let e = first_edge(&l);
++    l.route(&e).unwrap();
++    assert_eq!(l.route_calls, 1);
++
++    // Далёкая карточка сдвинулась — пересчёта нет.
++    objs[2].rect.x += 7;
++    l.sync(&objs, &edges, 16.0);
++    l.route(&e).unwrap();
++    assert_eq!(l.route_calls, 1);
++
++    // Сдвинулась карточка самой связи — ровно один пересчёт.
++    objs[0].rect.y += 7;
++    l.sync(&objs, &edges, 16.0);
++    l.route(&e).unwrap();
++    assert_eq!(l.route_calls, 2);
++}
++
++#[test]
++fn huge_department_frame_is_not_an_obstacle() {
++    let (mut objs, edges) = scene(40, 6);
++    objs.insert(0, department(9, Rect::new(-5, -5, 2000, 2000)));
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let r = l.route(&first_edge(&l)).unwrap();
++    assert_eq!(r.quality, Quality::Clean);
++}
++
++#[test]
++fn invalid_edges_have_no_route() {
++    let (objs, _) = scene(40, 6);
++    let mut l = EdgeLayer::new();
++    // Источник — запрос (ключ 0), цель — результат (ключ 2): направление неверное.
++    l.sync(&objs, &[EdgeGeom { ix: 0, from: 0, to: 2 }], 16.0);
++    assert!(l.route(&first_edge(&l)).is_none());
++    // Несуществующие ключи.
++    l.sync(&objs, &[EdgeGeom { ix: 1, from: 77, to: 78 }], 16.0);
++    assert!(l.route(&first_edge(&l)).is_none());
++}
++
++#[test]
++fn cell_size_change_clears_cache() {
++    let (objs, edges) = scene(40, 6);
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let e = first_edge(&l);
++    l.route(&e).unwrap();
++    l.sync(&objs, &edges, 20.0);
++    l.route(&e).unwrap();
++    assert_eq!(l.route_calls, 2);
++}
++
++#[test]
++fn obstacle_card_between_forces_detour_without_crossing() {
++    // Между источником (0..32) и целью (80..) стоит карточка (40..72) на той же высоте.
++    let mut objs = vec![process(0, 0, 0, 2, 2, 0), process(1, 80, 0, 2, 2, 10), process(2, 40, 0, 1, 1, 20)];
++    objs[2].rect = Rect::new(40, 0, 32, 17);
++    let edges = vec![EdgeGeom { ix: 0, from: 2, to: 10 }];
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let r = l.route(&first_edge(&l)).unwrap();
++    assert_eq!(r.quality, Quality::Clean);
++    let wall = l.card(2).rect;
++    for w in r.points.windows(2).skip(1).take(r.points.len().saturating_sub(3)) {
++        let (a, b) = (w[0], w[1]);
++        if a.y == b.y {
++            let inside_y = wall.y * U < a.y && a.y < (wall.y + wall.h) * U;
++            let overlap_x = a.x.min(b.x) < (wall.x + wall.w) * U && wall.x * U < a.x.max(b.x);
++            assert!(!(inside_y && overlap_x));
++        }
++    }
++}
++
++#[test]
++fn screen_route_is_orthogonal_at_any_zoom() {
++    let (objs, edges) = scene(40, 6);
++    let mut l = EdgeLayer::new();
++    l.sync(&objs, &edges, 16.0);
++    let e = first_edge(&l);
++    let route = l.route(&e).unwrap();
++    let (src_e, dst_e) = (*l.entry(e.from).unwrap(), *l.entry(e.to).unwrap());
++    for zoom in [0.4f32, 0.75, 1.0, 1.7] {
++        for shift in [Vec2::ZERO, Vec2::new(5.3, -7.1)] {
++            let offset = (30.0f32, 12.0f32);
++            let port = |entry: &super::layer::EntryRef, side: Side, drag: Vec2| {
++                let card = l.card(entry.card);
++                let origin = Pos2::new(
++                    (card.rect.x as f32 * 16.0 + offset.0) * zoom,
++                    (card.rect.y as f32 * 16.0 + offset.1) * zoom,
++                );
++                let (ox, oy) = l.port_offset_px(entry, side);
++                origin + drag + Vec2::new(ox, oy) * zoom
++            };
++            let sp = port(&src_e, route.src_side, shift);
++            let dp = port(&dst_e, route.dst_side, Vec2::ZERO);
++            let pts = route_to_screen(&route.points, 16.0, offset, zoom, sp, dp);
++            assert_eq!(pts[0], sp);
++            assert_eq!(*pts.last().unwrap(), dp);
++            for w in pts.windows(2) {
++                assert!((w[0].x - w[1].x).abs() < 1e-3 || (w[0].y - w[1].y).abs() < 1e-3, "диагональ при zoom {zoom}");
++            }
++            let n = pts.len();
++            assert!((pts[0].y - pts[1].y).abs() < 1e-3);
++            assert!((pts[n - 1].y - pts[n - 2].y).abs() < 1e-3);
++        }
++    }
++}
++
++#[test]
++fn edge_color_follows_statuses() {
++    let t = Theme::dark();
++    assert_eq!(edge_color(&t, StatusCode::Ok, StatusCode::Ok), t.status_ok);
++    assert_eq!(edge_color(&t, StatusCode::Surplus, StatusCode::Ok), t.status_ok);
++    assert_eq!(edge_color(&t, StatusCode::InProgress, StatusCode::Ok), t.status_deficit);
++    assert_eq!(edge_color(&t, StatusCode::Expected, StatusCode::Ok), t.status_deficit);
++    assert_eq!(edge_color(&t, StatusCode::Ok, StatusCode::Expected), t.status_deficit);
++    assert_eq!(edge_color(&t, StatusCode::Ok, StatusCode::Surplus), t.status_ok);
++}
++
++#[test]
++fn rounded_corner_is_tangent_arc() {
++    let pts = [Pos2::new(0.0, 0.0), Pos2::new(100.0, 0.0), Pos2::new(100.0, 80.0)];
++    assert_eq!(rounded_points(&pts, 0.0), pts.to_vec());
++    let r = 10.0;
++    let out = rounded_points(&pts, r);
++    assert_eq!(out[0], pts[0]);
++    assert_eq!(*out.last().unwrap(), pts[2]);
++    // Дуга начинается на r до угла и заканчивается на r после него, центр — (90, 10).
++    assert!((out[1] - Pos2::new(90.0, 0.0)).length() < 1e-3);
++    assert!((out[out.len() - 2] - Pos2::new(100.0, 10.0)).length() < 1e-3);
++    for p in &out[1..out.len() - 1] {
++        assert!(((*p - Pos2::new(90.0, 10.0)).length() - r).abs() < 1e-3);
++    }
++    // Радиус ограничен половиной самого короткого отрезка (80 / 2 = 40 → 1000 урезается до 40).
++    let big = rounded_points(&pts, 1000.0);
++    assert!((big[1] - Pos2::new(60.0, 0.0)).length() < 1e-3);
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/mod.rs b/crates/canvas/src/routing/mod.rs
+--- a/crates/canvas/src/routing/mod.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/mod.rs	2026-11-25 09:15:01.000000000 +0000
+@@ -0,0 +1,35 @@
++//! Ортогональные линии связи между показателями (ТЗ «Ортогональные линии связи»).
++//!
++//! Модуль разделён на чистое ядро без зависимости от egui и тонкий слой отрисовки:
++//! - `model`     — единицы, стороны, терминалы, маршрут, упрощение точек;
++//! - `cost`      — веса стоимости (длина → колена → красота);
++//! - `obstacles` — препятствия и проверки свободы отрезков;
++//! - `stubs`     — допустимые колонки первого и последнего отрезков;
++//! - `direct`    — прямая и «Z» без поиска;
++//! - `search`    — A* по сжатой сетке;
++//! - `router`    — ступени качества, область влияния, запасная ломаная;
++//! - `ports`     — геометрия строк Процесса и точки сцепления;
++//! - `layer`     — кэш маршрутов и ленивый пересчёт;
++//! - `screen`    — перевод маршрута в экранные координаты.
++//!
++//! Линии нигде не сериализуются: они строятся из положения карточек.
++
++pub mod cost;
++pub mod direct;
++pub mod layer;
++pub mod model;
++pub mod obstacles;
++pub mod ports;
++pub mod router;
++pub mod screen;
++pub mod search;
++pub mod stubs;
++
++#[cfg(test)]
++mod layer_tests;
++#[cfg(test)]
++mod tests;
++
++pub use layer::{CardInfo, EdgeLayer, EdgeRef, EntryRef};
++pub use model::{Pt, Quality, Route, Side, Terminal, U};
++pub use router::route;
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/model.rs b/crates/canvas/src/routing/model.rs
+--- a/crates/canvas/src/routing/model.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/model.rs	2026-11-25 09:15:01.000000000 +0000
+@@ -0,0 +1,162 @@
++//! Единицы, стороны, терминалы и маршрут.
++
++use polygram_core::layout::Rect;
++
++/// Субклеток в клетке. Весь расчёт маршрута идёт в субклетках целыми числами.
++pub const U: i32 = 16;
++
++/// Точка в субклетках.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
++pub struct Pt {
++    /// X в субклетках.
++    pub x: i32,
++    /// Y в субклетках.
++    pub y: i32,
++}
++
++impl Pt {
++    /// Создать точку.
++    pub const fn new(x: i32, y: i32) -> Self {
++        Self { x, y }
++    }
++}
++
++/// Сторона карточки, из которой линия выходит или в которую входит.
++/// Порядок обхода важен для детерминизма: Правая раньше Левой.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
++pub enum Side {
++    /// Правая сторона.
++    Right,
++    /// Левая сторона.
++    Left,
++}
++
++impl Side {
++    /// Обе стороны в порядке обхода.
++    pub const BOTH: [Side; 2] = [Side::Right, Side::Left];
++
++    /// Знак «наружу» от карточки: +1 вправо, −1 влево.
++    pub fn sign(self) -> i32 {
++        match self {
++            Side::Right => 1,
++            Side::Left => -1,
++        }
++    }
++}
++
++/// Качество маршрута. Чем дальше по списку, тем хуже.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
++pub enum Quality {
++    /// Охранная зона 1 клетка, заглушка не короче 2 клеток.
++    Clean,
++    /// Охранная зона 0, заглушка не короче 2 клеток.
++    Tight,
++    /// Охранная зона 0, заглушка не короче 1 клетки.
++    Short,
++    /// Запасная ломаная без поиска; может пересекать карточки.
++    Fallback,
++}
++
++/// Конец связи: прямоугольник карточки (клетки), идентификатор и два порта (субклетки).
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Terminal {
++    /// Идентификатор карточки (по нему определяется «своя» карточка).
++    pub card: u32,
++    /// Прямоугольник карточки в клетках.
++    pub rect: Rect,
++    /// Левый порт строки (субклетки).
++    pub left: Pt,
++    /// Правый порт строки (субклетки).
++    pub right: Pt,
++}
++
++impl Terminal {
++    /// Порт нужной стороны.
++    pub fn port(&self, side: Side) -> Pt {
++        match side {
++            Side::Right => self.right,
++            Side::Left => self.left,
++        }
++    }
++
++    /// Вертикаль карточки на нужной стороне (клетки).
++    pub fn edge_x(&self, side: Side) -> i32 {
++        match side {
++            Side::Right => self.rect.x + self.rect.w,
++            Side::Left => self.rect.x,
++        }
++    }
++}
++
++/// Готовый маршрут.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct Route {
++    /// Сторона источника.
++    pub src_side: Side,
++    /// Сторона цели.
++    pub dst_side: Side,
++    /// Точки в субклетках: первая — порт источника, последняя — порт цели.
++    pub points: Vec<Pt>,
++    /// Качество.
++    pub quality: Quality,
++    /// Область влияния (клетки): изменения карточек вне неё маршрут не меняют.
++    pub region: Rect,
++}
++
++impl Route {
++    /// Длина ломаной в субклетках.
++    pub fn length(&self) -> i64 {
++        self.points
++            .windows(2)
++            .map(|w| ((w[1].x - w[0].x).abs() + (w[1].y - w[0].y).abs()) as i64)
++            .sum()
++    }
++
++    /// Число колен.
++    pub fn bends(&self) -> usize {
++        self.points.len().saturating_sub(2)
++    }
++}
++
++/// Округление «от нуля» (половины уходят от нуля, в том числе для отрицательных).
++pub fn round_away(v: f32) -> i32 {
++    v.round() as i32
++}
++
++/// Убрать повторы подряд и средние точки из трёх на одной прямой
++/// (включая разворот на 180° по той же прямой).
++pub fn simplify(pts: Vec<Pt>) -> Vec<Pt> {
++    let mut out: Vec<Pt> = Vec::with_capacity(pts.len());
++    for p in pts {
++        if out.last() == Some(&p) {
++            continue;
++        }
++        out.push(p);
++        while out.len() >= 3 {
++            let n = out.len();
++            let (a, b, c) = (out[n - 3], out[n - 2], out[n - 1]);
++            let same_x = a.x == b.x && b.x == c.x;
++            let same_y = a.y == b.y && b.y == c.y;
++            if same_x || same_y {
++                out.remove(n - 2);
++            } else {
++                break;
++            }
++        }
++    }
++    out
++}
++
++/// Рамка клеток, охватывающая два прямоугольника (в клетках).
++pub fn union_rect(a: &Rect, b: &Rect) -> Rect {
++    let x0 = a.x.min(b.x);
++    let y0 = a.y.min(b.y);
++    let x1 = (a.x + a.w).max(b.x + b.w);
++    let y1 = (a.y + a.h).max(b.y + b.h);
++    Rect::new(x0, y0, x1 - x0, y1 - y0)
++}
++
++/// Манхэттенское расстояние между двумя точками (субклетки).
++pub fn manhattan(a: Pt, b: Pt) -> i32 {
++    (a.x - b.x).abs() + (a.y - b.y).abs()
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/obstacles.rs b/crates/canvas/src/routing/obstacles.rs
+--- a/crates/canvas/src/routing/obstacles.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/obstacles.rs	2026-11-25 09:15:20.000000000 +0000
+@@ -0,0 +1,80 @@
++//! Препятствия и проверки свободы отрезков.
++//! Границы препятствий в клетках, отрезки в субклетках; все неравенства строгие
++//! (касание границы разрешено).
++
++use super::model::{union_rect, Terminal, U};
++use polygram_core::layout::Rect;
++
++/// Дальность влияния (клетки): наибольшее поле окна 120 + предельный вылет заглушки 150.
++pub const REACH: i32 = 270;
++
++/// Чья это карточка относительно маршрута.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Own {
++    /// Карточка источника.
++    Src,
++    /// Карточка цели.
++    Dst,
++    /// Любая другая.
++    Other,
++}
++
++/// Препятствие: карточка, раздутая на охранную зону (клетки).
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Obstacle {
++    /// Левая граница.
++    pub x0: i32,
++    /// Верхняя граница.
++    pub y0: i32,
++    /// Правая граница.
++    pub x1: i32,
++    /// Нижняя граница.
++    pub y1: i32,
++    /// Метка принадлежности.
++    pub own: Own,
++}
++
++/// Построить препятствия: берутся карточки, строго пересекающие рамку пары, расширенную на
++/// `REACH`; каждая раздувается на `clear` клеток. Метка определяется по идентификатору карточки.
++pub fn build(cards: &[(u32, Rect)], src: &Terminal, dst: &Terminal, clear: i32) -> Vec<Obstacle> {
++    let pair = union_rect(&src.rect, &dst.rect);
++    let frame = Rect::new(pair.x - REACH, pair.y - REACH, pair.w + 2 * REACH, pair.h + 2 * REACH);
++    let mut out = Vec::new();
++    for (id, r) in cards {
++        if !frame.overlaps(r) {
++            continue;
++        }
++        let own = if *id == src.card {
++            Own::Src
++        } else if *id == dst.card {
++            Own::Dst
++        } else {
++            Own::Other
++        };
++        out.push(Obstacle {
++            x0: r.x - clear,
++            y0: r.y - clear,
++            x1: r.x + r.w + clear,
++            y1: r.y + r.h + clear,
++            own,
++        });
++    }
++    out
++}
++
++/// Вертикаль на колонке `x` (клетки) между высотами `ya` и `yb` (субклетки) свободна,
++/// если ни одно препятствие (с любой меткой) не заходит на неё строго.
++pub fn v_free(obs: &[Obstacle], x: i32, ya: i32, yb: i32) -> bool {
++    let (lo, hi) = (ya.min(yb), ya.max(yb));
++    !obs.iter()
++        .any(|o| o.x0 < x && x < o.x1 && o.y0 * U < hi && lo < o.y1 * U)
++}
++
++/// Горизонталь на высоте `y` (субклетки) между `xa` и `xb` (субклетки) свободна,
++/// если её не задевает ни одно препятствие, кроме меток из `skip`.
++pub fn h_free(obs: &[Obstacle], y: i32, xa: i32, xb: i32, skip: &[Own]) -> bool {
++    let (lo, hi) = (xa.min(xb), xa.max(xb));
++    !obs.iter().any(|o| {
++        !skip.contains(&o.own) && o.y0 * U < y && y < o.y1 * U && o.x0 * U < hi && lo < o.x1 * U
++    })
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/ports.rs b/crates/canvas/src/routing/ports.rs
+--- a/crates/canvas/src/routing/ports.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/ports.rs	2026-11-25 09:16:53.000000000 +0000
+@@ -0,0 +1,57 @@
++//! Геометрия строк Процесса и точки сцепления.
++//!
++//! Все размеры берутся из тех же констант, что и отрисовка карточки (`paint::constants`), и
++//! считаются в пикселях при масштабе 1. Порт стоит на внешнем краю строки показателя, на высоте
++//! её центра: левый порт — на левом краю строки, правый — на правом.
++
++use polygram_core::types::Direction;
++
++use super::model::Side;
++use crate::paint::constants::{
++    CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, PROCESS_CARD_W_PX, PROCESS_HEADER_H_PX,
++    PROCESS_PADDING_PX, ROW_H_PX,
++};
++
++/// Высота контейнера: шапка + строки + промежутки + отступы. Пустой контейнер содержит
++/// строку «+ Добавить показатель».
++fn container_height_px(n: usize) -> f32 {
++    let (p, h, r, g) = (CONTAINER_PADDING_PX, CONTAINER_HEADER_H_PX, ROW_H_PX, GAP_PX);
++    if n == 0 {
++        p + h + r + p
++    } else {
++        p + h + n as f32 * r + (n - 1) as f32 * g + p
++    }
++}
++
++/// Размер карточки Процесса в пикселях при масштабе 1: (ширина, высота).
++pub fn card_size_px(n_req: usize, n_res: usize) -> (f32, f32) {
++    let h = PROCESS_PADDING_PX
++        + PROCESS_HEADER_H_PX
++        + GAP_PX
++        + container_height_px(n_req)
++        + GAP_PX
++        + container_height_px(n_res)
++        + PROCESS_PADDING_PX;
++    (PROCESS_CARD_W_PX, h)
++}
++
++/// Смещение порта строки от левого верхнего угла карточки (пиксели, масштаб 1).
++/// `n_req` нужен, чтобы найти начало контейнера «Результат».
++pub fn row_port_px(n_req: usize, dir: Direction, row: usize, side: Side) -> (f32, f32) {
++    let inset = PROCESS_PADDING_PX + CONTAINER_PADDING_PX;
++    let x = match side {
++        Side::Left => inset,
++        Side::Right => PROCESS_CARD_W_PX - inset,
++    };
++    let req_top = PROCESS_PADDING_PX + PROCESS_HEADER_H_PX + GAP_PX;
++    let container_top = match dir {
++        Direction::Request => req_top,
++        Direction::Result => req_top + container_height_px(n_req) + GAP_PX,
++    };
++    let y = container_top
++        + CONTAINER_PADDING_PX
++        + CONTAINER_HEADER_H_PX
++        + row as f32 * (ROW_H_PX + GAP_PX)
++        + ROW_H_PX / 2.0;
++    (x, y)
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/router.rs b/crates/canvas/src/routing/router.rs
+--- a/crates/canvas/src/routing/router.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/router.rs	2026-11-25 09:16:21.000000000 +0000
+@@ -0,0 +1,118 @@
++//! Маршрутизатор: ступени качества, область влияния, запасная ломаная.
++
++use polygram_core::layout::Rect;
++
++use super::direct::{self, Candidate};
++use super::model::{manhattan, simplify, union_rect, Pt, Quality, Route, Side, Terminal, U};
++use super::obstacles;
++use super::search::{search, MARGINS};
++
++/// Ступени качества по порядку: (охранная зона, минимальная заглушка, качество).
++pub const TIERS: [(i32, i32, Quality); 3] = [
++    (1, 2, Quality::Clean),
++    (0, 2, Quality::Tight),
++    (0, 1, Quality::Short),
++];
++
++/// Нижняя граница длины (субклетки): наименьшее манхэттенское расстояние между портами.
++pub fn lower_bound(src: &Terminal, dst: &Terminal) -> i32 {
++    let mut lb = i32::MAX;
++    for s in Side::BOTH {
++        for t in Side::BOTH {
++            lb = lb.min(manhattan(src.port(s), dst.port(t)));
++        }
++    }
++    lb
++}
++
++/// Решение одной ступени качества. `None` — пути нет.
++pub fn solve(
++    obs: &[obstacles::Obstacle],
++    src: &Terminal,
++    dst: &Terminal,
++    min_stub: i32,
++) -> Option<Candidate> {
++    let lb = lower_bound(src, dst) as i64;
++    let direct = direct::best(obs, src, dst, min_stub);
++    if let Some(d) = &direct {
++        if d.len == lb {
++            return direct;
++        }
++    }
++    let mut best = direct;
++    for m in MARGINS {
++        if let Some(c) = search(obs, src, dst, min_stub, m, false) {
++            if best.as_ref().map_or(true, |b| c.cost < b.cost) {
++                best = Some(c);
++            }
++        }
++        if let Some(b) = &best {
++            if b.len <= lb + 2 * m as i64 * U as i64 {
++                break;
++            }
++        }
++    }
++    best
++}
++
++/// Построить маршрут между двумя терминалами среди карточек `cards` (идентификатор, прямоугольник).
++/// Всегда возвращает маршрут: если ни одна ступень не нашла путь, строится запасная ломаная.
++pub fn route(cards: &[(u32, Rect)], src: &Terminal, dst: &Terminal) -> Route {
++    let lb = lower_bound(src, dst) as i64;
++    for (clear, stub, quality) in TIERS {
++        let obs = obstacles::build(cards, src, dst, clear);
++        if let Some(c) = solve(&obs, src, dst, stub) {
++            let slack = if quality == Quality::Clean {
++                ((c.len - lb).max(0) / 2 / U as i64) as i32 + 4
++            } else {
++                300
++            };
++            return Route {
++                src_side: c.src_side,
++                dst_side: c.dst_side,
++                points: c.points,
++                quality,
++                region: region(src, dst, slack),
++            };
++        }
++    }
++    fallback(src, dst)
++}
++
++/// Область влияния: рамка карточек и портов (клетки), расширенная на запас.
++pub fn region(src: &Terminal, dst: &Terminal, slack: i32) -> Rect {
++    let u = union_rect(&src.rect, &dst.rect);
++    let (mut x0, mut y0, mut x1, mut y1) = (u.x, u.y, u.x + u.w, u.y + u.h);
++    for p in [src.left, src.right, dst.left, dst.right] {
++        let (cx, cy) = (p.x.div_euclid(U), p.y.div_euclid(U));
++        x0 = x0.min(cx);
++        y0 = y0.min(cy);
++        x1 = x1.max(cx + 1);
++        y1 = y1.max(cy + 1);
++    }
++    Rect::new(x0 - slack, y0 - slack, (x1 - x0) + 2 * slack, (y1 - y0) + 2 * slack)
++}
++
++/// Запасная ломаная: источник Правая, цель Левая, по колонкам на 2 клетки от карточек.
++/// Ортогональна и существует всегда, но может пересекать карточки.
++pub fn fallback(src: &Terminal, dst: &Terminal) -> Route {
++    let (ps, pt) = (src.port(Side::Right), dst.port(Side::Left));
++    let vs = (src.rect.x + src.rect.w + 2) * U;
++    let vt = (dst.rect.x - 2) * U;
++    let ym = ((ps.y + pt.y) / 2 / U) * U;
++    let points = simplify(vec![
++        ps,
++        Pt::new(vs, ps.y),
++        Pt::new(vs, ym),
++        Pt::new(vt, ym),
++        Pt::new(vt, pt.y),
++        pt,
++    ]);
++    Route {
++        src_side: Side::Right,
++        dst_side: Side::Left,
++        points,
++        quality: Quality::Fallback,
++        region: region(src, dst, 300),
++    }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/screen.rs b/crates/canvas/src/routing/screen.rs
+--- a/crates/canvas/src/routing/screen.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/screen.rs	2026-11-25 09:16:53.000000000 +0000
+@@ -0,0 +1,43 @@
++//! Перевод маршрута в экранные координаты и подгонка концов под реальные порты.
++
++use egui::Pos2;
++
++use super::model::{Pt, U};
++
++/// Точки маршрута (субклетки) → экранные пиксели.
++///
++/// Расчётные порты в кэше построены при масштабе 1; на текущем масштабе, а также при плавном
++/// визуальном смещении перетаскиваемой карточки реальные порты отличаются на доли клетки. Поэтому
++/// первая и последняя точки заменяются реальными экранными портами, а соседние точки выравниваются
++/// по их высоте: первый и последний отрезки остаются строго горизонтальными.
++pub fn route_to_screen(
++    points: &[Pt],
++    cell_size: f32,
++    offset: (f32, f32),
++    zoom: f32,
++    src_port: Pos2,
++    dst_port: Pos2,
++) -> Vec<Pos2> {
++    let mut pts: Vec<Pos2> = points
++        .iter()
++        .map(|p| {
++            Pos2::new(
++                (p.x as f32 / U as f32 * cell_size + offset.0) * zoom,
++                (p.y as f32 / U as f32 * cell_size + offset.1) * zoom,
++            )
++        })
++        .collect();
++    let n = pts.len();
++    if n < 2 {
++        return pts;
++    }
++    pts[0] = src_port;
++    pts[n - 1] = dst_port;
++    if n == 2 {
++        pts[1].y = pts[0].y;
++    } else {
++        pts[1].y = src_port.y;
++        pts[n - 2].y = dst_port.y;
++    }
++    pts
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/search.rs b/crates/canvas/src/routing/search.rs
+--- a/crates/canvas/src/routing/search.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/search.rs	2026-11-25 09:16:21.000000000 +0000
+@@ -0,0 +1,341 @@
++//! Поиск A* по сжатой сетке. Состояние — (колонка, ряд, направление движения).
++//! Разворот на 180° запрещён, поэтому колена считаются точно, а петли невозможны.
++
++use std::cmp::Reverse;
++use std::collections::{BinaryHeap, HashMap};
++
++use super::cost::{BEND_W, LEN_W, NONNATURAL, TIE_DIV};
++use super::direct::{mid, Candidate};
++use super::model::{manhattan, simplify, Pt, Side, Terminal, U};
++use super::obstacles::{v_free, Obstacle, Own};
++use super::stubs::columns;
++
++/// Поля окна поиска (клетки), пробуются по очереди.
++pub const MARGINS: [i32; 4] = [4, 12, 40, 120];
++
++const RIGHT: usize = 0;
++const LEFT: usize = 1;
++const DOWN: usize = 2;
++const UP: usize = 3;
++const NONE: u32 = u32::MAX;
++
++struct Goal {
++    a: usize,
++    b: usize,
++    side: Side,
++    /// Знаковая длина ножки: высота порта − ряд × 16.
++    leg: i32,
++    last_dir: usize,
++    last_len: i32,
++}
++
++/// Поиск пути в окне с заданным полем. `dense = true` строит полную сетку из всех целых линий
++/// (нужно только тестам для сверки со сжатой сеткой).
++pub fn search(
++    obs: &[Obstacle],
++    src: &Terminal,
++    dst: &Terminal,
++    min_stub: i32,
++    margin: i32,
++    dense: bool,
++) -> Option<Candidate> {
++    // --- Окно ---
++    let (mut wx0, mut wy0, mut wx1, mut wy1) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
++    for o in obs.iter().filter(|o| o.own != Own::Other) {
++        wx0 = wx0.min(o.x0);
++        wy0 = wy0.min(o.y0);
++        wx1 = wx1.max(o.x1);
++        wy1 = wy1.max(o.y1);
++    }
++    for p in [src.left, src.right, dst.left, dst.right] {
++        let (cx, cy) = (p.x.div_euclid(U), p.y.div_euclid(U));
++        wx0 = wx0.min(cx);
++        wy0 = wy0.min(cy);
++        wx1 = wx1.max(cx + 1);
++        wy1 = wy1.max(cy + 1);
++    }
++    if wx0 > wx1 || wy0 > wy1 {
++        return None;
++    }
++    wx0 -= margin;
++    wy0 -= margin;
++    wx1 += margin;
++    wy1 += margin;
++
++    let local: Vec<&Obstacle> = obs
++        .iter()
++        .filter(|o| o.x0 < wx1 && wx0 < o.x1 && o.y0 < wy1 && wy0 < o.y1)
++        .collect();
++    let (xmid, ymid) = mid(src, dst);
++
++    // --- Линии сетки ---
++    let (xs, ys): (Vec<i32>, Vec<i32>) = if dense {
++        ((wx0..=wx1).collect(), (wy0..=wy1).collect())
++    } else {
++        let mut xs = vec![wx0, wx1, xmid.div_euclid(U), xmid.div_euclid(U) + 1];
++        let mut ys = vec![wy0, wy1, ymid.div_euclid(U), ymid.div_euclid(U) + 1];
++        for o in &local {
++            xs.push(o.x0);
++            xs.push(o.x1);
++            ys.push(o.y0);
++            ys.push(o.y1);
++        }
++        for t in [src, dst] {
++            for s in Side::BOTH {
++                xs.push(t.edge_x(s) + s.sign() * min_stub);
++            }
++            for p in [t.left, t.right] {
++                ys.push(p.y.div_euclid(U));
++                ys.push(p.y.div_euclid(U) + 1);
++            }
++        }
++        xs.retain(|&x| wx0 <= x && x <= wx1);
++        ys.retain(|&y| wy0 <= y && y <= wy1);
++        xs.sort_unstable();
++        xs.dedup();
++        ys.sort_unstable();
++        ys.dedup();
++        (xs, ys)
++    };
++    let (nx, ny) = (xs.len(), ys.len());
++    if nx < 2 || ny < 2 {
++        return None;
++    }
++
++    // --- Занятые рёбра ---
++    let mut hblock = vec![false; ny * (nx - 1)];
++    let mut vblock = vec![false; (ny - 1) * nx];
++    for o in &local {
++        for b in 0..ny {
++            if o.y0 < ys[b] && ys[b] < o.y1 {
++                for a in 0..nx - 1 {
++                    if xs[a + 1] > o.x0 && xs[a] < o.x1 {
++                        hblock[b * (nx - 1) + a] = true;
++                    }
++                }
++            }
++        }
++        for a in 0..nx {
++            if o.x0 < xs[a] && xs[a] < o.x1 {
++                for b in 0..ny - 1 {
++                    if ys[b + 1] > o.y0 && ys[b] < o.y1 {
++                        vblock[b * nx + a] = true;
++                    }
++                }
++            }
++        }
++    }
++
++    let n_states = nx * ny * 4;
++    let st = |a: usize, b: usize, d: usize| (b * nx + a) * 4 + d;
++    let mut dist = vec![u64::MAX; n_states];
++    let mut parent = vec![NONE; n_states];
++    let mut start_side: Vec<Option<Side>> = vec![None; n_states];
++    let mut heap: BinaryHeap<Reverse<(u64, u64, u32, u32)>> = BinaryHeap::new();
++
++    let heur = |a: usize, b: usize| -> u64 {
++        let p = Pt::new(xs[a] * U, ys[b] * U);
++        let m = manhattan(p, dst.left).min(manhattan(p, dst.right));
++        m as u64 * LEN_W
++    };
++
++    // --- Старты: первый отрезок и ножка ---
++    for s in Side::BOTH {
++        let ps = src.port(s);
++        let Some((lo, hi)) = columns(obs, Own::Src, src.edge_x(s), s, ps.y, min_stub, Some((wx0, wx1))) else {
++            continue;
++        };
++        let out_dir = if s == Side::Right { RIGHT } else { LEFT };
++        let nonnat = if s == Side::Left { NONNATURAL } else { 0 };
++        let aligned = ps.y.rem_euclid(U) == 0;
++        let rows: Vec<(i32, usize)> = if aligned {
++            vec![(ps.y / U, out_dir)]
++        } else {
++            let f = ps.y.div_euclid(U);
++            vec![(f, UP), (f + 1, DOWN)]
++        };
++        for a in 0..nx {
++            if xs[a] < lo || xs[a] > hi {
++                continue;
++            }
++            let first = (xs[a] * U - ps.x).abs();
++            for &(row, dir) in &rows {
++                let Ok(b) = ys.binary_search(&row) else { continue };
++                let (len, bends) = if aligned {
++                    (first, 0u64)
++                } else {
++                    if !v_free(obs, xs[a], ps.y, row * U) {
++                        continue;
++                    }
++                    (first + (row * U - ps.y).abs(), 1u64)
++                };
++                let g = len as u64 * LEN_W + bends * BEND_W + nonnat;
++                let sidx = st(a, b, dir);
++                if g < dist[sidx] {
++                    dist[sidx] = g;
++                    parent[sidx] = NONE;
++                    start_side[sidx] = Some(s);
++                    heap.push(Reverse((g + heur(a, b), g, sidx as u32, NONE)));
++                }
++            }
++        }
++    }
++
++    // --- Финиши: ножка и последний отрезок ---
++    let mut goals: Vec<Goal> = Vec::new();
++    let mut goals_at: HashMap<usize, Vec<usize>> = HashMap::new();
++    for t in Side::BOTH {
++        let pt = dst.port(t);
++        let Some((lo, hi)) = columns(obs, Own::Dst, dst.edge_x(t), t, pt.y, min_stub, Some((wx0, wx1))) else {
++            continue;
++        };
++        let last_dir = if t == Side::Left { RIGHT } else { LEFT };
++        let rows: Vec<i32> = if pt.y.rem_euclid(U) == 0 {
++            vec![pt.y / U]
++        } else {
++            let f = pt.y.div_euclid(U);
++            vec![f, f + 1]
++        };
++        for a in 0..nx {
++            if xs[a] < lo || xs[a] > hi {
++                continue;
++            }
++            for &row in &rows {
++                let Ok(b) = ys.binary_search(&row) else { continue };
++                if !v_free(obs, xs[a], row * U, pt.y) {
++                    continue;
++                }
++                goals_at.entry(b * nx + a).or_default().push(goals.len());
++                goals.push(Goal {
++                    a,
++                    b,
++                    side: t,
++                    leg: pt.y - row * U,
++                    last_dir,
++                    last_len: (xs[a] * U - pt.x).abs(),
++                });
++            }
++        }
++    }
++    if goals.is_empty() {
++        return None;
++    }
++
++    // --- Основной цикл ---
++    while let Some(Reverse((_f, g, s_idx, goal))) = heap.pop() {
++        if goal != NONE {
++            return Some(rebuild(
++                s_idx as usize, &goals[goal as usize], g, &parent, &start_side, &xs, &ys, nx, src, dst,
++            ));
++        }
++        let s_idx = s_idx as usize;
++        if g > dist[s_idx] {
++            continue;
++        }
++        let d = s_idx % 4;
++        let vtx = s_idx / 4;
++        let (a, b) = (vtx % nx, vtx / nx);
++
++        if let Some(gs) = goals_at.get(&vtx) {
++            for &gi in gs {
++                if let Some(fc) = finish_cost(d, &goals[gi]) {
++                    let tot = g + fc;
++                    heap.push(Reverse((tot, tot, s_idx as u32, gi as u32)));
++                }
++            }
++        }
++
++        for nd in 0..4usize {
++            if nd == (d ^ 1) {
++                continue;
++            }
++            let (na, nb, cells, horizontal) = match nd {
++                RIGHT if a + 1 < nx && !hblock[b * (nx - 1) + a] => (a + 1, b, xs[a + 1] - xs[a], true),
++                LEFT if a > 0 && !hblock[b * (nx - 1) + a - 1] => (a - 1, b, xs[a] - xs[a - 1], true),
++                DOWN if b + 1 < ny && !vblock[b * nx + a] => (a, b + 1, ys[b + 1] - ys[b], false),
++                UP if b > 0 && !vblock[(b - 1) * nx + a] => (a, b - 1, ys[b] - ys[b - 1], false),
++                _ => continue,
++            };
++            let tie = if horizontal {
++                ((ys[b] * U - ymid).abs() / TIE_DIV) as u64
++            } else {
++                ((xs[a] * U - xmid).abs() / TIE_DIV) as u64
++            } * cells as u64;
++            let step = cells as u64 * U as u64 * LEN_W + if nd != d { BEND_W } else { 0 } + tie;
++            let ng = g + step;
++            let ns = st(na, nb, nd);
++            if ng < dist[ns] {
++                dist[ns] = ng;
++                parent[ns] = s_idx as u32;
++                heap.push(Reverse((ng + heur(na, nb), ng, ns as u32, NONE)));
++            }
++        }
++    }
++    None
++}
++
++/// Стоимость подхода к финишу из вершины при направлении прихода `d`.
++fn finish_cost(d: usize, g: &Goal) -> Option<u64> {
++    let nonnat = if g.side == Side::Right { NONNATURAL } else { 0 };
++    let last = g.last_len as u64 * LEN_W;
++    if g.leg == 0 {
++        if d == g.last_dir {
++            Some(last + nonnat)
++        } else if d == (g.last_dir ^ 1) {
++            None
++        } else {
++            Some(last + BEND_W + nonnat)
++        }
++    } else {
++        let leg_dir = if g.leg > 0 { DOWN } else { UP };
++        let into_leg = if d == leg_dir {
++            0
++        } else if d == (leg_dir ^ 1) {
++            return None;
++        } else {
++            BEND_W
++        };
++        Some((g.leg.unsigned_abs() as u64 + g.last_len as u64) * LEN_W + into_leg + BEND_W + nonnat)
++    }
++}
++
++#[allow(clippy::too_many_arguments)]
++fn rebuild(
++    goal_state: usize,
++    goal: &Goal,
++    total: u64,
++    parent: &[u32],
++    start_side: &[Option<Side>],
++    xs: &[i32],
++    ys: &[i32],
++    nx: usize,
++    src: &Terminal,
++    dst: &Terminal,
++) -> Candidate {
++    let mut verts: Vec<Pt> = Vec::new();
++    let mut cur = goal_state;
++    loop {
++        let vtx = cur / 4;
++        verts.push(Pt::new(xs[vtx % nx] * U, ys[vtx / nx] * U));
++        if parent[cur] == NONE {
++            break;
++        }
++        cur = parent[cur] as usize;
++    }
++    verts.reverse();
++    let side = start_side[cur].unwrap_or(Side::Right);
++    let ps = src.port(side);
++    let pt = dst.port(goal.side);
++    let mut pts = vec![ps, Pt::new(verts[0].x, ps.y)];
++    pts.extend(verts.iter().copied());
++    pts.push(Pt::new(verts[verts.len() - 1].x, pt.y));
++    pts.push(pt);
++    let _ = goal.a;
++    let _ = goal.b;
++    let points = simplify(pts);
++    let len: i64 = points
++        .windows(2)
++        .map(|w| ((w[1].x - w[0].x).abs() + (w[1].y - w[0].y).abs()) as i64)
++        .sum();
++    Candidate { src_side: side, dst_side: goal.side, points, cost: total, len }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/stubs.rs b/crates/canvas/src/routing/stubs.rs
+--- a/crates/canvas/src/routing/stubs.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/stubs.rs	2026-11-25 09:15:20.000000000 +0000
+@@ -0,0 +1,57 @@
++//! Допустимые колонки первого и последнего отрезков (заглушек).
++
++use super::model::Side;
++use super::obstacles::{Obstacle, Own};
++use super::model::U;
++
++/// Предельный вылет заглушки от ближней допустимой колонки (клетки).
++pub const MAX_STUB_REACH: i32 = 150;
++
++/// Диапазон допустимых целых колонок `(от, до)` включительно для заглушки.
++///
++/// `own` — метка своей карточки (она заглушку не блокирует), `edge` — вертикаль карточки
++/// на этой стороне, `y` — высота порта (субклетки), `window` — необязательное окно по X.
++pub fn columns(
++    obs: &[Obstacle],
++    own: Own,
++    edge: i32,
++    side: Side,
++    y: i32,
++    min_stub: i32,
++    window: Option<(i32, i32)>,
++) -> Option<(i32, i32)> {
++    let (mut lo, mut hi);
++    match side {
++        Side::Right => {
++            let near = edge + min_stub;
++            let mut far = near + MAX_STUB_REACH;
++            for o in obs {
++                if o.own != own && o.y0 * U < y && y < o.y1 * U && o.x1 > edge {
++                    far = far.min(o.x0);
++                }
++            }
++            lo = near;
++            hi = far;
++        }
++        Side::Left => {
++            let near = edge - min_stub;
++            let mut far = near - MAX_STUB_REACH;
++            for o in obs {
++                if o.own != own && o.y0 * U < y && y < o.y1 * U && o.x0 < edge {
++                    far = far.max(o.x1);
++                }
++            }
++            lo = far;
++            hi = near;
++        }
++    }
++    if let Some((wl, wr)) = window {
++        lo = lo.max(wl);
++        hi = hi.min(wr);
++    }
++    if lo > hi {
++        None
++    } else {
++        Some((lo, hi))
++    }
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/routing/tests.rs b/crates/canvas/src/routing/tests.rs
+--- a/crates/canvas/src/routing/tests.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/crates/canvas/src/routing/tests.rs	2026-11-25 09:25:49.000000000 +0000
+@@ -0,0 +1,316 @@
++//! Тесты маршрутизатора: золотые сценарии, случайные сцены, сверка со сжатой сеткой.
++
++use polygram_core::layout::Rect;
++
++use super::cost::{cost_bends, cost_len};
++use super::model::*;
++use super::obstacles::{self, Own};
++use super::router::{route, TIERS};
++use super::search::search;
++
++/// Терминал с портами в 0,75 клетки от краёв карточки на высоте `y` (клетки).
++fn term_y(card: u32, r: Rect, y: f32) -> Terminal {
++    Terminal {
++        card,
++        rect: r,
++        left: Pt::new(round_away((r.x as f32 + 0.75) * 16.0), round_away(y * 16.0)),
++        right: Pt::new(round_away(((r.x + r.w) as f32 - 0.75) * 16.0), round_away(y * 16.0)),
++    }
++}
++
++/// Терминал строки `k`: высота = y карточки + 0,6 + 1,3 × k.
++fn term_k(card: u32, r: Rect, k: u32) -> Terminal {
++    term_y(card, r, r.y as f32 + 0.6 + 1.3 * k as f32)
++}
++
++fn cards_of(rects: &[Rect]) -> Vec<(u32, Rect)> {
++    rects.iter().enumerate().map(|(i, r)| (i as u32, *r)).collect()
++}
++
++fn seg_hits_open_rect(a: Pt, b: Pt, o: &obstacles::Obstacle) -> bool {
++    let (x0, y0, x1, y1) = (o.x0 * U, o.y0 * U, o.x1 * U, o.y1 * U);
++    if a.y == b.y {
++        y0 < a.y && a.y < y1 && a.x.min(b.x) < x1 && x0 < a.x.max(b.x)
++    } else {
++        x0 < a.x && a.x < x1 && a.y.min(b.y) < y1 && y0 < a.y.max(b.y)
++    }
++}
++
++fn segs_touch(a0: Pt, a1: Pt, b0: Pt, b1: Pt) -> bool {
++    let (ax0, ax1, ay0, ay1) = (a0.x.min(a1.x), a0.x.max(a1.x), a0.y.min(a1.y), a0.y.max(a1.y));
++    let (bx0, bx1, by0, by1) = (b0.x.min(b1.x), b0.x.max(b1.x), b0.y.min(b1.y), b0.y.max(b1.y));
++    ax0 <= bx1 && bx0 <= ax1 && ay0 <= by1 && by0 <= ay1
++}
++
++/// Проверка маршрута по разделу 11.1 ТЗ.
++fn check_route(r: &Route, src: &Terminal, dst: &Terminal, cards: &[(u32, Rect)]) {
++    let p = &r.points;
++    let n = p.len();
++    assert!(n == 2 || n >= 4, "точек {n}");
++    assert_eq!(p[0], src.port(r.src_side));
++    assert_eq!(p[n - 1], dst.port(r.dst_side));
++    for w in p.windows(2) {
++        assert!(w[0].x == w[1].x || w[0].y == w[1].y, "диагональ {:?}", w);
++        assert!(w[0] != w[1], "нулевой отрезок");
++    }
++    for w in p.windows(3) {
++        let same = (w[0].x == w[1].x && w[1].x == w[2].x) || (w[0].y == w[1].y && w[1].y == w[2].y);
++        assert!(!same, "лишняя точка {:?}", w);
++    }
++    // Первый и последний отрезки горизонтальны, направление по сторонам.
++    assert_eq!(p[0].y, p[1].y);
++    assert_eq!(p[n - 1].y, p[n - 2].y);
++    assert_eq!((p[1].x - p[0].x).signum(), r.src_side.sign());
++    assert_eq!((p[n - 1].x - p[n - 2].x).signum(), -r.dst_side.sign());
++    // Нет самокасаний между несмежными отрезками.
++    for i in 0..n - 1 {
++        for j in i + 2..n - 1 {
++            assert!(!segs_touch(p[i], p[i + 1], p[j], p[j + 1]), "самокасание {i}/{j}");
++        }
++    }
++    if r.quality == Quality::Fallback {
++        return;
++    }
++    let (clear, stub) = match r.quality {
++        Quality::Clean => (1, 2),
++        Quality::Tight => (0, 2),
++        _ => (0, 1),
++    };
++    // Заглушки не короче минимума, вертикали на целых колонках вне своих карточек.
++    if n == 2 {
++        assert!((p[1].x - p[0].x).abs() >= 2 * U);
++    } else {
++        assert!((p[1].x - p[0].x).abs() >= stub * U);
++        assert!((p[n - 1].x - p[n - 2].x).abs() >= stub * U);
++        assert_eq!(p[1].x % U, 0);
++        assert_eq!(p[n - 2].x % U, 0);
++        let c1 = p[1].x / U;
++        assert!(c1 < src.rect.x || c1 > src.rect.x + src.rect.w);
++        let c2 = p[n - 2].x / U;
++        assert!(c2 < dst.rect.x || c2 > dst.rect.x + dst.rect.w);
++        for i in 1..n - 2 {
++            if p[i].y == p[i + 1].y {
++                assert_eq!(p[i].y % U, 0, "горизонталь не на ряду");
++            } else {
++                assert_eq!(p[i].x % U, 0, "вертикаль не на колонке");
++            }
++        }
++    }
++    // Препятствия.
++    let obs = obstacles::build(cards, src, dst, clear);
++    for i in 0..n - 1 {
++        let first_or_last = i == 0 || i == n - 2;
++        for o in &obs {
++            if first_or_last && matches!(o.own, Own::Src | Own::Dst) {
++                continue;
++            }
++            assert!(!seg_hits_open_rect(p[i], p[i + 1], o), "отрезок {i} задевает карточку {:?}", o);
++        }
++    }
++}
++
++fn len_manhattan_plus(src: &Terminal, dst: &Terminal) -> i64 {
++    manhattan(src.right, dst.left) as i64
++}
++
++#[test]
++fn three_segments_gap_4() {
++    let (a, b) = (Rect::new(0, 0, 30, 30), Rect::new(34, 10, 30, 30));
++    let (s, d) = (term_y(0, a, 6.4), term_y(1, b, 17.8));
++    let cards = cards_of(&[a, b]);
++    let r = route(&cards, &s, &d);
++    check_route(&r, &s, &d, &cards);
++    assert_eq!(r.quality, Quality::Clean);
++    assert_eq!((r.src_side, r.dst_side), (Side::Right, Side::Left));
++    assert_eq!(r.points.len(), 4);
++    assert_eq!(r.points[1].x, 32 * U);
++    assert_eq!(r.points[2].x, 32 * U);
++}
++
++#[test]
++fn vertical_in_middle_of_wide_gap() {
++    let (a, b) = (Rect::new(0, 0, 30, 30), Rect::new(50, 10, 30, 30));
++    let (s, d) = (term_y(0, a, 6.4), term_y(1, b, 17.8));
++    let r = route(&cards_of(&[a, b]), &s, &d);
++    assert_eq!(r.points.len(), 4);
++    assert_eq!(r.points[1].x, 40 * U);
++}
++
++#[test]
++fn straight_line() {
++    let (a, b) = (Rect::new(0, 0, 30, 30), Rect::new(40, 0, 30, 30));
++    let (s, d) = (term_y(0, a, 12.5), term_y(1, b, 12.5));
++    let r = route(&cards_of(&[a, b]), &s, &d);
++    assert_eq!(r.points.len(), 2);
++    assert_eq!(r.quality, Quality::Clean);
++}
++
++#[test]
++fn detour_around_wall() {
++    let (a, b, w) = (Rect::new(0, 0, 10, 10), Rect::new(40, 0, 10, 10), Rect::new(20, -4, 6, 18));
++    let (s, d) = (term_y(0, a, 4.5), term_y(1, b, 4.5));
++    let cards = cards_of(&[a, b, w]);
++    let r = route(&cards, &s, &d);
++    check_route(&r, &s, &d, &cards);
++    assert_eq!(r.quality, Quality::Clean);
++    assert_eq!(r.points.len(), 6);
++    // Манхэттен между портами + удвоенный меньший подъём (вверх 152 субклетки до зоны над стеной).
++    assert_eq!(r.length(), len_manhattan_plus(&s, &d) + 2 * 152);
++}
++
++#[test]
++fn backward_link_uses_outer_sides() {
++    let (a, b) = (Rect::new(60, 0, 20, 20), Rect::new(0, 4, 20, 20));
++    let (s, d) = (term_k(0, a, 0), term_k(1, b, 1));
++    let cards = cards_of(&[a, b]);
++    let r = route(&cards, &s, &d);
++    check_route(&r, &s, &d, &cards);
++    assert_eq!((r.src_side, r.dst_side), (Side::Left, Side::Right));
++}
++
++#[test]
++fn narrow_gap_gives_short_quality() {
++    let (a, b) = (Rect::new(20, 20, 10, 10), Rect::new(60, 20, 10, 10));
++    let (l, rr) = (Rect::new(9, 10, 10, 30), Rect::new(31, 10, 10, 30));
++    let (s, d) = (term_k(0, a, 0), term_k(1, b, 0));
++    let cards = cards_of(&[a, b, l, rr]);
++    let r = route(&cards, &s, &d);
++    check_route(&r, &s, &d, &cards);
++    assert_eq!(r.quality, Quality::Short);
++}
++
++#[test]
++fn boxed_in_falls_back() {
++    let (a, b) = (Rect::new(20, 20, 10, 10), Rect::new(60, 20, 10, 10));
++    let (l, rr) = (Rect::new(10, 10, 10, 30), Rect::new(30, 10, 10, 30));
++    let (s, d) = (term_k(0, a, 0), term_k(1, b, 0));
++    let cards = cards_of(&[a, b, l, rr]);
++    let r = route(&cards, &s, &d);
++    assert_eq!(r.quality, Quality::Fallback);
++    check_route(&r, &s, &d, &cards);
++}
++
++#[test]
++fn deterministic() {
++    let (a, b, w) = (Rect::new(0, 0, 30, 30), Rect::new(33, 40, 30, 30), Rect::new(10, 31, 12, 8));
++    let (s, d) = (term_k(0, a, 1), term_k(1, b, 2));
++    let cards = cards_of(&[a, b, w]);
++    assert_eq!(route(&cards, &s, &d), route(&cards, &s, &d));
++}
++
++// ---------- Случайные сцены ----------
++
++struct Lcg(u64);
++impl Lcg {
++    fn next(&mut self) -> u32 {
++        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
++        (self.0 >> 33) as u32
++    }
++    fn range(&mut self, lo: i32, hi: i32) -> i32 {
++        lo + (self.next() % (hi - lo + 1) as u32) as i32
++    }
++}
++
++fn random_scene(rng: &mut Lcg) -> (Vec<(u32, Rect)>, Terminal, Terminal) {
++    scene(rng, (140, 100), (3, 7), (10, 34), (8, 30))
++}
++
++/// Плотная сцена: много карточек на малой площади, чтобы чаще требовались обходы.
++fn crowded_scene(rng: &mut Lcg) -> (Vec<(u32, Rect)>, Terminal, Terminal) {
++    scene(rng, (90, 60), (7, 11), (6, 20), (6, 16))
++}
++
++fn scene(
++    rng: &mut Lcg,
++    area: (i32, i32),
++    count: (i32, i32),
++    w: (i32, i32),
++    h: (i32, i32),
++) -> (Vec<(u32, Rect)>, Terminal, Terminal) {
++    loop {
++        let n = rng.range(count.0, count.1) as usize;
++        let mut rects: Vec<Rect> = Vec::new();
++        let mut tries = 0;
++        while rects.len() < n && tries < 400 {
++            tries += 1;
++            let r = Rect::new(rng.range(0, area.0), rng.range(0, area.1), rng.range(w.0, w.1), rng.range(h.0, h.1));
++            if rects.iter().all(|o| !o.overlaps(&r)) {
++                rects.push(r);
++            }
++        }
++        if rects.len() < 2 {
++            continue;
++        }
++        let s = term_k(0, rects[0], rng.range(0, 3) as u32);
++        let d = term_k(1, rects[1], rng.range(0, 3) as u32);
++        return (cards_of(&rects), s, d);
++    }
++}
++
++#[test]
++fn random_scenes_satisfy_requirements() {
++    let mut rng = Lcg(42);
++    let (mut clean, mut total) = (0, 0);
++    for _ in 0..400 {
++        let (cards, s, d) = random_scene(&mut rng);
++        let r = route(&cards, &s, &d);
++        check_route(&r, &s, &d, &cards);
++        total += 1;
++        if r.quality == Quality::Clean {
++            clean += 1;
++        }
++    }
++    assert!(clean * 2 >= total, "Чисто только {clean} из {total}");
++}
++
++/// Сжатая сетка должна давать ту же длину и число колен, что полная сетка из всех целых линий.
++#[test]
++fn compressed_grid_matches_dense_grid() {
++    let mut rng = Lcg(7);
++    for _ in 0..120 {
++        let (cards, s, d) = random_scene(&mut rng);
++        for (clear, stub, _) in TIERS.iter().take(2) {
++            let obs = obstacles::build(&cards, &s, &d, *clear);
++            let sparse = search(&obs, &s, &d, *stub, 12, false);
++            let dense = search(&obs, &s, &d, *stub, 12, true);
++            match (sparse, dense) {
++                (None, None) => {}
++                (Some(a), Some(b)) => {
++                    assert_eq!(cost_len(a.cost), cost_len(b.cost), "длина");
++                    assert_eq!(cost_bends(a.cost), cost_bends(b.cost), "колена");
++                }
++                (a, b) => panic!("расхождение существования пути: {:?} / {:?}", a.is_some(), b.is_some()),
++            }
++        }
++    }
++}
++
++/// Плотные сцены: требования ТЗ выполняются, а сжатая сетка совпадает с полной.
++#[test]
++fn crowded_scenes_requirements_and_dense_match() {
++    let mut rng = Lcg(2026);
++    let mut by_quality = [0usize; 4];
++    let mut searched = 0usize;
++    for _ in 0..300 {
++        let (cards, s, d) = crowded_scene(&mut rng);
++        let r = route(&cards, &s, &d);
++        check_route(&r, &s, &d, &cards);
++        by_quality[r.quality as usize] += 1;
++        for (clear, stub, _) in TIERS.iter().take(2) {
++            let obs = obstacles::build(&cards, &s, &d, *clear);
++            let sparse = search(&obs, &s, &d, *stub, 12, false);
++            let dense = search(&obs, &s, &d, *stub, 12, true);
++            match (sparse, dense) {
++                (None, None) => {}
++                (Some(a), Some(b)) => {
++                    searched += 1;
++                    assert_eq!(cost_len(a.cost), cost_len(b.cost), "длина");
++                    assert_eq!(cost_bends(a.cost), cost_bends(b.cost), "колена");
++                }
++                (a, b) => panic!("расхождение существования пути: {:?} / {:?}", a.is_some(), b.is_some()),
++            }
++        }
++    }
++    println!("качество Чисто/Впритык/Коротко/Запасной = {:?}, сверок = {}", by_quality, searched);
++    assert!(by_quality[0] > 0 && searched > 100);
++}
+diff -ruN -x target -x Cargo.lock a/crates/canvas/src/theme.rs b/crates/canvas/src/theme.rs
+--- a/crates/canvas/src/theme.rs	2026-11-25 09:39:22.449203722 +0000
++++ b/crates/canvas/src/theme.rs	2026-11-25 09:16:53.000000000 +0000
+@@ -62,6 +62,10 @@
+     pub text_muted: Color32,
+     /// Радиус порта точки сцепления.
+     pub port_radius: f32,
++    /// Толщина линии связи (пиксели при zoom = 1).
++    pub edge_width: f32,
++    /// Радиус скругления углов линии связи (пиксели при zoom = 1); 0 — острые углы.
++    pub line_corner_radius: f32,
+ 
+     // ========== Статусы ==========
+     /// Цвет точки статуса «Ок» (зелёный).
+@@ -113,6 +117,8 @@
+             text: Color32::from_rgb(230, 230, 235),
+             text_muted: Color32::from_rgb(150, 150, 160),
+             port_radius: 3.0,
++            edge_width: 1.5,
++            line_corner_radius: 0.0,
+ 
+             status_ok: Color32::from_rgb(76, 175, 80),
+             status_warning: Color32::from_rgb(255, 152, 0),
+diff -ruN -x target -x Cargo.lock a/crates/polygram/src/app/mod.rs b/crates/polygram/src/app/mod.rs
+--- a/crates/polygram/src/app/mod.rs	2026-11-25 09:39:22.461259974 +0000
++++ b/crates/polygram/src/app/mod.rs	2026-11-25 09:17:34.000000000 +0000
+@@ -131,6 +131,7 @@
+         let mut geometry = self.engine.geometry();
+         // Отдел не имеет фиксированного размера: рамка обтягивается под детей.
+         crate::app::departments::fit_departments_to_children(&mut geometry, None);
++        self.canvas.edges = geometry.edges;
+         self.canvas.objects = geometry.objects;
+         self.cached_geometry = None;
+     }

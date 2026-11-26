@@ -40,3 +40,8 @@ pub const PROCESS_BORDER_RADIUS_PX: f32 = 6.0;
 pub const CONTAINER_BORDER_RADIUS_PX: f32 = 4.0;
 /// Скругление угла строки показателя (пиксели при zoom = 1).
 pub const ROW_BORDER_RADIUS_PX: f32 = 2.0;
+
+// ========== Линии связи ==========
+
+/// Ширина карточки процесса (пиксели при zoom = 1). Определяет и размер препятствия для линий.
+pub const PROCESS_CARD_W_PX: f32 = 512.0;
