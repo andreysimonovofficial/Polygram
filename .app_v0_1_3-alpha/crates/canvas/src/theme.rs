@@ -65,6 +65,7 @@ pub struct Theme {
     /// Толщина линии связи (пиксели при zoom = 1).
     pub edge_width: f32,
     /// Радиус скругления углов линии связи (пиксели при zoom = 1); 0 — острые углы.
+    /// По умолчанию 6 px; на коротких коленах адаптируется под размер ступеньки.
     pub line_corner_radius: f32,
 
     // ========== Статусы ==========
@@ -118,7 +119,7 @@ impl Theme {
             text_muted: Color32::from_rgb(150, 150, 160),
             port_radius: 3.0,
             edge_width: 1.5,
-            line_corner_radius: 0.0,
+            line_corner_radius: 6.0,
 
             status_ok: Color32::from_rgb(76, 175, 80),
             status_warning: Color32::from_rgb(255, 152, 0),

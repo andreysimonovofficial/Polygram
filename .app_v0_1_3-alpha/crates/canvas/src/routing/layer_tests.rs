@@ -36,6 +36,7 @@ fn process(ix: u32, x: i32, y: i32, n_req: u32, n_res: u32, base: u32) -> Object
         requests: (0..n_req).map(|i| entry(base + i)).collect(),
         results: (0..n_res).map(|i| entry(base + n_req + i)).collect(),
         parent: None,
+        icon: String::new(),
     }
 }
 
@@ -50,6 +51,7 @@ fn department(ix: u32, rect: Rect) -> ObjectGeom {
         requests: vec![],
         results: vec![],
         parent: None,
+        icon: String::new(),
     }
 }
 
@@ -250,4 +252,28 @@ fn rounded_corner_is_tangent_arc() {
     // Радиус ограничен половиной самого короткого отрезка (80 / 2 = 40 → 1000 урезается до 40).
     let big = rounded_points(&pts, 1000.0);
     assert!((big[1] - Pos2::new(60.0, 0.0)).length() < 1e-3);
+}
+
+#[test]
+fn rounded_corner_adapts_to_short_step() {
+    // Короткая вертикальная ступенька (20 px) и длинная горизонтальная (100 px).
+    // step = 20 → радиус колена = min(6, 20/2) = 6, дуга заходит на 6 от угла.
+    let pts = [Pos2::new(0.0, 0.0), Pos2::new(100.0, 0.0), Pos2::new(100.0, 20.0)];
+    let out = rounded_points(&pts, 6.0);
+    assert!((out[1] - Pos2::new(94.0, 0.0)).length() < 1e-3);
+    assert!((out[out.len() - 2] - Pos2::new(100.0, 6.0)).length() < 1e-3);
+    for p in &out[1..out.len() - 1] {
+        assert!(((*p - Pos2::new(94.0, 6.0)).length() - 6.0).abs() < 1e-3);
+    }
+
+    // Очень короткая ступенька (4 px) → радиус урезается до step/2 = 2.
+    let tiny = [Pos2::new(0.0, 0.0), Pos2::new(100.0, 0.0), Pos2::new(100.0, 4.0)];
+    let t = rounded_points(&tiny, 6.0);
+    assert!((t[1] - Pos2::new(98.0, 0.0)).length() < 1e-3);
+    assert!((t[t.len() - 2] - Pos2::new(100.0, 2.0)).length() < 1e-3);
+
+    // Длинные ступеньки → радиус не превышает заданные 6 px.
+    let long = [Pos2::new(0.0, 0.0), Pos2::new(100.0, 0.0), Pos2::new(100.0, 100.0)];
+    let l = rounded_points(&long, 6.0);
+    assert!((l[1] - Pos2::new(94.0, 0.0)).length() < 1e-3);
 }

@@ -29,7 +29,9 @@ pub fn edge_color(theme: &Theme, src: StatusCode, dst: StatusCode) -> Color32 {
 }
 
 /// Нарисовать ломаную. При `radius > 0` углы скругляются дугой, касающейся обоих отрезков;
-/// радиус ограничен половиной самого короткого отрезка. Начало и конец не скругляются.
+/// радиус каждого колена ограничен `radius` и половиной меньшего из смежных отрезков, поэтому
+/// короткие ступеньки скругляются слабее, а длинные — на `radius` (по умолчанию 6 px).
+/// Начало и конец не скругляются.
 pub fn paint_polyline(painter: &Painter, pts: &[Pos2], color: Color32, width: f32, radius: f32) {
     if pts.len() < 2 {
         return;
@@ -39,18 +41,24 @@ pub fn paint_polyline(painter: &Painter, pts: &[Pos2], color: Color32, width: f3
 }
 
 /// Точки ломаной после скругления углов (8 отрезков на дугу).
+/// Радиус колена между отрезками `(p0->p1)` и `(p1->p2)` равен `min(radius, step / 2)`,
+/// где `step` — длина меньшего из смежных отрезков. При короткой ступеньке скругление
+/// адаптируется под её размер; при достаточном размере используется `radius`.
 pub fn rounded_points(pts: &[Pos2], radius: f32) -> Vec<Pos2> {
     if radius <= 0.0 || pts.len() < 3 {
-        return pts.to_vec();
-    }
-    let min_len = pts.windows(2).map(|w| (w[1] - w[0]).length()).fold(f32::MAX, f32::min);
-    let r = radius.min(min_len / 2.0);
-    if r <= 0.0 {
         return pts.to_vec();
     }
     let mut out = vec![pts[0]];
     for i in 1..pts.len() - 1 {
         let (p0, p1, p2) = (pts[i - 1], pts[i], pts[i + 1]);
+        let len_in = (p1 - p0).length();
+        let len_out = (p2 - p1).length();
+        let step = len_in.min(len_out);
+        let r = radius.min(step / 2.0);
+        if r <= 0.0 {
+            out.push(p1);
+            continue;
+        }
         let din = (p1 - p0).normalized();
         let dout = (p2 - p1).normalized();
         let center = p1 - din * r + dout * r;

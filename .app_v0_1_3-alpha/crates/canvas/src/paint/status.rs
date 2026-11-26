@@ -92,6 +92,7 @@ mod tests {
             requests: vec![],
             results: vec![],
             parent: None,
+            icon: String::new(),
         }
     }
 
@@ -115,6 +116,7 @@ mod tests {
                 .collect(),
             results: vec![],
             parent: Some(parent.into()),
+            icon: String::new(),
         }
     }
 
@@ -171,6 +173,7 @@ mod tests {
                 requests: vec![],
                 results: vec![],
                 parent: Some("d".into()),
+                icon: String::new(),
             },
             process("p1", "sub", &[0]),
         ];
