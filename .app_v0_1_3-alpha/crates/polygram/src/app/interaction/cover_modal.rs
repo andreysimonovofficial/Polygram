@@ -7,13 +7,12 @@ use polygram_core::types::NodeKind;
 use polygram_canvas::modal;
 use polygram_canvas::{default_icon_for, lucide_by_name, paint_lucide};
 use egui::{
-    Align, Color32, Pos2, Rect, Sense, Vec2, Align2, FontId, FontFamily, Stroke, StrokeKind,
-    Layout,
+    Color32, Pos2, Rect, Sense, Vec2, Align2, FontId, FontFamily, Stroke, StrokeKind,
 };
 use egui_lucide::Lucide;
 
-/// Доступные иконки для обложки: (русская подпись, имя варианта Lucide).
-/// Уникальность: каждая иконка в единственном экземпляре, без дублей.
+/// Полный набор иконок для обложки (без дублей).
+/// Каждый вариант Lucide встречается строго один раз.
 const COVER_ICONS: &[(&str, &str)] = &[
     ("Иконка Процесса", "BookUp2"),
     ("Иконка Отдела", "GraphHub"),
@@ -45,6 +44,50 @@ const COVER_ICONS: &[(&str, &str)] = &[
     ("Слои", "Layers"),
     ("Продукт", "Box"),
     ("Контроль качества", "Check"),
+    ("Входящие", "Inbox"),
+    ("Календарь", "Calendar"),
+    ("Камера", "Camera"),
+    ("Карта", "Map"),
+    ("Кошелёк", "Wallet"),
+    ("Меню", "Menu"),
+    ("Монитор", "Monitor"),
+    ("Музыка", "Music"),
+    ("Ноты", "Music"),
+    ("Облако", "Cloud"),
+    ("Отчёты", "BarChart3"),
+    ("Папка", "Folder"),
+    ("Подпись", "Signature"),
+    ("Поиск", "Search"),
+    ("Презентация", "Presentation"),
+    ("Принтер", "Printer"),
+    ("Профиль", "User"),
+    ("Радио", "Radio"),
+    ("Разделение", "Divide"),
+    ("Радар", "Radar"),
+    ("Рекомендация", "ThumbsUp"),
+    ("Сборка", "GitMerge"),
+    ("Сеть", "Wifi"),
+    ("Сообщение", "MessageCircle"),
+    ("Солнце", "Sun"),
+    ("Спецификация", "FileText"),
+    ("Статистика", "PieChart"),
+    ("Студия", "Studio"),
+    ("Таблица", "Tablet"),
+    ("Телефон", "Phone"),
+    ("Тикет", "Ticket"),
+    ("Токен", "Token"),
+    ("Тренд", "TrendingUp"),
+    ("Уведомление", "Bell"),
+    ("Управление", "Settings"),
+    ("Файл", "File"),
+    ("Фильтр", "Filter"),
+    ("Фото", "Image"),
+    ("Часы", "Clock"),
+    ("Чеклист", "CheckCircle"),
+    ("Штрихкод", "Barcode"),
+    ("Экран", "Tv"),
+    ("Энveloppe", "Mail"),
+    ("Ютуб", "Youtube"),
 ];
 
 /// Размер иконки в сетке выбора (пиксели).
@@ -56,8 +99,7 @@ const GRID_STEP_X: f32 = 60.0;
 const GRID_STEP_Y: f32 = 44.0;
 
 /// Рисование модального окна «Настроить обложку».
-/// Элементы выстраиваются строго по вертикали:
-/// шапка → карточка предпросмотра → строка поиска + сетка иконок (со скроллом) → подвал.
+/// Вертикальный поток: шапка (modal::header) → тело (предпросмотр + поиск + сетка со скроллом) → подвал (modal::footer).
 pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     if !app.dialogs.cover_modal_open {
         return;
@@ -102,63 +144,53 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                 ui.set_width(500.0);
 
                 // === Шапка (вверху) ===
-                {
-                    let header_rect = ui.available_rect_before_wrap();
-                    ui.allocate_rect(header_rect, Sense::hover());
-                    ui.horizontal(|ui| {
-                        ui.set_min_width(header_rect.width());
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(0.0, 4.0);
-                            ui.label(
-                                egui::RichText::new("Настроить обложку")
-                                    .family(FontFamily::Name("inter_semibold".into()))
-                                    .size(16.0)
-                                    .color(Color32::WHITE),
-                            );
-                            ui.label(
-                                egui::RichText::new("Выберите иконку для обложки объекта")
-                                    .family(FontFamily::Name("inter_medium".into()))
-                                    .size(11.0)
-                                    .extra_letter_spacing(0.44)
-                                    .color(Color32::from_rgb(0xA1, 0xA1, 0xAA)),
-                            );
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                            if modal::close_button(ui) {
-                                close_modal = true;
-                            }
-                        });
-                    });
+                if modal::header(
+                    ui,
+                    "Настроить обложку",
+                    "Выберите иконку для обложки объекта",
+                    None,
+                ) {
+                    close_modal = true;
                 }
 
                 ui.add_space(12.0);
 
-                // === Карточка предпросмотра ===
-                let preview_reset = preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
-                if preview_reset {
-                    reset_icon = true;
-                }
-
-                ui.add_space(12.0);
-
-                // === Блок выбора иконки (строка поиска + сетка со скроллом) ===
-                let body_height = 240.0;
-
+                // === Тело: карточка предпросмотра + поиск + сетка иконок со скроллом ===
+                let body_height = 280.0;
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
                     .max_height(body_height)
                     .show(ui, |ui| {
-                        ui.set_width(500.0);
-                        search_input(ui, &mut app.dialogs.cover_modal_search);
-                        ui.add_space(12.0);
-                        icon_grid(ui, &app.dialogs.cover_modal_search, &app.dialogs.cover_modal_icon, &mut new_icon);
-                    });
-            });
+                        ui.set_width(496.0);
 
-            // === Подвал (внизу) ===
-            if modal::footer(ui) {
-                save_modal = true;
-            }
+                        // Карточка предпросмотра.
+                        let preview_reset =
+                            preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
+                        if preview_reset {
+                            reset_icon = true;
+                        }
+
+                        ui.add_space(12.0);
+
+                        // Строка поиска.
+                        search_input(ui, &mut app.dialogs.cover_modal_search);
+
+                        ui.add_space(12.0);
+
+                        // Сетка иконок.
+                        icon_grid(
+                            ui,
+                            &app.dialogs.cover_modal_search,
+                            &app.dialogs.cover_modal_icon,
+                            &mut new_icon,
+                        );
+                    });
+
+                // === Подвал (внизу) ===
+                if modal::footer(ui) {
+                    save_modal = true;
+                }
+            });
         });
 
     if reset_icon {
@@ -325,7 +357,8 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
         FontId::new(12.0, FontFamily::Name("inter_medium".into())),
         Color32::from_rgb(0xD4, 0xD4, 0xD8),
     );
-    let reset_response = ui.interact(reset_rect, ui.scope_id().with("cover_reset"), Sense::click());
+    let reset_response =
+        ui.interact(reset_rect, ui.scope_id().with("cover_reset"), Sense::click());
 
     ui.advance_cursor_after_rect(card_rect);
     ui.add_space(8.0);
@@ -427,11 +460,8 @@ fn icon_grid(
             };
             paint_lucide(ui, icon_rect, icon, icon_color);
 
-            let response = ui.interact(
-                btn_rect,
-                ui.scope_id().with(name),
-                Sense::click(),
-            );
+            let response =
+                ui.interact(btn_rect, ui.scope_id().with(name), Sense::click());
             if response.clicked() {
                 *new_icon = Some(name.to_owned());
             }

@@ -316,7 +316,7 @@ impl Canvas {
             }
         }
 
-        // Department frames (container borders with header, drawn behind child cards).
+        // Department frames: hovered departments first (normal header/content, drawn behind children).
         for object in &self.objects {
             if object.kind != NodeKind::Department {
                 continue;
@@ -337,7 +337,9 @@ impl Canvas {
             }
             let is_selected = selected_objects.iter().any(|id| id == &object.id);
             let is_hovered = pointer_pos.map_or(false, |p| rect_px.contains(p));
-            // Подсчитать процессы внутри отдела.
+            if !is_hovered {
+                continue; // Nicht-hovered отделы рисуются обложкой в третьем проходе (поверх детей).
+            }
             let process_count = self.objects.iter()
                 .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
                 .count();
@@ -393,7 +395,45 @@ impl Canvas {
             self.container_header_hotspots.extend(result.header_hotspots);
         }
 
-        // Линии связи рисуются поверх карточек.
+        // Department covers for non-hovered departments — рисуются поверх дочерних процессов.
+        for object in &self.objects {
+            if object.kind != NodeKind::Department {
+                continue;
+            }
+            let r = &object.rect;
+            let mut screen_pos = self.cell_to_screen(r.x, r.y);
+            if let Some((shift, ids)) = &drag_visual {
+                if ids.contains(&object.id) {
+                    screen_pos = screen_pos + *shift;
+                }
+            }
+            let rect_px = Rect::from_min_size(
+                screen_pos,
+                Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
+            );
+            if !rect_px.intersects(clip_rect) {
+                continue;
+            }
+            let is_hovered = pointer_pos.map_or(false, |p| rect_px.contains(p));
+            if is_hovered {
+                continue; // Наведённый отдел уже нарисован в первом проходе (обычное содержимое).
+            }
+            let process_count = self.objects.iter()
+                .filter(|o| o.kind == NodeKind::Process && o.parent.as_ref() == Some(&object.id))
+                .count();
+            paint_department_frame(
+                painter,
+                ui,
+                object,
+                rect_px,
+                zoom,
+                &self.theme,
+                is_hovered,
+                process_count,
+            );
+        }
+
+        // Линии связи рисуются поверх карточек и обложек.
         paint::edge::paint_edges(
             painter,
             clip_rect,
