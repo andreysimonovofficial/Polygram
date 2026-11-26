@@ -4,7 +4,7 @@
 
 use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind, Color32};
 use polygram_core::types::Direction;
-use polygram_core::{DynamicState, EntryGeom, ObjectGeom};
+use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 
 use crate::icons::paint_lucide;
 use crate::paint::constants::{
@@ -333,6 +333,14 @@ fn paint_metric_container(
 
         let cy_row = row_rect.center().y;
 
+        // Цвет иконок строки по статусу показателя.
+        let status = dynamic.status[entry.ix as usize];
+        let (type_color, waiting_color, surplus_color) = match status {
+            StatusCode::Expected => (theme.status_deficit, theme.status_deficit, theme.text_muted),
+            StatusCode::Surplus => (theme.status_warning, theme.text_muted, theme.status_warning),
+            _ => (theme.text_muted, theme.text_muted, theme.text_muted),
+        };
+
         // Content area: после left padding (16px) и перед right padding (16px).
         let content_left = row_left + row_pad;   // +16px от левого края строки
         let content_right = row_right - row_pad; // -16px от правого края строки
@@ -343,7 +351,7 @@ fn paint_metric_container(
             ui,
             Rect::from_center_size(Pos2::new(icon_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::List,
-            theme.text_muted,
+            type_color,
         );
 
         // Имя показателя — начинается после иконки + gap.
@@ -384,7 +392,7 @@ fn paint_metric_container(
             ui,
             Rect::from_center_size(Pos2::new(waiting_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::Clock,
-            theme.text_muted,
+            waiting_color,
         );
 
         // Иконка Избыток (square-exclamation-point) — крайнюю справа.
@@ -393,7 +401,7 @@ fn paint_metric_container(
             ui,
             Rect::from_center_size(Pos2::new(surplus_cx, cy_row), Vec2::splat(icon_size)),
             Lucide::SquareExclamationPoint,
-            theme.text_muted,
+            surplus_color,
         );
 
         // Горячая зона перетаскивания строки.
