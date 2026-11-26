@@ -84,7 +84,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
 
                 // === Тело: карточка предпросмотра + поиск + сетка иконок со скроллом ===
                 egui::ScrollArea::vertical()
-                    .auto_shrink(false)
+                    .max_height(240.0)
                     .show(ui, |ui| {
                         ui.set_width(496.0);
 
