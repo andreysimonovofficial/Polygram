@@ -8,9 +8,9 @@ use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 
 use crate::icons::{default_icon_for, paint_lucide};
 use crate::paint::constants::{
-    CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, GAP_PX, ICON_SIZE_PX,
-    PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX, ROW_BORDER_RADIUS_PX,
-    ROW_H_PX, ROW_PADDING_X_PX,
+    CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, COVER_CONTENT_SCALE,
+    GAP_PX, ICON_SIZE_PX, PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX,
+    ROW_BORDER_RADIUS_PX, ROW_H_PX, ROW_PADDING_X_PX,
 };
 use crate::paint::status::worst_status;
 use crate::status_label_ru;
@@ -113,7 +113,8 @@ pub fn paint_process(
                 StrokeKind::Middle,
             );
             // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
-            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom);
+            // Содержимое обложки увеличено в 2 раза, чтобы быть соразмерным площади карточки.
+            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * COVER_CONTENT_SCALE;
             let cover_icon = default_icon_for(object.kind, &object.icon);
             let center = card_rect.center();
 
@@ -121,16 +122,16 @@ pub fn paint_process(
             // центрируется относительно центра обложки.
             let name_sig = format!("{}", object.name);
             let id_sig = format!("#{}", object.id);
-            let name_size = 13.0 * zoom;
-            let id_size = 11.0 * zoom;
+            let name_size = 13.0 * zoom * COVER_CONTENT_SCALE;
+            let id_size = 11.0 * zoom * COVER_CONTENT_SCALE;
             let name_color = Color32::WHITE;
             let id_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
-            let gap = 8.0 * zoom;
+            let gap = 8.0 * zoom * COVER_CONTENT_SCALE;
 
             let name_font = FontId::new(name_size, FontFamily::Name("inter_semibold".into()));
             let id_font = FontId::new(id_size, FontFamily::Name("inter_medium".into()));
             let pill_h = id_size * 1.4;
-            let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom;
+            let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom * COVER_CONTENT_SCALE;
             let pill_w = pill_w.max(id_size * 2.0);
 
             let stack_h = cover_icon_side + gap + name_size + gap + pill_h;
@@ -159,15 +160,17 @@ pub fn paint_process(
                 Pos2::new(center.x, pill_y),
                 Vec2::new(pill_w, pill_h),
             );
+            let pill_radius = 2.0 * zoom * COVER_CONTENT_SCALE;
+            let pill_border = Stroke::new(1.0 * zoom * COVER_CONTENT_SCALE, Color32::from_rgb(0x37, 0x38, 0x39));
             painter.rect_filled(
                 pill_rect,
-                2.0 * zoom,
+                pill_radius,
                 Color32::from_rgb(0x25, 0x25, 0x25),
             );
             painter.rect_stroke(
                 pill_rect,
-                2.0 * zoom,
-                Stroke::new(1.0 * zoom, Color32::from_rgb(0x37, 0x38, 0x39)),
+                pill_radius,
+                pill_border,
                 StrokeKind::Middle,
             );
             painter.text(
