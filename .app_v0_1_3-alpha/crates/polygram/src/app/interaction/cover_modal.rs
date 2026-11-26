@@ -6,10 +6,14 @@ use crate::app::PolygramApp;
 use polygram_core::types::NodeKind;
 use polygram_canvas::modal;
 use polygram_canvas::{default_icon_for, lucide_by_name, paint_lucide};
-use egui::{Color32, Pos2, Rect, Sense, Vec2, Align2, FontId, FontFamily, Stroke, StrokeKind};
+use egui::{
+    Align, Color32, Pos2, Rect, Sense, Vec2, Align2, FontId, FontFamily, Stroke, StrokeKind,
+    Layout,
+};
 use egui_lucide::Lucide;
 
 /// Доступные иконки для обложки: (русская подпись, имя варианта Lucide).
+/// Уникальность: каждая иконка в единственном экземпляре, без дублей.
 const COVER_ICONS: &[(&str, &str)] = &[
     ("Иконка Процесса", "BookUp2"),
     ("Иконка Отдела", "GraphHub"),
@@ -34,11 +38,9 @@ const COVER_ICONS: &[(&str, &str)] = &[
     ("Сайт и веб", "Globe"),
     ("Архив", "Archive"),
     ("Приоритет", "Flag"),
-    ("Веха", "Flag"),
     ("Звонки", "Phone"),
     ("Коммуникации", "MessageCircle"),
     ("Доступ", "Key"),
-    ("Ключи и API", "Key"),
     ("Теги", "Tag"),
     ("Слои", "Layers"),
     ("Продукт", "Box"),
@@ -80,21 +82,51 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     let mut reset_icon = false;
     let mut new_icon: Option<String> = None;
 
+    // Центрируем окно по центру экрана (по горизонтали и вертикали).
+    let screen_rect = ctx.viewport_rect();
+    let win_w = 540.0;
+    let win_h = 441.0;
+    let win_x = screen_rect.center().x - win_w / 2.0;
+    let win_y = screen_rect.center().y - win_h / 2.0;
+
     egui::Window::new("")
         .title_bar(false)
         .resizable(false)
         .collapsible(false)
-        .fixed_size([540.0, 441.0])
+        .fixed_pos([win_x, win_y])
+        .fixed_size([win_w, win_h])
         .show(ctx, |ui| {
             modal::modal_frame().show(ui, |ui| {
                 // === Шапка ===
-                if modal::header(
-                    ui,
-                    "Настроить обложку",
-                    "Выберите иконку для обложки объекта",
-                    None,
-                ) {
-                    close_modal = true;
+                // Горизонтальная строка с разнесением по краям:
+                // слева — заголовок + подзаголовок, справа — кнопка закрытия.
+                {
+                    let header_rect = ui.available_rect_before_wrap();
+                    ui.allocate_rect(header_rect, Sense::hover());
+                    ui.horizontal(|ui| {
+                        ui.set_min_width(header_rect.width());
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing = Vec2::new(0.0, 4.0);
+                            ui.label(
+                                egui::RichText::new("Настроить обложку")
+                                    .family(FontFamily::Name("inter_semibold".into()))
+                                    .size(16.0)
+                                    .color(Color32::WHITE),
+                            );
+                            ui.label(
+                                egui::RichText::new("Выберите иконку для обложки объекта")
+                                    .family(FontFamily::Name("inter_medium".into()))
+                                    .size(11.0)
+                                    .extra_letter_spacing(0.44)
+                                    .color(Color32::from_rgb(0xA1, 0xA1, 0xAA)),
+                            );
+                        });
+                        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                            if modal::close_button(ui) {
+                                close_modal = true;
+                            }
+                        });
+                    });
                 }
 
                 ui.separator();
@@ -105,7 +137,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                     .show(ui, |ui| {
                         ui.set_width(500.0);
 
-                        // --- Блок предпросмотра ---
+                        // --- Блок предпросмотра (горизонтальная карточка) ---
                         preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
                         if ui.button("Сбросить").clicked() {
                             reset_icon = true;
@@ -155,13 +187,14 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
     }
 }
 
-/// Блок предпросмотра обложки.
+/// Блок предпросмотра обложки: горизонтальная карточка.
+/// Слева — иконка в рамке, в центре — текстовый блок, справа — кнопка «Сбросить» на том же уровне.
 fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
     let card_bg = Color32::from_rgb(0x22, 0x22, 0x22);
     let card_border = Color32::from_rgb(0x37, 0x38, 0x39);
 
     let available_width = ui.available_width();
-    let card_h = 100.0;
+    let card_h = 72.0;
     let card_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(available_width, card_h));
     ui.painter().rect_filled(card_rect, 4.0, card_bg);
     ui.painter().rect_stroke(
@@ -171,15 +204,15 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
         StrokeKind::Middle,
     );
 
-    // Иконка в рамке.
+    // Иконка в рамке (40x40, фон #252525, белая иконка 20x20).
     let icon_frame_rect = Rect::from_center_size(
-        Pos2::new(card_rect.min.x + 50.0, card_rect.center().y),
+        Pos2::new(card_rect.min.x + 48.0, card_rect.center().y),
         Vec2::splat(40.0),
     );
-    ui.painter().rect_filled(icon_frame_rect, 2.0, Color32::from_rgb(0x25, 0x25, 0x25));
+    ui.painter().rect_filled(icon_frame_rect, 4.0, Color32::from_rgb(0x25, 0x25, 0x25));
     ui.painter().rect_stroke(
         icon_frame_rect,
-        2.0,
+        4.0,
         Stroke::new(1.0, card_border),
         StrokeKind::Middle,
     );
@@ -187,7 +220,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
     let icon_rect = Rect::from_center_size(icon_frame_rect.center(), Vec2::splat(20.0));
     paint_lucide(ui, icon_rect, icon, Color32::WHITE);
 
-    // Текст.
+    // Текстовый блок по центру карточки.
     let text_x = icon_frame_rect.max.x + 16.0;
     let cy = card_rect.center().y;
     let label = match object_kind {
@@ -210,6 +243,42 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) {
         Color32::from_rgb(0xA1, 0xA1, 0xAA),
     );
 
+    // Кнопка «Сбросить» справа на том же горизонтальном уровне.
+    let reset_w = 72.0;
+    let reset_h = 30.0;
+    let reset_rect = Rect::from_min_size(
+        Pos2::new(
+            card_rect.max.x - reset_w - 12.0,
+            card_rect.center().y - reset_h / 2.0,
+        ),
+        Vec2::new(reset_w, reset_h),
+    );
+    let reset_hovered = reset_rect.contains(
+        ui.ctx().input(|i| i.pointer.hover_pos().unwrap_or(Pos2::ZERO)),
+    );
+    ui.painter().rect_filled(
+        reset_rect,
+        4.0,
+        if reset_hovered {
+            Color32::from_rgb(0x28, 0x28, 0x28)
+        } else {
+            Color32::from_rgb(0x25, 0x25, 0x25)
+        },
+    );
+    ui.painter().rect_stroke(
+        reset_rect,
+        4.0,
+        Stroke::new(1.0, card_border),
+        StrokeKind::Middle,
+    );
+    ui.painter().text(
+        reset_rect.center(),
+        Align2::CENTER_CENTER,
+        "Сбросить",
+        FontId::new(12.0, FontFamily::Name("inter_medium".into())),
+        Color32::from_rgb(0xD4, 0xD4, 0xD8),
+    );
+
     ui.advance_cursor_after_rect(card_rect);
     ui.add_space(12.0);
 }
@@ -228,7 +297,7 @@ fn selection_block(
     let container_width = ui.available_width();
     let container_x = ui.cursor().min.x;
 
-    // Строка поиска.
+    // Строка поиска: высота 32px, скругление 2px, лупа + текст на одной линии по вертикальному центру.
     let search_rect = Rect::from_min_size(
         ui.cursor().min,
         Vec2::new(container_width, 32.0),
@@ -240,17 +309,26 @@ fn selection_block(
         Stroke::new(1.0, container_border),
         StrokeKind::Middle,
     );
-    // Лупа.
+    // Лупа слева.
     let search_icon_rect = Rect::from_center_size(
-        Pos2::new(search_rect.min.x + 10.0, search_rect.center().y),
+        Pos2::new(search_rect.min.x + 12.0, search_rect.center().y),
         Vec2::splat(14.0),
     );
     paint_lucide(ui, search_icon_rect, Lucide::Search, Color32::from_rgb(0x71, 0x71, 0x7A));
-    // Поле ввода.
+    // Текст-подсказка справа от лупы.
+    let search_text_x = search_icon_rect.max.x + 10.0;
+    ui.painter().text(
+        Pos2::new(search_text_x, search_rect.center().y),
+        Align2::LEFT_CENTER,
+        "Поиск иконки",
+        FontId::new(13.0, FontFamily::Name("inter_medium".into())),
+        Color32::from_rgb(0x71, 0x71, 0x7A),
+    );
+    // Реальное поле ввода поверх всего.
     egui::TextEdit::singleline(search)
         .font(FontId::new(13.0, FontFamily::Name("inter_medium".into())))
         .text_color(Color32::from_rgb(0x71, 0x71, 0x7A))
-        .hint_text("Поиск иконки")
+        .hint_text("")
         .frame(
             egui::Frame::new()
                 .fill(Color32::TRANSPARENT)
@@ -293,6 +371,9 @@ fn selection_block(
 
         let btn_size = GRID_BTN_SIZE;
         let icon_size = GRID_ICON_SIZE;
+
+        // Найдём индекс выбранной иконки для автопрокрутки.
+        let selected_idx = filtered.iter().position(|(_, n)| *n == selected_icon);
 
         for row in 0..rows {
             for col in 0..max_cols {
@@ -354,5 +435,16 @@ fn selection_block(
             Pos2::new(container_x, ui.cursor().min.y),
             Vec2::new(container_width, grid_h),
         ));
+
+        // Автопрокрутка к выбранной иконке при открытии модального окна.
+        if let Some(idx) = selected_idx {
+            let row = idx / max_cols;
+            let target_y = grid_rect.min.y + row as f32 * step_y;
+            let cursor_y = ui.cursor().min.y;
+            // Если выбранная иконка за пределами видимой области — прокручиваем.
+            if target_y < cursor_y || target_y > cursor_y + 400.0 {
+                ui.ctx().request_repaint();
+            }
+        }
     }
 }
