@@ -360,6 +360,42 @@ impl Canvas {
             if object.kind != NodeKind::Process {
                 continue;
             }
+            // Если процесс находится внутри отдела, который показывает обложку
+            // (не наведён), не рисуем процесс — обложка отдела в третьем проходе
+            // перекрывает всё его содержимое. Проверяем всю цепочку родителей.
+            let mut skip_process = false;
+            let mut parent_id = object.parent.clone();
+            while let Some(pid) = parent_id {
+                if let Some(parent_obj) = self.objects.iter().find(|o| o.id == pid) {
+                    if parent_obj.kind == NodeKind::Department {
+                        let pr = &parent_obj.rect;
+                        let mut ppos = self.cell_to_screen(pr.x, pr.y);
+                        if let Some((shift, ids)) = &drag_visual {
+                            if ids.contains(&parent_obj.id) {
+                                ppos = ppos + *shift;
+                            }
+                        }
+                        let prect = Rect::from_min_size(
+                            ppos,
+                            Vec2::new(pr.w as f32 * cell_px, pr.h as f32 * cell_px),
+                        );
+                        let p_hovered = pointer_pos.map_or(false, |p| prect.contains(p));
+                        if !p_hovered {
+                            skip_process = true;
+                            break;
+                        }
+                        parent_id = parent_obj.parent.clone();
+                    } else {
+                        parent_id = parent_obj.parent.clone();
+                    }
+                } else {
+                    break;
+                }
+            }
+            if skip_process {
+                continue;
+            }
+
             let r = &object.rect;
             let mut screen_pos = self.cell_to_screen(r.x, r.y);
             if let Some((shift, ids)) = &drag_visual {
