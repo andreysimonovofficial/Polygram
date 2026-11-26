@@ -119,27 +119,52 @@ pub fn paint_process(
             // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
             let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * cover_scale;
             let cover_icon = default_icon_for(object.kind, &object.icon);
-            let cover_icon_rect =
-                Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
-            paint_lucide(ui, cover_icon_rect, cover_icon, Color32::WHITE);
+            let center = card_rect.center();
 
-            // Подпись под иконкой: две строки — имя объекта и #ID в плашке.
+            // Имя объекта и #ID — в одну горизонтальную строку с иконкой,
+            // весь ряд центрируется относительно центра обложки.
             let name_sig = format!("{}", object.name);
             let id_sig = format!("#{}", object.id);
             let name_size = 13.0 * zoom * cover_scale;
             let id_size = 11.0 * zoom * cover_scale;
             let name_color = Color32::WHITE;
             let id_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
-            let sig_w = cover_icon_side * 1.5;
-            let name_rect = Rect::from_center_size(
-                Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 6.0 * zoom * cover_scale),
-                Vec2::new(sig_w, name_size * 1.5),
-            );
-            // Плашка под именем: скругление 2px, размер под текст ID.
+            let gap = 8.0 * zoom * cover_scale;
+
+            let name_font = FontId::new(name_size, FontFamily::Name("inter_semibold".into()));
+            let id_font = FontId::new(id_size, FontFamily::Name("inter_medium".into()));
+
+            // Приблизительная ширина текста (Inter, оценка по размеру шрифта и длине строки).
+            let name_w = name_sig.len() as f32 * name_size * 0.58;
+            let id_text_w = id_sig.len() as f32 * id_size * 0.52;
             let pill_h = id_size * 1.4;
-            let pill_w = id_size * (id_sig.len() as f32 + 1.0);
+            let pill_w = (id_text_w + 8.0 * zoom * cover_scale).max(id_size * 2.0);
+
+            let row_w = cover_icon_side + gap + name_w + gap + pill_w;
+            let start_x = center.x - row_w / 2.0;
+
+            // Иконка — слева, по вертикальному центру обложки.
+            let icon_rect = Rect::from_center_size(
+                Pos2::new(start_x + cover_icon_side / 2.0, center.y),
+                Vec2::splat(cover_icon_side),
+            );
+            paint_lucide(ui, icon_rect, cover_icon, Color32::WHITE);
+
+            // Название объекта — по центру строки, по вертикальному центру обложки.
+            painter.text(
+                Pos2::new(start_x + cover_icon_side + gap + name_w / 2.0, center.y),
+                Align2::CENTER_CENTER,
+                &name_sig,
+                name_font,
+                name_color,
+            );
+
+            // Плашка #ID — справа, по вертикальному центру обложки.
             let pill_rect = Rect::from_center_size(
-                Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 6.0 * zoom * cover_scale + name_size + 4.0 * zoom * cover_scale + pill_h / 2.0),
+                Pos2::new(
+                    start_x + cover_icon_side + gap + name_w + gap + pill_w / 2.0,
+                    center.y,
+                ),
                 Vec2::new(pill_w, pill_h),
             );
             painter.rect_filled(
@@ -157,15 +182,8 @@ pub fn paint_process(
                 pill_rect.center(),
                 Align2::CENTER_CENTER,
                 &id_sig,
-                FontId::new(id_size, FontFamily::Name("inter_medium".into())),
+                id_font,
                 id_color,
-            );
-            painter.text(
-                name_rect.center(),
-                Align2::CENTER_CENTER,
-                &name_sig,
-                FontId::new(name_size, FontFamily::Name("inter_semibold".into())),
-                name_color,
             );
             return ProcessPaintResult {
             total_height,
