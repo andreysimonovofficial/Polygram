@@ -112,8 +112,8 @@ pub fn paint_process(
             Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
             StrokeKind::Middle,
         );
-        // Иконка обложки: квадрат 10 клеток, строго по центру, белый цвет.
-        let cover_icon_side = 10.0 * (theme.cell_size * zoom);
+        // Иконка обложки: квадрат 5 клеток, строго по центру, белый цвет.
+        let cover_icon_side = 5.0 * (theme.cell_size * zoom);
         let cover_icon = default_icon_for(object.kind, &object.icon);
         let cover_icon_rect =
             Rect::from_center_size(card_rect.center(), Vec2::splat(cover_icon_side));
@@ -128,26 +128,25 @@ pub fn paint_process(
         let id_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
         let sig_w = cover_icon_side * 1.5;
         let name_rect = Rect::from_center_size(
-            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 8.0 * zoom),
+            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 6.0 * zoom),
             Vec2::new(sig_w, name_size * 1.5),
         );
-        // Плашка под именем: скруглённые углы, тёмный фон, рамка.
-        let pill_h = id_size * 1.8;
-        let pill_w = cover_icon_side * 1.4;
+        // Плашка под именем: скругление 2px, размер под текст ID.
+        let pill_h = id_size * 1.4;
+        let pill_w = id_size * (id_sig.len() as f32 + 1.0);
         let pill_rect = Rect::from_center_size(
-            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 8.0 * zoom + name_size + 6.0 * zoom + pill_h / 2.0),
+            Pos2::new(card_rect.center().x, card_rect.center().y + cover_icon_side / 2.0 + 6.0 * zoom + name_size + 4.0 * zoom + pill_h / 2.0),
             Vec2::new(pill_w, pill_h),
         );
-        let pill_hovered = false;
         painter.rect_filled(
             pill_rect,
-            pill_h / 2.0,
+            2.0 * zoom,
             Color32::from_rgb(0x25, 0x25, 0x25),
         );
         painter.rect_stroke(
             pill_rect,
-            pill_h / 2.0,
-            Stroke::new(1.0, Color32::from_rgb(0x37, 0x38, 0x39)),
+            2.0 * zoom,
+            Stroke::new(1.0 * zoom, Color32::from_rgb(0x37, 0x38, 0x39)),
             StrokeKind::Middle,
         );
         painter.text(
@@ -164,14 +163,6 @@ pub fn paint_process(
             FontId::new(name_size, FontFamily::Name("inter_semibold".into())),
             name_color,
         );
-        ui.painter().text(
-            name_rect.center(),
-            Align2::CENTER_CENTER,
-            &name_sig,
-            FontId::new(name_size, FontFamily::Name("inter_semibold".into())),
-            name_color,
-        );
-
         return ProcessPaintResult {
             total_height,
             add_hotspots: Vec::new(),
