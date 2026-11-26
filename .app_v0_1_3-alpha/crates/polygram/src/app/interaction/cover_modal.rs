@@ -7,7 +7,7 @@ use polygram_core::types::NodeKind;
 use polygram_canvas::modal;
 use polygram_canvas::{default_icon_for, lucide_by_name, paint_lucide};
 use egui::{
-    Color32, Pos2, Rect, Sense, Vec2, Align2, FontId, FontFamily, Stroke, StrokeKind,
+    Align2, Color32, FontFamily, FontId, Pos2, Rect, Sense, Vec2, Stroke, StrokeKind,
 };
 use egui_lucide::Lucide;
 
@@ -45,14 +45,12 @@ const COVER_ICONS: &[(&str, &str)] = &[
     ("Продукт", "Box"),
     ("Контроль качества", "Check"),
     ("Входящие", "Inbox"),
-    ("Календарь", "Calendar"),
     ("Камера", "Camera"),
     ("Карта", "Map"),
     ("Кошелёк", "Wallet"),
     ("Меню", "Menu"),
     ("Монитор", "Monitor"),
     ("Музыка", "Music"),
-    ("Ноты", "Music"),
     ("Облако", "Cloud"),
     ("Отчёты", "BarChart3"),
     ("Папка", "Folder"),
@@ -86,7 +84,6 @@ const COVER_ICONS: &[(&str, &str)] = &[
     ("Чеклист", "CheckCircle"),
     ("Штрихкод", "Barcode"),
     ("Экран", "Tv"),
-    ("Энveloppe", "Mail"),
     ("Ютуб", "Youtube"),
 ];
 
@@ -164,8 +161,7 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                         ui.set_width(496.0);
 
                         // Карточка предпросмотра.
-                        let preview_reset =
-                            preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
+                        let preview_reset = preview_block(ui, &app.dialogs.cover_modal_icon, object_kind);
                         if preview_reset {
                             reset_icon = true;
                         }
@@ -173,17 +169,24 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
                         ui.add_space(12.0);
 
                         // Строка поиска.
-                        search_input(ui, &mut app.dialogs.cover_modal_search);
+                        modal::input_field(
+                            ui,
+                            &mut app.dialogs.cover_modal_search,
+                            "Поиск иконки",
+                            Vec2::new(ui.available_width(), 32.0),
+                            false,
+                            egui::Margin {
+                                left: 40,
+                                top: 6,
+                                right: 40,
+                                bottom: 6,
+                            },
+                        );
 
                         ui.add_space(12.0);
 
                         // Сетка иконок.
-                        icon_grid(
-                            ui,
-                            &app.dialogs.cover_modal_search,
-                            &app.dialogs.cover_modal_icon,
-                            &mut new_icon,
-                        );
+                        icon_grid(ui, &app.dialogs.cover_modal_search, &app.dialogs.cover_modal_icon, &mut new_icon);
                     });
 
                 // === Подвал (внизу) ===
@@ -217,52 +220,6 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
         }
         app.dialogs.reset_cover_modal();
     }
-}
-
-/// Строка поиска иконки: поле 32px, скругление 2px, лупа + текст по вертикальному центру.
-fn search_input(ui: &mut egui::Ui, search: &mut String) {
-    let container_width = ui.available_width();
-    let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
-    let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
-
-    let search_rect = Rect::from_min_size(
-        ui.cursor().min,
-        Vec2::new(container_width, 32.0),
-    );
-    ui.painter().rect_filled(search_rect, 2.0, input_bg);
-    ui.painter().rect_stroke(
-        search_rect,
-        2.0,
-        Stroke::new(1.0, container_border),
-        StrokeKind::Middle,
-    );
-    // Лупа слева.
-    let search_icon_rect = Rect::from_center_size(
-        Pos2::new(search_rect.min.x + 12.0, search_rect.center().y),
-        Vec2::splat(14.0),
-    );
-    paint_lucide(ui, search_icon_rect, Lucide::Search, Color32::from_rgb(0x71, 0x71, 0x7A));
-    // Текст-подсказка.
-    let search_text_x = search_icon_rect.max.x + 10.0;
-    ui.painter().text(
-        Pos2::new(search_text_x, search_rect.center().y),
-        Align2::LEFT_CENTER,
-        "Поиск иконки",
-        FontId::new(13.0, FontFamily::Name("inter_medium".into())),
-        Color32::from_rgb(0x71, 0x71, 0x7A),
-    );
-    // Реальное поле ввода поверх всего.
-    egui::TextEdit::singleline(search)
-        .font(FontId::new(13.0, FontFamily::Name("inter_medium".into())))
-        .text_color(Color32::from_rgb(0x71, 0x71, 0x7A))
-        .hint_text("")
-        .frame(
-            egui::Frame::new()
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::new(0.0, Color32::TRANSPARENT)),
-        )
-        .show(ui);
-    ui.advance_cursor_after_rect(search_rect);
 }
 
 /// Карточка предпросмотра обложки: горизонтальная карточка.
@@ -357,8 +314,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
         FontId::new(12.0, FontFamily::Name("inter_medium".into())),
         Color32::from_rgb(0xD4, 0xD4, 0xD8),
     );
-    let reset_response =
-        ui.interact(reset_rect, ui.scope_id().with("cover_reset"), Sense::click());
+    let reset_response = ui.allocate_rect(reset_rect, Sense::click());
 
     ui.advance_cursor_after_rect(card_rect);
     ui.add_space(8.0);
@@ -367,6 +323,7 @@ fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> b
 }
 
 /// Сетка иконок с возможностью выбора.
+/// Каждая кнопка получает уникальный ID через ui.allocate_rect (автогенерация).
 fn icon_grid(
     ui: &mut egui::Ui,
     search: &str,
@@ -460,8 +417,7 @@ fn icon_grid(
             };
             paint_lucide(ui, icon_rect, icon, icon_color);
 
-            let response =
-                ui.interact(btn_rect, ui.scope_id().with(name), Sense::click());
+            let response = ui.allocate_rect(btn_rect, Sense::click());
             if response.clicked() {
                 *new_icon = Some(name.to_owned());
             }
