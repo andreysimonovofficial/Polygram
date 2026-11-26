@@ -115,11 +115,24 @@ pub fn paint_process(
     let header_cy = oy + header_h / 2.0;
 
     // Иконка типа процесса (book-up-2).
+    let process_status = match (
+        worst_status(&object.requests, dynamic),
+        worst_status(&object.results, dynamic),
+    ) {
+        (StatusCode::Expected, _) | (_, StatusCode::Expected) => StatusCode::Expected,
+        (StatusCode::Surplus, _) | (_, StatusCode::Surplus) => StatusCode::Surplus,
+        _ => StatusCode::Ok,
+    };
+    let (process_type_color, process_waiting_color, process_surplus_color) = match process_status {
+        StatusCode::Expected => (theme.status_deficit, theme.status_deficit, theme.text_muted),
+        StatusCode::Surplus => (theme.status_warning, theme.text_muted, theme.status_warning),
+        _ => (theme.text_muted, theme.text_muted, theme.text_muted),
+    };
     paint_lucide(
         ui,
         Rect::from_center_size(Pos2::new(ox + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
         Lucide::BookUp2,
-        theme.text,
+        process_type_color,
     );
 
     // Название процесса.
@@ -152,7 +165,7 @@ pub fn paint_process(
         ui,
         Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::Clock,
-        theme.text_muted,
+        process_waiting_color,
     );
 
     // Иконка Избыток (square-exclamation-point) — крайнюю справа.
@@ -160,7 +173,7 @@ pub fn paint_process(
         ui,
         Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::SquareExclamationPoint,
-        theme.text_muted,
+        process_surplus_color,
     );
 
     // === Контейнеры ===
@@ -253,14 +266,6 @@ fn paint_metric_container(
     );
     let header_cy = cy + container_header_h / 2.0;
 
-    // Иконка типа контейнера (package-check).
-    paint_lucide(
-        ui,
-        Rect::from_center_size(Pos2::new(cx + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
-        Lucide::PackageCheck,
-        theme.text,
-    );
-
     // Текст шапки: "ЗАПРОС (N) СТАТУС" / "РЕЗУЛЬТАТ (N) СТАТУС".
     let label = match dir {
         Direction::Request => "ЗАПРОС",
@@ -268,7 +273,20 @@ fn paint_metric_container(
     };
     let status = worst_status(entries, dynamic);
     let status_text = status_label_ru(status, dir);
+    let (container_type_color, container_waiting_color, container_surplus_color) = match status {
+        StatusCode::Expected => (theme.status_deficit, theme.status_deficit, theme.text_muted),
+        StatusCode::Surplus => (theme.status_warning, theme.text_muted, theme.status_warning),
+        _ => (theme.text_muted, theme.text_muted, theme.text_muted),
+    };
     let header_text = format!("{} ({}) {}", label, entries.len(), status_text);
+
+    // Иконка типа контейнера (package-check).
+    paint_lucide(
+        ui,
+        Rect::from_center_size(Pos2::new(cx + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
+        Lucide::PackageCheck,
+        container_type_color,
+    );
 
     // Текст шапки: после иконки типа + gap.
     let header_text_x = cx + padding + icon_size + 8.0 * zoom;
@@ -288,7 +306,7 @@ fn paint_metric_container(
         ui,
         Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::Clock,
-        theme.text_muted,
+        container_waiting_color,
     );
 
     // Иконка Избыток (square-exclamation-point) — крайнюю справа.
@@ -296,7 +314,7 @@ fn paint_metric_container(
         ui,
         Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
         Lucide::SquareExclamationPoint,
-        theme.text_muted,
+        container_surplus_color,
     );
 
     // Горячая зона кнопки меню ≡ (слева, поверх иконки типа).
