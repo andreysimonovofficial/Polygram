@@ -243,17 +243,24 @@ impl PolygramApp {
                                     let start_cell =
                                         self.drag_start_cells.get(0).copied().unwrap_or((0, 0));
                                     let object_size = (obj.rect.w, obj.rect.h);
-                                    let drop_cell = find_free_cell_in_dept(
-                                        &self.canvas.objects,
-                                        over_id,
-                                        object_size.0,
-                                        object_size.1,
-                                        &id,
-                                    )
-                                    .unwrap_or((obj.rect.x, obj.rect.y));
                                     let already_in_dept = self.canvas.objects.iter().any(|o| {
                                         o.id == id && o.parent.as_deref() == Some(over_id)
                                     });
+                                    let drop_cell = if already_in_dept {
+                                        // Процесс уже находится в отделе: перемещаем на фактическую
+                                        // позицию курсора (привязанную к сетке в update_drag_objects),
+                                        // а не на первую свободную клетку отдела.
+                                        (obj.rect.x, obj.rect.y)
+                                    } else {
+                                        find_free_cell_in_dept(
+                                            &self.canvas.objects,
+                                            over_id,
+                                            object_size.0,
+                                            object_size.1,
+                                            &id,
+                                        )
+                                        .unwrap_or((obj.rect.x, obj.rect.y))
+                                    };
                                     if already_in_dept {
                                         if drop_cell != start_cell {
                                             self.apply_batch(vec![Command::MoveObject {
