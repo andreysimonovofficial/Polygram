@@ -44,7 +44,7 @@ impl PolygramApp {
                 self.canvas.cell_to_screen(r.x, r.y),
                 egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
             );
-            let header_h = cell_px * 1.0;
+            let header_h = 80.0 * zoom;
             let header_rect =
                 egui::Rect::from_min_size(rect_px.min, egui::Vec2::new(rect_px.width(), header_h));
             if header_rect.contains(screen_pos) {
