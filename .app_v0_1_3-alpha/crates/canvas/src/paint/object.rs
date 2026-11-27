@@ -1,17 +1,23 @@
 //! Рисование объекта "Процесс" на холсте.
 //! Реализует динамическую геометрию по CSS спецификации:
 //! Процесс растягивается под контейнеры, Контейнер растягивается под показатели.
+//!
+//! Декомпозирован по модулям:
+//! - `cover`         — обложка процесса (когда не наведено)
+//! - `process_header` — шапка процесса (иконка, название, #ID, статусы)
 
 use egui::{Painter, Pos2, Rect, Stroke, Vec2, Align2, FontId, FontFamily, StrokeKind, Color32};
 use polygram_core::types::Direction;
 use polygram_core::{DynamicState, EntryGeom, ObjectGeom, StatusCode};
 
-use crate::icons::{default_icon_for, paint_lucide};
+use crate::icons::paint_lucide;
 use crate::paint::constants::{
-    CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX, COVER_CONTENT_SCALE,
+    CONTAINER_BORDER_RADIUS_PX, CONTAINER_HEADER_H_PX, CONTAINER_PADDING_PX,
     GAP_PX, ICON_SIZE_PX, PROCESS_BORDER_RADIUS_PX, PROCESS_HEADER_H_PX, PROCESS_PADDING_PX,
     ROW_BORDER_RADIUS_PX, ROW_H_PX, ROW_PADDING_X_PX,
 };
+use crate::paint::cover::paint_process_cover;
+use crate::paint::process_header::paint_process_header;
 use crate::paint::status::worst_status;
 use crate::status_label_ru;
 use egui_lucide::Lucide;
@@ -103,178 +109,58 @@ pub fn paint_process(
         // === Обложка процесса (когда не наведено) ===
         let is_hovered = mouse_pos.map_or(false, |p| card_rect.contains(p));
         if !is_hovered {
-            // Фон полностью перекрывает площадь процесса.
-            painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));
-            // Контур обложки.
-            let border_width = 1.0 * zoom;
-            painter.rect_stroke(
+            paint_process_cover(
+                painter,
+                ui,
+                object,
                 card_rect,
                 process_radius,
-                Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
-                StrokeKind::Middle,
-            );
-            // Жёлтая пунктирная обводка — самая верхняя карточка при наложении на другую.
-            if is_top_overlap {
-                paint_dashed_rect(painter, card_rect, process_radius, Color32::YELLOW, 2.0 * zoom, 8.0 * zoom, 4.0 * zoom);
-            }
-            // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
-            // Содержимое обложки увеличено в 2 раза, чтобы быть соразмерным площади карточки.
-            let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * COVER_CONTENT_SCALE;
-            let cover_icon = default_icon_for(object.kind, &object.icon);
-            let center = card_rect.center();
-
-            // Имя объекта и #ID — в вертикальный стек с иконкой, весь стек
-            // центрируется относительно центра обложки.
-            let name_sig = format!("{}", object.name);
-            let id_sig = format!("#{}", object.id);
-            let name_size = 13.0 * zoom * COVER_CONTENT_SCALE;
-            let id_size = 11.0 * zoom * COVER_CONTENT_SCALE;
-            let name_color = Color32::WHITE;
-            let id_color = Color32::from_rgb(0xA1, 0xA1, 0xAA);
-            let gap = 8.0 * zoom * COVER_CONTENT_SCALE;
-
-            let name_font = FontId::new(name_size, FontFamily::Name("inter_semibold".into()));
-            let id_font = FontId::new(id_size, FontFamily::Name("inter_medium".into()));
-            let pill_h = id_size * 1.4;
-            let pill_w = id_sig.len() as f32 * id_size * 0.52 + 8.0 * zoom * COVER_CONTENT_SCALE;
-            let pill_w = pill_w.max(id_size * 2.0);
-
-            let stack_h = cover_icon_side + gap + name_size + gap + pill_h;
-            let start_y = center.y - stack_h / 2.0;
-
-            // Иконка — сверху стека, по горизонтали по центру обложки.
-            let icon_rect = Rect::from_center_size(
-                Pos2::new(center.x, start_y + cover_icon_side / 2.0),
-                Vec2::splat(cover_icon_side),
-            );
-            paint_lucide(ui, icon_rect, cover_icon, Color32::WHITE);
-
-            // Название объекта — по центру стека, по горизонтали по центру обложки.
-            let name_y = start_y + cover_icon_side + gap + name_size / 2.0;
-            painter.text(
-                Pos2::new(center.x, name_y),
-                Align2::CENTER_CENTER,
-                &name_sig,
-                name_font,
-                name_color,
-            );
-
-            // Плашка #ID — снизу стека, по горизонтали по центру обложки.
-            let pill_y = start_y + cover_icon_side + gap + name_size + gap + pill_h / 2.0;
-            let pill_rect = Rect::from_center_size(
-                Pos2::new(center.x, pill_y),
-                Vec2::new(pill_w, pill_h),
-            );
-            let pill_radius = 2.0 * zoom * COVER_CONTENT_SCALE;
-            let pill_border = Stroke::new(1.0 * zoom * COVER_CONTENT_SCALE, Color32::from_rgb(0x37, 0x38, 0x39));
-            painter.rect_filled(
-                pill_rect,
-                pill_radius,
-                Color32::from_rgb(0x25, 0x25, 0x25),
-            );
-            painter.rect_stroke(
-                pill_rect,
-                pill_radius,
-                pill_border,
-                StrokeKind::Middle,
-            );
-            painter.text(
-                pill_rect.center(),
-                Align2::CENTER_CENTER,
-                &id_sig,
-                id_font,
-                id_color,
+                zoom,
+                theme,
+                is_top_overlap,
             );
             return ProcessPaintResult {
-            total_height,
-            add_hotspots: Vec::new(),
-            menu_hotspots: Vec::new(),
-            drag_hotspots: Vec::new(),
-            header_hotspots: Vec::new(),
-        };
-    }
+                total_height,
+                add_hotspots: Vec::new(),
+                menu_hotspots: Vec::new(),
+                drag_hotspots: Vec::new(),
+                header_hotspots: Vec::new(),
+            };
+        }
 
-    // Фон карточки процесса #202020.
-    painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));
+        // Фон карточки процесса #202020.
+        painter.rect_filled(card_rect, process_radius, Color32::from_rgb(32, 32, 32));
 
-    // Граница карточки процесса #373839.
-    let border_width = if is_selected { 2.0 * zoom } else { 1.0 * zoom };
-    painter.rect_stroke(
-        card_rect,
-        process_radius,
-        Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
-        StrokeKind::Middle,
-    );
+        // Граница карточки процесса #373839.
+        let border_width = if is_selected { 2.0 * zoom } else { 1.0 * zoom };
+        painter.rect_stroke(
+            card_rect,
+            process_radius,
+            Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
+            StrokeKind::Middle,
+        );
 
-    // Жёлтая пунктирная обводка — самая верхняя карточка при наложении на другую.
-    if is_top_overlap {
-        paint_dashed_rect(painter, card_rect, process_radius, Color32::YELLOW, 2.0 * zoom, 8.0 * zoom, 4.0 * zoom);
-    }
+        // Жёлтая пунктирная обводка — самая верхняя карточка при наложении на другую.
+        if is_top_overlap {
+            paint_dashed_rect(painter, card_rect, process_radius, Color32::YELLOW, 2.0 * zoom, 8.0 * zoom, 4.0 * zoom);
+        }
 
-    // === Шапка процесса ===
-    let header_cy = oy + header_h / 2.0;
-
-    // Иконка типа процесса (book-up-2).
-    let process_status = match (
-        worst_status(&object.requests, dynamic),
-        worst_status(&object.results, dynamic),
-    ) {
-        (StatusCode::Expected, _) | (_, StatusCode::Expected) => StatusCode::Expected,
-        (StatusCode::Surplus, _) | (_, StatusCode::Surplus) => StatusCode::Surplus,
-        _ => StatusCode::Ok,
-    };
-    let (process_type_color, process_waiting_color, process_surplus_color) = match process_status {
-        StatusCode::Expected => (theme.status_deficit, theme.status_deficit, theme.text_muted),
-        StatusCode::Surplus => (theme.status_warning, theme.text_muted, theme.status_warning),
-        _ => (theme.text_muted, theme.text_muted, theme.text_muted),
-    };
-    paint_lucide(
-        ui,
-        Rect::from_center_size(Pos2::new(ox + padding + icon_size / 2.0, header_cy), Vec2::splat(icon_size)),
-        Lucide::BookUp2,
-        process_type_color,
-    );
-
-    // Название процесса.
-    let title = object.name.clone();
-    let title_x = ox + padding + icon_size + 8.0 * zoom;
-    painter.text(
-        Pos2::new(title_x, header_cy),
-        Align2::LEFT_CENTER,
-        &title,
-        FontId::new(20.0 * zoom, FontFamily::Proportional),
-        theme.text,
-    );
-
-    // #ID процесса (справа, до иконок статуса).
-    // Регуем место справа: padding + surplus_icon + gap + waiting_icon + gap
-    let id_right = ox + card_w - padding - 2.0 * icon_size - 2.0 * gap;
-    let id_text = format!("#{}", object.id);
-    painter.text(
-        Pos2::new(id_right, header_cy),
-        Align2::RIGHT_CENTER,
-        &id_text,
-        FontId::new(20.0 * zoom, FontFamily::Proportional),
-        theme.text_muted,
-    );
-
-    // Иконка Ожидание (clock-exclamation-point) — перед иконкой избытка.
-    let surplus_cx = ox + card_w - padding - icon_size / 2.0;
-    let waiting_cx = surplus_cx - icon_size - gap;
-    paint_lucide(
-        ui,
-        Rect::from_center_size(Pos2::new(waiting_cx, header_cy), Vec2::splat(icon_size)),
-        Lucide::Clock,
-        process_waiting_color,
-    );
-
-    // Иконка Избыток (square-exclamation-point) — крайнюю справа.
-    paint_lucide(
-        ui,
-        Rect::from_center_size(Pos2::new(surplus_cx, header_cy), Vec2::splat(icon_size)),
-        Lucide::SquareExclamationPoint,
-        process_surplus_color,
-    );
+        // === Шапка процесса ===
+        let _process_status = paint_process_header(
+            painter,
+            ui,
+            object,
+            dynamic,
+            theme,
+            ox,
+            oy,
+            header_h,
+            card_w,
+            zoom,
+            padding,
+            icon_size,
+            gap,
+        );
 
     // === Контейнеры ===
     let container_x = ox + padding;
@@ -570,7 +456,7 @@ fn row_border_rad(zoom: f32) -> f32 {
 
 /// Нарисовать пунктирный прямоугольник вокруг `rect` со скруглёнными углами.
 /// Сегменты рисуются по часовой стрелке: нижний, правый, верхний, левый.
-fn paint_dashed_rect(
+pub fn paint_dashed_rect(
     painter: &Painter,
     rect: Rect,
     radius: f32,

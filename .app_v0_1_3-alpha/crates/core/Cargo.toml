@@ -15,6 +15,9 @@ rand = "0.8"
 [lib]
 doctest = false
 
+[lints.rust]
+missing_docs = "warn"
+
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

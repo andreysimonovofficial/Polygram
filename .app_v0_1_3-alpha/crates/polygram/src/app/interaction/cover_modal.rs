@@ -1,29 +1,25 @@
 //! Модальное окно «Настроить обложку» для выбора иконки Процесса или Отдела.
 //! Источник спецификации:
 //! Документация/Продукт/Интерфейс/Сущности/Объекты/Объекты - Оформление/Объекты - Оформление - Обложки.md
+//!
+//! Декомпозирован по модулям:
+//! - `icon_list`   — все уникальные иконки Lucide
+//! - `preview_block` — карточка предпросмотра обложки
+//! - `icon_grid`   — сетка иконок с поиском
 
 use crate::app::PolygramApp;
 use polygram_core::types::NodeKind;
 use polygram_canvas::modal;
-use polygram_canvas::{default_icon_for, lucide_by_name, paint_lucide};
-use egui::{
-    Align2, Color32, FontFamily, FontId, Pos2, Rect, Sense, Vec2, Stroke, StrokeKind,
-};
+use egui::Vec2;
 use egui_lucide::Lucide;
 
-/// Размер иконки в сетке выбора (пиксели).
-const GRID_ICON_SIZE: f32 = 16.0;
-/// Размер кнопки иконки в сетке (пиксели).
-const GRID_BTN_SIZE: Vec2 = Vec2::new(54.0, 38.0);
-/// Шаг сетки по горизонтали / вертикали (пиксели).
-const GRID_STEP_X: f32 = 60.0;
-const GRID_STEP_Y: f32 = 44.0;
+pub mod icon_grid;
+pub mod icon_list;
+pub mod preview_block;
 
-/// Все уникальные иконки Lucide без дублей.
-/// Берём напрямую из `Lucide::ALL` (все 1903 иконки библиотеки).
-fn all_lucide_icons() -> Vec<(String, Lucide)> {
-    Lucide::ALL.iter().copied().map(|icon| (icon.name().to_owned(), icon)).collect()
-}
+pub use icon_grid::icon_grid;
+pub use icon_list::all_lucide_icons;
+pub use preview_block::preview_block;
 
 /// Рисование модального окна «Настроить обложку».
 /// Вертикальный поток: шапка (modal::header) → тело (предпросмотр + поиск + сетка со скроллом) → подвал (modal::footer).
@@ -166,236 +162,4 @@ pub fn render_cover_modal(app: &mut PolygramApp, ctx: &egui::Context) {
         }
         app.dialogs.reset_cover_modal();
     }
-}
-
-/// Карточка предпросмотра обложки: горизонтальная карточка.
-/// Слева — иконка в рамке, в центре — текстовый блок, справа — кнопка «Сбросить» на том же уровне.
-/// Возвращает `true`, если нажата кнопка «Сбросить».
-fn preview_block(ui: &mut egui::Ui, icon_name: &str, object_kind: NodeKind) -> bool {
-    let card_bg = Color32::from_rgb(0x22, 0x22, 0x22);
-    let card_border = Color32::from_rgb(0x37, 0x38, 0x39);
-
-    let available_width = ui.available_width();
-    let card_h = 72.0;
-    let card_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(available_width, card_h));
-
-    // Всегда выделяем регионы взаимодействия СНАЧАЛА (корректный порядок ID в egui).
-    let reset_w = 72.0;
-    let reset_h = 30.0;
-    let reset_rect = Rect::from_min_size(
-        Pos2::new(
-            card_rect.max.x - reset_w - 12.0,
-            card_rect.center().y - reset_h / 2.0,
-        ),
-        Vec2::new(reset_w, reset_h),
-    );
-    let reset_response = ui.allocate_rect(reset_rect, Sense::click());
-
-    // Затем рисуем.
-    ui.painter().rect_filled(card_rect, 4.0, card_bg);
-    ui.painter().rect_stroke(
-        card_rect,
-        4.0,
-        Stroke::new(1.0, card_border),
-        StrokeKind::Middle,
-    );
-
-    // Иконка в рамке (40x40, фон #252525, белая иконка 20x20).
-    let icon_frame_rect = Rect::from_center_size(
-        Pos2::new(card_rect.min.x + 48.0, card_rect.center().y),
-        Vec2::splat(40.0),
-    );
-    ui.painter().rect_filled(icon_frame_rect, 4.0, Color32::from_rgb(0x25, 0x25, 0x25));
-    ui.painter().rect_stroke(
-        icon_frame_rect,
-        4.0,
-        Stroke::new(1.0, card_border),
-        StrokeKind::Middle,
-    );
-    let icon = default_icon_for(object_kind, icon_name);
-    let icon_rect = Rect::from_center_size(icon_frame_rect.center(), Vec2::splat(20.0));
-    paint_lucide(ui, icon_rect, icon, Color32::WHITE);
-
-    // Текстовый блок по центру карточки.
-    let text_x = icon_frame_rect.max.x + 16.0;
-    let cy = card_rect.center().y;
-    let label = match object_kind {
-        NodeKind::Process => "Процесс",
-        NodeKind::Department => "Отдел",
-        _ => "Объект",
-    };
-    ui.painter().text(
-        Pos2::new(text_x, cy - 10.0),
-        Align2::LEFT_CENTER,
-        label,
-        FontId::new(13.0, FontFamily::Name("inter_semibold".into())),
-        Color32::WHITE,
-    );
-    ui.painter().text(
-        Pos2::new(text_x, cy + 10.0),
-        Align2::LEFT_CENTER,
-        "Отображается, когда курсор не наведён",
-        FontId::new(11.0, FontFamily::Name("inter_medium".into())),
-        Color32::from_rgb(0xA1, 0xA1, 0xAA),
-    );
-
-    // Кнопка «Сбросить» справа на том же горизонтальном уровне (внутри карточки).
-    let preview_start_y = ui.cursor().min.y;
-    let reset_hovered = reset_response.hovered();
-    ui.painter().rect_filled(
-        reset_rect,
-        4.0,
-        if reset_hovered {
-            Color32::from_rgb(0x28, 0x28, 0x28)
-        } else {
-            Color32::from_rgb(0x25, 0x25, 0x25)
-        },
-    );
-    ui.painter().rect_stroke(
-        reset_rect,
-        4.0,
-        Stroke::new(1.0, card_border),
-        StrokeKind::Middle,
-    );
-    ui.painter().text(
-        reset_rect.center(),
-        Align2::CENTER_CENTER,
-        "Сбросить",
-        FontId::new(12.0, FontFamily::Name("inter_medium".into())),
-        Color32::from_rgb(0xD4, 0xD4, 0xD8),
-    );
-
-    ui.advance_cursor_after_rect(Rect::from_min_size(
-        Pos2::new(card_rect.min.x, preview_start_y),
-        Vec2::new(available_width, card_h),
-    ));
-    ui.add_space(8.0);
-
-    reset_response.clicked()
-}
-
-/// Сетка иконок с возможностью выбора.
-/// Каждая иконка — уникальный вариант Lucide (все 1903 из библиотеки).
-/// Возвращает `Some(rect)` выбранной иконки (координаты относительно содержимого скролла),
-/// чтобы модальное окно могло прокрутить сетку к ней при открытии.
-fn icon_grid(
-    ui: &mut egui::Ui,
-    search: &str,
-    selected_icon: &str,
-    all_icons: &[(String, Lucide)],
-    new_icon: &mut Option<Lucide>,
-) -> Option<Rect> {
-    let container_bg = Color32::from_rgb(0x22, 0x22, 0x22);
-    let container_border = Color32::from_rgb(0x37, 0x38, 0x39);
-    let input_bg = Color32::from_rgb(0x25, 0x25, 0x25);
-
-    let container_width = ui.available_width();
-    let container_x = ui.cursor().min.x;
-
-    // Фильтрация иконок по поиску (по kebab-case имени Lucide).
-    let filter = search.to_lowercase();
-    let filtered: Vec<&(String, Lucide)> = all_icons
-        .iter()
-        .filter(|(name, _)| filter.is_empty() || name.to_lowercase().contains(&filter))
-        .collect();
-
-    if filtered.is_empty() {
-        ui.label("Найдено: 0");
-        ui.add_space(8.0);
-        return None;
-    }
-
-    let step_x = GRID_STEP_X;
-    let step_y = GRID_STEP_Y;
-    let max_cols = ((container_width / step_x).floor() as usize).max(1);
-    let rows = (filtered.len() + max_cols - 1) / max_cols;
-    let grid_h = rows as f32 * step_y;
-    let grid_start_y = ui.cursor().min.y;
-
-    let grid_rect = Rect::from_min_size(
-        Pos2::new(container_x, grid_start_y),
-        Vec2::new(container_width, grid_h),
-    );
-    ui.painter().rect_filled(grid_rect, 2.0, container_bg);
-    ui.painter().rect_stroke(
-        grid_rect,
-        2.0,
-        Stroke::new(1.0, container_border),
-        StrokeKind::Middle,
-    );
-
-    let btn_size = GRID_BTN_SIZE;
-    let icon_size = GRID_ICON_SIZE;
-
-    // Сначала выделяем все регионы взаимодействия (уникальные ID через allocate_rect).
-    let mut btn_rects: Vec<Rect> = Vec::with_capacity(filtered.len());
-    for row in 0..rows {
-        for col in 0..max_cols {
-            let idx = row * max_cols + col;
-            if idx >= filtered.len() {
-                break;
-            }
-            let btn_x = container_x + col as f32 * step_x + (step_x - btn_size.x) / 2.0;
-            let btn_y = grid_rect.min.y + row as f32 * step_y + (step_y - btn_size.y) / 2.0;
-            let btn_rect = Rect::from_min_size(Pos2::new(btn_x, btn_y), btn_size);
-            btn_rects.push(btn_rect);
-        }
-    }
-
-    // Регистрируем все интерактивные зоны.
-    let responses: Vec<egui::Response> = btn_rects
-        .iter()
-        .map(|rect| ui.allocate_rect(*rect, Sense::click()))
-        .collect();
-
-    // Затем рисуем все иконки.
-    let mut selected_rect: Option<Rect> = None;
-    for (idx, (_label, icon)) in filtered.iter().enumerate() {
-        let btn_rect = btn_rects[idx];
-        let response = &responses[idx];
-
-        let is_selected = icon.name() == selected_icon;
-        if is_selected {
-            selected_rect = Some(btn_rect);
-        }
-        let hovered = response.hovered();
-
-        let fill = if is_selected {
-            Color32::from_rgb(0x34, 0x34, 0x34)
-        } else if hovered {
-            Color32::from_rgb(0x28, 0x28, 0x28)
-        } else {
-            input_bg
-        };
-        let border = if is_selected {
-            Color32::WHITE
-        } else {
-            container_border
-        };
-        ui.painter().rect_filled(btn_rect, 2.0, fill);
-        ui.painter().rect_stroke(
-            btn_rect,
-            2.0,
-            Stroke::new(1.0, border),
-            StrokeKind::Middle,
-        );
-
-        let icon_rect = Rect::from_center_size(btn_rect.center(), Vec2::splat(icon_size));
-        let icon_color = if is_selected {
-            Color32::WHITE
-        } else {
-            Color32::from_rgb(0xD4, 0xD4, 0xD8)
-        };
-        paint_lucide(ui, icon_rect, *icon, icon_color);
-
-        if response.clicked() {
-            *new_icon = Some(*icon);
-        }
-    }
-
-    ui.advance_cursor_after_rect(Rect::from_min_size(
-        Pos2::new(container_x, grid_start_y),
-        Vec2::new(container_width, grid_h),
-    ));
-    selected_rect
 }

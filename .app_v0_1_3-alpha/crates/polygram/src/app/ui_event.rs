@@ -5,15 +5,19 @@
 //! - драг-показателя и реордер/соединение показателей;
 //! - выделение рамкой.
 //! Диалоги после панели обрабатываются в mod.rs (ui()).
+//!
+//! Декомпозирован по модулям:
+//! - `click_handling` — клики: выделение, добавление показателя, контекстное меню, переименование
+//! - `metric_drag`    — перетаскивание показателя: соединение, реордер
+//! - `selection_box`  — выделение рамкой
 
-use egui::{Pos2, PointerButton, Rect, Vec2};
-use polygram_core::{
-    drag_domain::compute_metric_drop_object,
-    types::{ContainerDirection, Direction},
-};
-use polygram_canvas::paint::object::process_total_height;
-use crate::app::PolygramApp;
+use egui::PointerButton;
 use polygram_core::runtime::Published;
+use crate::app::PolygramApp;
+
+pub(crate) mod click_handling;
+pub(crate) mod metric_drag;
+pub(crate) mod selection_box;
 
 impl PolygramApp {
     /// Обработать весь блок CentralPanel: интеракцию с холстом,
@@ -73,84 +77,8 @@ impl PolygramApp {
             return;
         }
 
-        // ---- ПКМ: контекстное меню на отделе/процессе или пустом месте ----
-        if canvas_response.secondary_clicked() {
-            if let Some(pos) = canvas_response.interact_pointer_pos() {
-                self.selection_box_start = None;
-                self.right_click = Some(pos);
-                self.right_click_object = self.process_under(pos, &published.dynamic)
-                    .or_else(|| self.object_under(pos));
-                self.menu_just_opened = true;
-            }
-        }
-
-        // ---- ЛКМ клик: выделение объекта ----
-        if canvas_response.clicked() {
-            if let Some(pos) = canvas_response.interact_pointer_pos() {
-                let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
-                if let Some(id) = self.header_under(pos) {
-                    self.selection_box_start = None;
-                    self.toggle_select(id.clone(), ctrl);
-                } else if let Some((obj_id, dir, _rect)) = self.canvas.add_metric_hotspots.iter()
-                    .find(|(_, _, rect)| rect.contains(pos))
-                {
-                    // Клик на "+ Добавить показатель" — открыть диалог добавления показателя.
-                    let n = match dir {
-                        Direction::Request => self.canvas.objects.iter()
-                            .find(|o| o.id == *obj_id)
-                            .map(|o| o.requests.len())
-                            .unwrap_or(0),
-                        Direction::Result => self.canvas.objects.iter()
-                            .find(|o| o.id == *obj_id)
-                            .map(|o| o.results.len())
-                            .unwrap_or(0),
-                    };
-                    self.dialogs.add_metric_defaults(obj_id.clone(), *dir, n);
-                    self.dialogs.add_metric_process_name = self.canvas.objects.iter()
-                        .find(|o| o.id == *obj_id)
-                        .map(|o| o.name.clone())
-                        .unwrap_or_default();
-                    // Сбрасываем любое состояние драга, чтобы клик на '+'
-                    // не затащил объект за собой.
-                    self.cancel_drag();
-                } else {
-                    // Проверяем клик по процессу.
-                    let mut clicked_process = false;
-                    if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
-                        self.selection_box_start = None;
-                        self.toggle_select(obj_id.clone(), ctrl);
-                        clicked_process = true;
-                    }
-                    if !clicked_process {
-                        // Клик по пустому месту — сбрасываем выделение.
-                        self.selected_objects.clear();
-                    }
-                }
-            }
-        }
-
-        // ---- Двойной клик по процессу — инлайн-переименование ----
-        if canvas_response.hovered()
-            && ui.ctx().input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary))
-        {
-            if let Some(pos) = canvas_response.interact_pointer_pos() {
-                if let Some(obj_id) = self.process_under(pos, &published.dynamic) {
-                    let obj_name = self
-                        .canvas
-                        .objects
-                        .iter()
-                        .find(|o| o.id == obj_id)
-                        .map(|o| o.name.clone())
-                        .unwrap_or_default();
-                    self.dialogs.edit_target = Some(obj_id);
-                    self.dialogs.edit_input = obj_name;
-                    self.selected_objects.clear();
-                    self.cancel_drag();
-                    self.drag_metric_source = None;
-                    self.selection_box_start = None;
-                }
-            }
-        }
+        // Обработка кликов (вынесено в click_handling)
+        self.handle_canvas_clicks(ui, published);
 
         // ---- Начало взаимодействия: драг отдела/процесса за шапку, драг контейнера, драг показателя или selection box ----
         if canvas_response.drag_started_by(PointerButton::Primary)
@@ -178,10 +106,7 @@ impl PolygramApp {
                     self.start_drag_objects(self.selected_objects.clone(), pos);
                 } else if let Some((obj_id, dir, name)) = self.drag_metric_under(pos) {
                     // Начало перетаскивания показателя (соединение/переордер записей).
-                    if self.canvas.objects.iter().any(|o| o.id == obj_id && o.kind == polygram_core::types::NodeKind::Process) {
-                        self.drag_metric_source = Some((obj_id, dir, name));
-                        self.drag_metric_start = Some(pos);
-                    }
+                    self.start_drag_metric(obj_id, dir, name, pos);
                 } else {
                     self.selection_box_start = Some(pos);
                 }
@@ -204,38 +129,11 @@ impl PolygramApp {
                     }
                 }
             }
-            if self.drag_metric_source.is_some() {
-                if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    if let Some((src_id, _, src_name)) = &self.drag_metric_source {
-                        if let Some((_, _, _, src_rect)) = self.canvas.drag_metric_hotspots.iter()
-                            .find(|(id, _, name, _)| id == src_id && name == src_name)
-                        {
-                            ui.painter().line_segment(
-                                [src_rect.center(), cur],
-                                egui::Stroke::new(2.0, self.canvas.theme.accent),
-                            );
-                        }
-                    }
-                }
-            }
-            if self.selection_box_start.is_some() {
-                if let Some(cur) = canvas_response.interact_pointer_pos() {
-                    let start = self.selection_box_start.unwrap();
-                    let x = start.x.min(cur.x);
-                    let y = start.y.min(cur.y);
-                    let w = (cur.x - start.x).abs();
-                    let h = (cur.y - start.y).abs();
-                    if w > 4.0 && h > 4.0 {
-                        let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
-                        ui.painter().rect_stroke(
-                            box_rect,
-                            0.0,
-                            egui::Stroke::new(2.0, self.canvas.theme.text),
-                            egui::StrokeKind::Middle,
-                        );
-                    }
-                }
-            }
+            // Selection box отрисовка (вынесено в selection_box)
+            self.handle_selection_box(ui, published);
+
+            // Драг показателя — отрисовка линии (вынесено в metric_drag)
+            let _ = self.handle_metric_drag(ui, published);
         }
 
         // ---- Завершение перетаскивания объекта ----
@@ -255,214 +153,11 @@ impl PolygramApp {
             }
         }
 
-        // ---- Завершение перетаскивания показателя ----
+        // Завершение перетаскивания показателя (вынесено в metric_drag)
         if self.drag_metric_source.is_some()
             && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
         {
-            let (src_id, src_dir, src_name) = self.drag_metric_source.take().unwrap();
-            self.drag_metric_start = None;
-            if let Some(cur) = canvas_response.interact_pointer_pos() {
-                let zoom = self.canvas.camera.zoom;
-                let offset = self.canvas.camera.offset;
-                let cell_size = self.canvas.cell_size;
-                let cur_cell = (
-                    ((cur.x / zoom - offset.x) / cell_size).round() as i32,
-                    ((cur.y / zoom - offset.y) / cell_size).round() as i32,
-                );
-                let under_any = self.canvas.objects.iter().any(|o| {
-                    o.rect.x <= cur_cell.0
-                        && cur_cell.0 < o.rect.x + o.rect.w
-                        && o.rect.y <= cur_cell.1
-                        && cur_cell.1 < o.rect.y + o.rect.h
-                });
-                // Реордер строки внутри того же контейнера (ЗАПРОС/РЕЗУЛЬТАТ одного объекта).
-                let hovered_same = self.canvas.drag_metric_hotspots.iter()
-                    .find(|(oid, d, name, rect)| {
-                        *oid == src_id && *d == src_dir && rect.contains(cur)
-                    })
-                    .map(|(_, _, name, _)| name.clone());
-                if let Some(hovered_name) = hovered_same {
-                    if let Some(obj) = self.canvas.objects.iter().find(|o| o.id == src_id) {
-                        let entries = match src_dir {
-                            Direction::Request => &obj.requests,
-                            Direction::Result => &obj.results,
-                        };
-                        if let Some(to_ix) = entries.iter().position(|e| e.name == hovered_name) {
-                            // Найти from_ix для перетаскиваемой записи.
-                            if let Some(from_ix) = entries.iter().position(|e| e.name == src_name) {
-                                if to_ix != from_ix {
-                                    self.apply_cmd(polygram_core::Command::ReorderMetricEntry {
-                                        object: src_id.clone(),
-                                        dir: src_dir,
-                                        from_ix,
-                                        to_ix,
-                                    });
-                                }
-                            }
-                        }
-                        self.drag_metric_source = None;
-                        return;
-                    }
-                }
-                // Соединение показателя с объектом-целью: определяем цель под курсором.
-                // Процесс — добавить запись в его контейнер и связать.
-                // Отдел — создать Процесс, переподчинить отдел и связать.
-                // Контейнер/Показатель/другое по клетке курсора — связать с объектом под курсором.
-                // Свободное место — создать Процесс и связать.
-                let dragged_dir = match src_dir {
-                    Direction::Request => ContainerDirection::Request,
-                    Direction::Result => ContainerDirection::Result,
-                };
-                let geometry = self.engine.geometry();
-                let (target_geom, over_dept) =
-                    if let Some(dst_id) = self.canvas.object_at_any(cur, &published.dynamic) {
-                        let obj = self.canvas.objects.iter().find(|o| o.id == dst_id);
-                        match obj.map(|o| o.kind) {
-                            Some(polygram_core::types::NodeKind::Department) => {
-                                (None, Some(dst_id))
-                            }
-                            _ => (obj.cloned(), None),
-                        }
-                    } else if under_any {
-                        self.canvas.objects
-                            .iter()
-                            .find(|o| {
-                                o.id != src_id
-                                    && o.rect.x <= cur_cell.0
-                                    && cur_cell.0 < o.rect.x + o.rect.w
-                                    && o.rect.y <= cur_cell.1
-                                    && cur_cell.1 < o.rect.y + o.rect.h
-                            })
-                            .map(|o| (Some(o.clone()), None))
-                            .unwrap_or((None, None))
-                    } else {
-                        (None, None)
-                    };
-
-                // Не соединять объект с самим собой.
-                let is_self = target_geom.as_ref().map_or(false, |t| t.id == src_id);
-                if !is_self {
-                    let cmds = compute_metric_drop_object(
-                        &geometry,
-                        &src_id,
-                        &src_name,
-                        dragged_dir,
-                        cur_cell,
-                        cur_cell,
-                        over_dept.as_deref(),
-                        (2, 2),
-                        target_geom.as_ref(),
-                    );
-                    let mut applied = false;
-                    if !cmds.commands.is_empty() {
-                        match self.engine.apply_batch(
-                            polygram_core::types::Scope::Root,
-                            cmds.commands,
-                        ) {
-                            Ok(_) => applied = true,
-                            Err((_, e)) => {
-                                // Если показатель-def не существует, создаём его и повторяем.
-                                if matches!(
-                                    e,
-                                    polygram_core::error::EngineError::MetricDefNotFound(_)
-                                ) {
-                                    let def_cmds = vec![
-                                        polygram_core::Command::AddMetricDef {
-                                            id: Some(src_name.clone()),
-                                            name: src_name.clone(),
-                                            kind: polygram_core::types::MetricKind::Number,
-                                            unit: String::new(),
-                                            api: None,
-                                        },
-                                    ];
-                                    let _ = self.engine.apply_batch(
-                                        polygram_core::types::Scope::Root,
-                                        def_cmds,
-                                    );
-                                    let geometry = self.engine.geometry();
-                                    let cmds2 = compute_metric_drop_object(
-                                        &geometry,
-                                        &src_id,
-                                        &src_name,
-                                        dragged_dir,
-                                        cur_cell,
-                                        cur_cell,
-                                        over_dept.as_deref(),
-                                        (2, 2),
-                                        target_geom.as_ref(),
-                                    );
-                                    if !cmds2.commands.is_empty() {
-                                        let _ = self.engine.apply_batch(
-                                            polygram_core::types::Scope::Root,
-                                            cmds2.commands,
-                                        );
-                                        applied = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if applied {
-                        self.sync_canvas_from_engine();
-                    }
-                }
-            }
-        }
-
-        // ---- Завершение выделения рамкой (selection box) ----
-        if self.selection_box_start.is_some()
-            && !ui.input(|i| i.pointer.button_down(PointerButton::Primary))
-        {
-            if let (Some(start), Some(end)) = (
-                self.selection_box_start,
-                canvas_response.interact_pointer_pos(),
-            ) {
-                let x = start.x.min(end.x);
-                let y = start.y.min(end.y);
-                let w = (end.x - start.x).abs();
-                let h = (end.y - start.y).abs();
-                self.selection_box_start = None;
-                if w > 4.0 && h > 4.0 {
-                    let cell_px = self.canvas.cell_px();
-                    let box_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h));
-                    let ctrl = ui.ctx().input(|i| i.modifiers.ctrl);
-                    let mut newly_selected: Vec<String> = Vec::new();
-                    for object in &self.canvas.objects {
-                        let r = &object.rect;
-                        let rect_px = if object.kind == polygram_core::types::NodeKind::Process {
-                            let zoom = self.canvas.camera.zoom;
-                            let card_w = 512.0 * zoom;
-                            let card_h = process_total_height(
-                                object,
-                                &published.dynamic,
-                                zoom,
-                                card_w,
-                            );
-                            Rect::from_min_size(
-                                self.canvas.cell_to_screen(r.x, r.y),
-                                egui::Vec2::new(card_w, card_h),
-                            )
-                        } else {
-                            Rect::from_min_size(
-                                self.canvas.cell_to_screen(r.x, r.y),
-                                egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-                            )
-                        };
-                        if box_rect.intersects(rect_px) {
-                            newly_selected.push(object.id.clone());
-                        }
-                    }
-                    if ctrl {
-                        for id in &newly_selected {
-                            if !self.selected_objects.iter().any(|s| s == id) {
-                                self.selected_objects.push(id.clone());
-                            }
-                        }
-                    } else {
-                        self.selected_objects = newly_selected;
-                    }
-                }
-            }
+            let _ = self.handle_metric_drag(ui, published);
         }
     }
 }

@@ -4,6 +4,10 @@
 //! вынесена в `polygram_canvas::modal`; здесь осталось только специфическое
 //! тело окна добавления показателя с жёстким вертикальным центрированием
 //! содержимого внутри рамки тела и составным блоком «значение + синхронизация».
+//!
+//! Декомпозирован по модулям:
+//! - `type_icon`  — иконка типа, циклический перебор, парсинг значения
+//! - `date_popup` — popup-календарь с выбором времени
 
 use crate::app::PolygramApp;
 use polygram_canvas::modal::{
@@ -13,13 +17,19 @@ use polygram_canvas::modal::{
     MODAL_TYPE_HOVER_BG,
 };
 use polygram_canvas::paint_lucide;
-use chrono::{Datelike, NaiveDate, NaiveTime, Utc};
+use chrono::{Datelike, NaiveDate, NaiveTime};
 use egui::{
     Align, Color32, Context, CornerRadius, FontFamily, FontId, Frame, Layout, Margin, PointerButton,
     Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, Window,
 };
 use egui_lucide::Lucide;
-use polygram_core::{MetricKind, MetricValue, runtime::Published};
+use polygram_core::{MetricValue, runtime::Published};
+
+pub mod date_popup;
+pub mod type_icon;
+
+pub use date_popup::render_date_time_popup;
+pub use type_icon::{is_date_kind, metric_kind_icon, metric_kind_next, parse_metric_value};
 
 /// Фон внутренней рамки тела окна: #222222.
 const BG_VALUE_ROW: Color32 = Color32::from_rgb(0x22, 0x22, 0x22);
@@ -29,47 +39,6 @@ const BG_SYNC_BASE: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
 const BG_SYNC_HOVER: Color32 = Color32::from_rgb(0x32, 0x32, 0x32);
 /// Фон кнопки синхронизации при нажатии: #383838.
 const BG_SYNC_ACTIVE: Color32 = Color32::from_rgb(0x38, 0x38, 0x38);
-
-/// Иконка Lucide для данного типа показателя.
-fn metric_kind_icon(kind: MetricKind) -> Lucide {
-    match kind {
-        MetricKind::Number => Lucide::Hash,
-        MetricKind::Time => Lucide::Clock,
-        MetricKind::Date => Lucide::Calendar,
-        MetricKind::Deadline => Lucide::CalendarClock,
-        MetricKind::Percentage => Lucide::Percent,
-        MetricKind::Binary => Lucide::ToggleRight,
-        MetricKind::Duration => Lucide::Clock,
-        MetricKind::Money => Lucide::DollarSign,
-        MetricKind::Text => Lucide::FileText,
-        MetricKind::Formula => Lucide::Calculator,
-        MetricKind::Timestamp => Lucide::CalendarClock,
-        _ => Lucide::Hash,
-    }
-}
-
-/// Следующий тип показателя при клике на иконку типа.
-fn metric_kind_next(kind: MetricKind) -> MetricKind {
-    match kind {
-        MetricKind::Number => MetricKind::Time,
-        MetricKind::Time => MetricKind::Date,
-        MetricKind::Date => MetricKind::Deadline,
-        MetricKind::Deadline => MetricKind::Percentage,
-        MetricKind::Percentage => MetricKind::Binary,
-        MetricKind::Binary => MetricKind::Duration,
-        MetricKind::Duration => MetricKind::Money,
-        MetricKind::Money => MetricKind::Text,
-        MetricKind::Text => MetricKind::Formula,
-        MetricKind::Formula => MetricKind::Timestamp,
-        MetricKind::Timestamp => MetricKind::Number,
-        _ => MetricKind::Number,
-    }
-}
-
-/// Является ли тип показателя датовым (Date / Deadline).
-fn is_date_kind(kind: MetricKind) -> bool {
-    matches!(kind, MetricKind::Date | MetricKind::Deadline)
-}
 
 /// Модальное диалоговое окно добавления показателя.
 pub fn handle_add_metric_dialog(
@@ -570,180 +539,4 @@ fn paint_right_aligned(ui: &Ui, rect: Rect, text: &str, pad_right: f32) {
     let y = rect.center().y - galley.size().y / 2.0;
     ui.painter()
         .galley(pos2(x, y), galley, MODAL_TEXT);
-}
-
-/// Преобразовать строку из текстового поля в MetricValue согласно типу показателя.
-fn parse_metric_value(s: &str, kind: MetricKind) -> MetricValue {
-    let trimmed = s.trim();
-    match kind {
-        MetricKind::Number => trimmed
-            .parse::<f64>()
-            .map(MetricValue::Number)
-            .unwrap_or(MetricValue::Null),
-        MetricKind::Money => trimmed
-            .parse::<f64>()
-            .map(|v| MetricValue::Money(v as i64))
-            .unwrap_or(MetricValue::Null),
-        MetricKind::Percentage => trimmed
-            .parse::<f64>()
-            .map(MetricValue::Percentage)
-            .unwrap_or(MetricValue::Null),
-        MetricKind::Duration => trimmed
-            .parse::<f64>()
-            .map(|v| MetricValue::Duration(v as i64))
-            .unwrap_or(MetricValue::Null),
-        MetricKind::Date | MetricKind::Deadline => {
-            if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d.%m.%Y %H:%M")
-                .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc())
-                .or_else(|_| {
-                    NaiveDate::parse_from_str(trimmed, "%d.%m.%Y").map(|d| {
-                        d.and_hms_opt(0, 0, 0).unwrap().and_utc()
-                    })
-                })
-                .or_else(|_| {
-                    chrono::DateTime::parse_from_rfc3339(trimmed)
-                        .map(|dt| dt.with_timezone(&Utc))
-                })
-            {
-                match kind {
-                    MetricKind::Deadline => MetricValue::Deadline(dt),
-                    _ => MetricValue::Date(dt),
-                }
-            } else {
-                MetricValue::Null
-            }
-        }
-        MetricKind::Binary => match trimmed.to_lowercase().as_str() {
-            "true" | "1" | "да" | "yes" => MetricValue::Binary(true),
-            "false" | "0" | "нет" | "no" => MetricValue::Binary(false),
-            _ => MetricValue::Null,
-        },
-        MetricKind::Text => MetricValue::Text(trimmed.to_owned()),
-        _ => MetricValue::Null,
-    }
-}
-
-/// Рисовать popup-календарь с выбором времени для типа Date / Deadline.
-fn render_date_time_popup(
-    ui: &mut egui::Ui,
-    selected_date: &mut Option<NaiveDate>,
-    selected_time: &mut Option<NaiveTime>,
-) -> bool {
-    let now = chrono::Local::now();
-    let show_date = selected_date.unwrap_or(now.date_naive());
-    let _show_time = selected_time.unwrap_or(now.time());
-
-    let month_names = [
-        "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
-        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
-    ];
-
-    let prev_month = |d: NaiveDate| -> NaiveDate {
-        let (y, m) = if d.month() == 1 {
-            (d.year() - 1, 12)
-        } else {
-            (d.year(), d.month() - 1)
-        };
-        d.with_day(1)
-            .unwrap()
-            .with_year(y)
-            .unwrap()
-            .with_month(m as u32)
-            .unwrap()
-    };
-    let next_month = |d: NaiveDate| -> NaiveDate {
-        let (y, m) = if d.month() == 12 {
-            (d.year() + 1, 1)
-        } else {
-            (d.year(), d.month() + 1)
-        };
-        d.with_day(1)
-            .unwrap()
-            .with_year(y)
-            .unwrap()
-            .with_month(m as u32)
-            .unwrap()
-    };
-
-    let mut picked = false;
-
-    egui::Grid::new("date_time_calendar").num_columns(7).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            if ui.button("‹").clicked() {
-                *selected_date = Some(prev_month(show_date));
-            }
-            ui.label(format!(
-                "{} {}",
-                month_names[(show_date.month() - 1) as usize],
-                show_date.year()
-            ));
-            if ui.button("›").clicked() {
-                *selected_date = Some(next_month(show_date));
-            }
-        });
-        ui.end_row();
-
-        for wd in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] {
-            ui.label(wd);
-        }
-        ui.end_row();
-
-        let first = show_date.with_day(1).unwrap();
-        let next = next_month(show_date);
-        let days_in_month = (next - first).num_days() as u32;
-        let start_offset = first.weekday().number_from_monday() as usize - 1;
-        let total_cells = start_offset + days_in_month as usize;
-        let rows = total_cells.div_ceil(7);
-
-        for row in 0..rows {
-            for col in 0..7 {
-                let idx = row * 7 + col;
-                if idx < start_offset || idx >= total_cells {
-                    ui.label("");
-                } else {
-                    let day = (idx - start_offset + 1) as u32;
-                    let date = show_date.with_day(day).unwrap();
-                    let is_sel = selected_date.map_or(false, |s| s == date);
-                    let mut button = egui::Button::new(format!("{}", day));
-                    if is_sel {
-                        button = button.frame(true);
-                    }
-                    if ui.add(button).clicked() {
-                        *selected_date = Some(date);
-                        picked = true;
-                    }
-                }
-            }
-            ui.end_row();
-        }
-    });
-
-    ui.separator();
-    ui.horizontal(|ui| {
-        ui.label("Время:");
-        let mut time_str = selected_time
-            .map(|t| t.format("%H:%M").to_string())
-            .unwrap_or_else(|| "00:00".to_owned());
-        let time_response = ui.add(
-            egui::TextEdit::singleline(&mut time_str)
-                .desired_width(50.0)
-                .hint_text("чч:мм"),
-        );
-        if time_response.changed() {
-            if let Ok(t) = NaiveTime::parse_from_str(time_str.trim(), "%H:%M") {
-                *selected_time = Some(t);
-            } else if let Ok(t) = NaiveTime::parse_from_str(time_str.trim(), "%H:%M:%S") {
-                *selected_time = Some(t);
-            } else if time_str.trim().is_empty() {
-                *selected_time = None;
-            }
-        }
-        if ui.button("сегодня").clicked() {
-            *selected_date = Some(now.date_naive());
-            *selected_time = Some(now.time());
-            picked = true;
-        }
-    });
-
-    picked
 }

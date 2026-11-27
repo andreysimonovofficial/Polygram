@@ -1,14 +1,30 @@
 //! Canvas Polygram: background, dot grid, and objects (processes and departments).
 //! Uses polygram_core::ObjectGeom for object geometry with request/result containers.
+//!
+//! Декомпозирован по модулям (один файл — одна ответственность):
+//! - `camera`      — камера холста (смещение, зум)
+//! - `object_rect` — прямоугольник объекта в координатах сетки
+//! - `hit_test`    — определение объекта/шапки/отдела под экранной позицией
+//! - `icons`       — иконки Lucide
+//! - `paint`       — рендер объектов и линий связи
+//! - `paint_department` — рендер frames отделов
+//! - `theme`       — тема оформления
+//! - `modal`       — универсальная оболочка модальных окон
+//! - `routing`     — маршрутизация линий связи
 
+mod camera;
+mod hit_test;
 mod icons;
+mod object_rect;
 pub mod paint;
 mod paint_department;
 pub mod theme;
 pub mod modal;
 pub mod routing;
 
+pub use camera::Camera;
 pub use icons::{paint_lucide, default_icon_for, lucide_by_name};
+pub use object_rect::ObjectRect;
 pub use paint::{paint_add_row, paint_process, ProcessPaintResult};
 pub use paint_department::paint_department_frame;
 pub use theme::{status_dot_color, status_label_ru, Theme};
@@ -56,45 +72,6 @@ pub fn register_inter_fonts(ctx: &egui::Context) {
 
 use egui::{Context, Color32, PointerButton, Pos2, Rect, Response, Vec2};
 use polygram_core::{DynamicState, id_allocator::allocate_id};
-
-/// Camera of the canvas: offset and zoom.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Camera {
-    /// Camera offset in world coordinates.
-    pub offset: egui::Vec2,
-    /// Zoom factor.
-    pub zoom: f32,
-}
-
-impl Camera {
-    /// Creates a new camera with zero offset and zoom 1.0.
-    pub fn new() -> Self {
-        Self {
-            offset: egui::Vec2::ZERO,
-            zoom: 1.0,
-        }
-    }
-}
-
-/// Position and size of an object in world coordinates (grid cells).
-#[derive(Clone, Debug, PartialEq)]
-pub struct ObjectRect {
-    /// Cell X coordinate of the top-left corner.
-    pub x: i32,
-    /// Cell Y coordinate of the top-left corner.
-    pub y: i32,
-    /// Width in cells.
-    pub w: i32,
-    /// Height in cells.
-    pub h: i32,
-}
-
-impl ObjectRect {
-    /// Creates a new object rectangle at the given cell position and size.
-    pub fn new(x: i32, y: i32, w: i32, h: i32) -> Self {
-        Self { x, y, w, h }
-    }
-}
 
 /// Canvas Polygram.
 pub struct Canvas {
@@ -391,11 +368,11 @@ impl Canvas {
                 let card_w = 512.0 * zoom;
                 let rect_a = Rect::from_min_size(
                     pos_a,
-                    Vec2::new(card_w, paint::object::process_total_height(oa, dynamic, zoom, card_w)),
+                    Vec2::new(card_w, crate::paint::object::process_total_height(oa, dynamic, zoom, card_w)),
                 );
                 let rect_b = Rect::from_min_size(
                     pos_b,
-                    Vec2::new(card_w, paint::object::process_total_height(ob, dynamic, zoom, card_w)),
+                    Vec2::new(card_w, crate::paint::object::process_total_height(ob, dynamic, zoom, card_w)),
                 );
                 if rect_a.intersects(rect_b) {
                     let top = if ia > ib { ia } else { ib };
@@ -453,7 +430,7 @@ impl Canvas {
             }
             // Процесс: ширина фиксирована 512px (CSS спецификация), высота динамическая.
             let card_w = 512.0 * zoom;
-            let card_h = paint::object::process_total_height(object, dynamic, zoom, card_w);
+            let card_h = crate::paint::object::process_total_height(object, dynamic, zoom, card_w);
             let rect_px = Rect::from_min_size(screen_pos, Vec2::new(card_w, card_h));
             if !rect_px.intersects(clip_rect) {
                 continue;
@@ -536,118 +513,6 @@ impl Canvas {
             self.cell_size,
             drag_visual,
         );
-    }
-
-    /// Является ли отдел `obj` прикрыт обложкой не наведённого родительского отдела.
-    /// Если какой-то departamentos-предок не наведён, его обложка (третий проход `paint`)
-    /// перекрывает всё содержимое отдела, включая сам этот отдел — так же, как дочерние
-    /// процессы скрываются обложкой не наведённого родителя.
-    fn department_covered_by_cover(&self, pointer_pos: Option<Pos2>, obj: &ObjectGeom) -> bool {
-        let cell_px = self.cell_px();
-        let mut parent_id = obj.parent.clone();
-        while let Some(pid) = parent_id {
-            if let Some(parent) = self.objects.iter().find(|o| o.id == pid) {
-                if parent.kind == NodeKind::Department {
-                    let pr = &parent.rect;
-                    let prect = Rect::from_min_size(
-                        self.cell_to_screen(pr.x, pr.y),
-                        Vec2::new(pr.w as f32 * cell_px, pr.h as f32 * cell_px),
-                    );
-                    let p_hovered = pointer_pos.map_or(false, |p| prect.contains(p));
-                    if !p_hovered {
-                        return true;
-                    }
-                    parent_id = parent.parent.clone();
-                } else {
-                    parent_id = parent.parent.clone();
-                }
-            } else {
-                break;
-            }
-        }
-        false
-    }
-
-    /// Вернуть id любого объекта (процесса или отдела), под которым находится заданная экранная позиция.
-    /// Сначала проверяются процессы (с фиксированной геометрией 256×256px), затем отделы
-    /// (возвращается самый вложенный — с наименьшей площадью rect).
-    pub fn object_at_any<'a>(&'a self, screen_pos: Pos2, dynamic: &DynamicState) -> Option<&'a str> {
-        let cell_px = self.cell_px();
-        let zoom = self.camera.zoom;
-
-        // Сначала процессы (динамическая CSS-геометрия).
-        for object in &self.objects {
-            if object.kind != NodeKind::Process {
-                continue;
-            }
-            let r = &object.rect;
-            let card_w = 512.0 * zoom;
-            let card_h = paint::object::process_total_height(object, dynamic, zoom, card_w);
-            let rect_px = Rect::from_min_size(
-                self.cell_to_screen(r.x, r.y),
-                Vec2::new(card_w, card_h),
-            );
-            if rect_px.contains(screen_pos) {
-                return Some(&object.id);
-            }
-        }
-
-        // Затем самый вложенный отдел (наименьшая площадь rect).
-        let mut best: Option<(&'a str, f32)> = None;
-        for object in &self.objects {
-            if object.kind != NodeKind::Department {
-                continue;
-            }
-            let r = &object.rect;
-            let rect_px = Rect::from_min_size(
-                self.cell_to_screen(r.x, r.y),
-                Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-            );
-            if rect_px.contains(screen_pos) {
-                let area = rect_px.area();
-                if best.map_or(true, |(_, a)| area < a) {
-                    best = Some((&object.id, area));
-                }
-            }
-        }
-        best.map(|(id, _)| id)
-    }
-
-    /// Вернуть id отдела, под которым находится заданная экранная позиция.
-    pub fn object_at<'a>(&'a self, screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
-        for object in &self.objects {
-            if object.kind != NodeKind::Department {
-                continue;
-            }
-            let r = &object.rect;
-            let rect_px = egui::Rect::from_min_size(
-                egui::pos2(r.x as f32 * cell_px, r.y as f32 * cell_px),
-                egui::Vec2::new(r.w as f32 * cell_px, r.h as f32 * cell_px),
-            );
-            if rect_px.contains(screen_pos) {
-                return Some(&object.id);
-            }
-        }
-        None
-    }
-
-    /// Вернуть id отдела, чья шапка содержит заданную экранную позицию.
-    pub fn header_at<'a>(&'a self, screen_pos: Pos2, cell_px: f32) -> Option<&'a str> {
-        for object in &self.objects {
-            if object.kind != NodeKind::Department {
-                continue;
-            }
-            let r = &object.rect;
-            let header_h = cell_px * 1.0;
-            let header_rect = egui::Rect::from_min_size(
-                egui::pos2(r.x as f32 * cell_px, r.y as f32 * cell_px),
-                egui::Vec2::new(r.w as f32 * cell_px, header_h),
-            );
-            if header_rect.contains(screen_pos) {
-                return Some(&object.id);
-            }
-        }
-        None
     }
 }
 
