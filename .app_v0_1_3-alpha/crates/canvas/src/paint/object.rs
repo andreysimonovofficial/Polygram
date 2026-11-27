@@ -113,6 +113,10 @@ pub fn paint_process(
                 Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
                 StrokeKind::Middle,
             );
+            // Жёлтая пунктирная обводка — самая верхняя карточка при наложении на другую.
+            if is_top_overlap {
+                paint_dashed_rect(painter, card_rect, process_radius, Color32::YELLOW, 2.0 * zoom, 8.0 * zoom, 4.0 * zoom);
+            }
             // Иконка обложки: 10 клеток / 3, строго по центру, белый цвет.
             // Содержимое обложки увеличено в 2 раза, чтобы быть соразмерным площади карточки.
             let cover_icon_side = (10.0 / 3.0) * (theme.cell_size * zoom) * COVER_CONTENT_SCALE;
