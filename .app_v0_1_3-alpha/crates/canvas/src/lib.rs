@@ -362,7 +362,49 @@ impl Canvas {
         }
 
         // Process cards with containers.
-        for object in &self.objects {
+        // Вычислить наложения процессов: для каждой пары пересекающихся процессов
+        // самая верхняя — объект с бóльшим индексом в self.objects (z-порядок).
+        let process_indices: Vec<usize> = self
+            .objects
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| o.kind == NodeKind::Process)
+            .map(|(i, _)| i)
+            .collect();
+        let mut is_top_overlap: Vec<bool> = vec![false; self.objects.len()];
+        for ai in 0..process_indices.len() {
+            for bi in (ai + 1)..process_indices.len() {
+                let ia = process_indices[ai];
+                let ib = process_indices[bi];
+                let oa = &self.objects[ia];
+                let ob = &self.objects[ib];
+                let mut pos_a = self.cell_to_screen(oa.rect.x, oa.rect.y);
+                let mut pos_b = self.cell_to_screen(ob.rect.x, ob.rect.y);
+                if let Some((shift, ids)) = &drag_visual {
+                    if ids.contains(&oa.id) {
+                        pos_a = pos_a + *shift;
+                    }
+                    if ids.contains(&ob.id) {
+                        pos_b = pos_b + *shift;
+                    }
+                }
+                let card_w = 512.0 * zoom;
+                let rect_a = Rect::from_min_size(
+                    pos_a,
+                    Vec2::new(card_w, paint::object::process_total_height(oa, dynamic, zoom, card_w)),
+                );
+                let rect_b = Rect::from_min_size(
+                    pos_b,
+                    Vec2::new(card_w, paint::object::process_total_height(ob, dynamic, zoom, card_w)),
+                );
+                if rect_a.intersects(rect_b) {
+                    let top = if ia > ib { ia } else { ib };
+                    is_top_overlap[top] = true;
+                }
+            }
+        }
+
+        for (ix, object) in self.objects.iter().enumerate() {
             if object.kind != NodeKind::Process {
                 continue;
             }
@@ -430,6 +472,7 @@ impl Canvas {
                 zoom,
                 mouse_pos,
                 is_selected,
+                is_top_overlap[ix],
             );
             self.add_metric_hotspots.extend(result.add_hotspots);
             self.container_menu_hotspots.extend(result.menu_hotspots);
@@ -629,6 +672,56 @@ mod tests {
         }
     }
 
+    fn proc(id: &str, rect: Rect) -> ObjectGeom {
+        ObjectGeom {
+            ix: 0,
+            id: id.to_owned(),
+            name: id.to_owned(),
+            kind: NodeKind::Process,
+            rect,
+            direction: None,
+            requests: Vec::new(),
+            results: Vec::new(),
+            parent: None,
+            icon: String::new(),
+        }
+    }
+
+    /// Поставить ix равным индексу в векторе (z-порядок).
+    fn fix_ixs(objects: &mut Vec<ObjectGeom>) {
+        for (i, o) in objects.iter_mut().enumerate() {
+            o.ix = i as u32;
+        }
+    }
+
+    /// Экранный rect карточки процесса (как в Canvas::paint: cell_size=16, zoom=1, card_w=512).
+    fn screen_rect(o: &ObjectGeom) -> egui::Rect {
+        let pos = egui::pos2(o.rect.x as f32 * 16.0, o.rect.y as f32 * 16.0);
+        egui::Rect::from_min_size(pos, egui::Vec2::new(512.0, 300.0))
+    }
+
+    /// Реплика логики определения top-overlap из Canvas::paint для тестирования.
+    fn top_overlap_for(objects: &[ObjectGeom]) -> Vec<bool> {
+        let mut is_top = vec![false; objects.len()];
+        let proc_idxs: Vec<usize> = objects
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| o.kind == NodeKind::Process)
+            .map(|(i, _)| i)
+            .collect();
+        for ai in 0..proc_idxs.len() {
+            for bi in (ai + 1)..proc_idxs.len() {
+                let ia = proc_idxs[ai];
+                let ib = proc_idxs[bi];
+                if screen_rect(&objects[ia]).intersects(screen_rect(&objects[ib])) {
+                    let top = if ia > ib { ia } else { ib };
+                    is_top[top] = true;
+                }
+            }
+        }
+        is_top
+    }
+
     #[test]
     fn child_department_covered_by_non_hovered_parent() {
         let mut canvas = Canvas::new();
@@ -650,5 +743,40 @@ mod tests {
         canvas.objects.push(dept("d1", Rect::new(0, 0, 30, 30), None));
         let d1 = &canvas.objects[0];
         assert!(!canvas.department_covered_by_cover(None, d1));
+    }
+
+    #[test]
+    fn overlapping_processes_higher_index_is_top() {
+        let mut canvas = Canvas::new();
+        canvas.objects.push(proc("p1", Rect::new(0, 0, 16, 16)));
+        canvas.objects.push(proc("p2", Rect::new(10, 10, 16, 16))); // карты наслаиваются (512px ширина)
+        fix_ixs(&mut canvas.objects);
+        let top = top_overlap_for(&canvas.objects);
+        assert!(!top[0]);
+        assert!(top[1]);
+    }
+
+    #[test]
+    fn non_overlapping_processes_no_top_overlap() {
+        let mut canvas = Canvas::new();
+        canvas.objects.push(proc("p1", Rect::new(0, 0, 16, 16)));
+        canvas.objects.push(proc("p2", Rect::new(100, 100, 16, 16))); // далеко, нет наложения
+        fix_ixs(&mut canvas.objects);
+        let top = top_overlap_for(&canvas.objects);
+        assert!(!top[0]);
+        assert!(!top[1]);
+    }
+
+    #[test]
+    fn chain_overlaps_each_pair_top_is_higher_index() {
+        let mut canvas = Canvas::new();
+        canvas.objects.push(proc("p1", Rect::new(0, 0, 16, 16)));
+        canvas.objects.push(proc("p2", Rect::new(10, 10, 16, 16))); // наслаивается на p1
+        canvas.objects.push(proc("p3", Rect::new(20, 20, 16, 16))); // наслаивается на p2, не на p1
+        fix_ixs(&mut canvas.objects);
+        let top = top_overlap_for(&canvas.objects);
+        assert!(!top[0]); // p1 проигрывает p2
+        assert!(top[1]);  // p2 выигрывает у p1
+        assert!(top[2]);  // p3 выигрывает у p2
     }
 }

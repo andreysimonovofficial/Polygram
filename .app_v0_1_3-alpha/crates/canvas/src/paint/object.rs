@@ -79,6 +79,7 @@ pub fn paint_process(
     zoom: f32,
     mouse_pos: Option<Pos2>,
     is_selected: bool,
+    is_top_overlap: bool,
 ) -> ProcessPaintResult {
     let mut add_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
     let mut menu_hotspots: Vec<(String, Direction, Rect)> = Vec::new();
@@ -200,6 +201,11 @@ pub fn paint_process(
         Stroke::new(border_width, Color32::from_rgb(55, 56, 57)),
         StrokeKind::Middle,
     );
+
+    // Жёлтая пунктирная обводка — самая верхняя карточка при наложении на другую.
+    if is_top_overlap {
+        paint_dashed_rect(painter, card_rect, process_radius, Color32::YELLOW, 2.0 * zoom, 8.0 * zoom, 4.0 * zoom);
+    }
 
     // === Шапка процесса ===
     let header_cy = oy + header_h / 2.0;
@@ -556,4 +562,59 @@ fn paint_metric_container(
 
 fn row_border_rad(zoom: f32) -> f32 {
     ROW_BORDER_RADIUS_PX * zoom
+}
+
+/// Нарисовать пунктирный прямоугольник вокруг `rect` со скруглёнными углами.
+/// Сегменты рисуются по часовой стрелке: нижний, правый, верхний, левый.
+fn paint_dashed_rect(
+    painter: &Painter,
+    rect: Rect,
+    radius: f32,
+    color: Color32,
+    stroke_width: f32,
+    dash_len: f32,
+    gap_len: f32,
+) {
+    let stroke = Stroke::new(stroke_width, color);
+    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
+
+    let draw_dashed = |painter: &Painter, from: Pos2, to: Pos2, stroke: Stroke| {
+        let dir = (to - from).normalized();
+        let length = (to - from).length();
+        let mut dist = 0.0;
+        while dist < length {
+            let end = (dist + dash_len).min(length);
+            painter.line_segment([from + dir * dist, from + dir * end], stroke);
+            dist = end + gap_len;
+        }
+    };
+
+    // Нижняя сторона: слева направо.
+    draw_dashed(
+        painter,
+        Pos2::new(rect.min.x + r, rect.max.y),
+        Pos2::new(rect.max.x - r, rect.max.y),
+        stroke,
+    );
+    // Правая сторона: снизу вверх.
+    draw_dashed(
+        painter,
+        Pos2::new(rect.max.x, rect.max.y - r),
+        Pos2::new(rect.max.x, rect.min.y + r),
+        stroke,
+    );
+    // Верхняя сторона: справа налево.
+    draw_dashed(
+        painter,
+        Pos2::new(rect.max.x - r, rect.min.y),
+        Pos2::new(rect.min.x + r, rect.min.y),
+        stroke,
+    );
+    // Левая сторона: сверху вниз.
+    draw_dashed(
+        painter,
+        Pos2::new(rect.min.x, rect.min.y + r),
+        Pos2::new(rect.min.x, rect.max.y - r),
+        stroke,
+    );
 }
